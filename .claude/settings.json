@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f *)",
+      "Bash(git push * --force*)",
+      "Bash(git push upstream*)",
+      "Bash(git push origin --delete*)",
+      "Bash(git push origin :*)",
+      "Bash(sudo *)",
+      "Bash(ssh * sudo *)",
+      "Bash(adb root*)",
+      "Bash(adb reboot bootloader*)",
+      "Bash(adb reboot recovery*)",
+      "Bash(adb install*)",
+      "Bash(adb uninstall*)",
+      "Bash(fastboot *)",
+      "Read(./.familyhub-local/**/*.env)",
+      "Read(./.env)",
+      "Read(./.env.*)"
+    ],
+    "ask": [
+      "Bash(git push origin familyhub/prototype*)",
+      "Bash(git tag *)",
+      "Bash(git push origin familyhub-v*)",
+      "Bash(git push --tags*)",
+      "Bash(gh release *)",
+      "Bash(gh workflow run *)",
+      "Bash(gh api * -X PUT */merge*)",
+      "Bash(gh pr merge *)",
+      "Bash(git push public*)",
+      "Bash(git -C * push*familyhub-pub*)",
+      "Bash(*frame.sh reload*)",
+      "Bash(*frame.sh home*)",
+      "Bash(*frame.sh brightness*)",
+      "Bash(*frame.sh url*)",
+      "Bash(*frame.sh frameo*)",
+      "Bash(adb shell settings put*)",
+      "Bash(adb shell pm *)",
+      "Bash(adb reboot*)"
+    ]
+  }
+}

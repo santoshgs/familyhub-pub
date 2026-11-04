@@ -1,0 +1,11 @@
+{$FAMILYHUB_HOST} {
+    # Access logging is intentionally disabled: OAuth codes and state are in queries.
+    # A direct gateway -> API route gives Express one trusted proxy hop.
+    @backend path /api/* /ws /health /ready
+    handle @backend {
+        reverse_proxy server:3001
+    }
+    handle {
+        reverse_proxy client:80
+    }
+}

@@ -1,0 +1,257 @@
+// The API base URL comes from `apiBase()` (serverConfig): same-origin in
+// production (''), the local backend in development.
+import { mockRequest } from '../demo/mockApi';
+import { apiBase } from './serverConfig';
+
+const IS_DEMO = Boolean(import.meta.env.VITE_DEMO);
+const AUTH_EXPIRED_EVENT = 'openfamily:auth-expired';
+
+export class ApiError extends Error {
+    constructor(message: string, readonly status: number, readonly detail?: string) {
+        super(message);
+    }
+}
+
+class ApiClient {
+    private token: string | null = null;
+
+    constructor() {
+        this.token = localStorage.getItem('token');
+    }
+
+    setToken(token: string | null) {
+        this.token = token;
+        if (token) {
+            localStorage.setItem('token', token);
+        } else {
+            localStorage.removeItem('token');
+        }
+    }
+
+    getToken(): string | null {
+        return this.token;
+    }
+
+    private async request<T>(
+        endpoint: string,
+        options: RequestInit = {}
+    ): Promise<T> {
+        // Static GitHub Pages demo: serve everything from the in-browser mock.
+        if (IS_DEMO) {
+            const method = (options.method as string) || 'GET';
+            const body = options.body ? JSON.parse(options.body as string) : undefined;
+            return mockRequest<T>(method, endpoint, body);
+        }
+
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json',
+        };
+
+        const sentToken = this.token;
+        if (sentToken) {
+            headers['Authorization'] = `Bearer ${sentToken}`;
+        }
+
+        const response = await fetch(`${apiBase()}${endpoint}`, {
+            ...options,
+            cache: 'no-store',
+            headers: {
+                ...headers,
+                ...(options.headers as Record<string, string>),
+            },
+        });
+
+        const contentType = response.headers.get('content-type') || '';
+        const data = contentType.includes('application/json') ? await response.json() : null;
+
+        if (!response.ok) {
+            // A 401 only ends the session it was sent with: a request still in
+            // flight when a fresh token arrives (leaving a family, unlinking
+            // SSO...) must not sign out the new session.
+            if (response.status === 401 && sentToken === this.token) {
+                this.setToken(null);
+                localStorage.removeItem('user');
+                window.dispatchEvent(
+                    new CustomEvent(AUTH_EXPIRED_EVENT, {
+                        detail: data?.error || data?.message || 'Unauthorized',
+                    })
+                );
+            }
+
+            const fallbackMessage = `HTTP ${response.status}`;
+            throw new ApiError(data?.error || data?.message || fallbackMessage, response.status,
+                endpoint.startsWith('/api/ai/') && typeof data?.message === 'string' ? data.message.slice(0, 1000) : undefined);
+        }
+
+        return data as T;
+    }
+
+    async get<T>(endpoint: string): Promise<T> {
+        return this.request<T>(endpoint, { method: 'GET' });
+    }
+
+    /**
+     * Fetches binary content (images…) with the auth header.
+     * Not supported by the static demo mock — throws so callers fall back.
+     */
+    async getBlob(endpoint: string): Promise<Blob> {
+        if (IS_DEMO) throw new Error('Binary endpoints are not available in demo mode');
+
+        const headers: Record<string, string> = {};
+        if (this.token) headers['Authorization'] = `Bearer ${this.token}`;
+
+        const response = await fetch(`${apiBase()}${endpoint}`, { headers });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.blob();
+    }
+
+    async post<T>(endpoint: string, body: any): Promise<T> {
+        return this.request<T>(endpoint, {
+            method: 'POST',
+            body: JSON.stringify(body),
+        });
+    }
+
+    /** Sends a file's text as the raw body (an .ics calendar, for instance). */
+    async postText<T>(endpoint: string, text: string, contentType: string): Promise<T> {
+        if (IS_DEMO) throw new Error('DEMO_UNAVAILABLE');
+        return this.request<T>(endpoint, {
+            method: 'POST',
+            body: text,
+            headers: { 'Content-Type': contentType },
+        });
+    }
+
+    async patch<T>(endpoint: string, body: unknown): Promise<T> {
+        return this.request<T>(endpoint, { method: 'PATCH', body: JSON.stringify(body) });
+    }
+
+    async put<T>(endpoint: string, body: any): Promise<T> {
+        return this.request<T>(endpoint, {
+            method: 'PUT',
+            body: JSON.stringify(body),
+        });
+    }
+
+    async delete<T>(endpoint: string): Promise<T> {
+        return this.request<T>(endpoint, { method: 'DELETE' });
+    }
+
+    // Authentication methods
+    async login(email: string, password: string) {
+        const response = await this.post<any>(
+            '/api/auth/login',
+            { email, password }
+        );
+
+        if (response.success && response.data) {
+            this.setToken(response.data.token);
+            return { success: true, ...response.data };
+        }
+        return response;
+    }
+
+    async register(email: string, password: string, name: string, inviteToken?: string, role?: string) {
+        const body: Record<string, string> = { email, password, name, role: role ?? 'parent' };
+        if (inviteToken) body.inviteToken = inviteToken;
+
+        const response = await this.post<any>(
+            '/api/auth/register',
+            body
+        );
+
+        if (response.success && response.data) {
+            this.setToken(response.data.token);
+            return { success: true, ...response.data };
+        }
+        return response;
+    }
+
+    async joinFamily(inviteToken: string) {
+        const response = await this.post<any>('/api/invites/join', { token: inviteToken });
+        if (response.success && response.data) {
+            this.setToken(response.data.token);
+            return { success: true, ...response.data };
+        }
+        return response;
+    }
+
+    async leaveFamily() {
+        const response = await this.delete<any>('/api/invites/leave');
+        if (response.success && response.data) {
+            this.setToken(response.data.token);
+            return { success: true, ...response.data };
+        }
+        return response;
+    }
+
+    async refreshToken() {
+        const response = await this.post<any>('/api/auth/refresh', {});
+        if (response.success && response.data) {
+            this.setToken(response.data.token);
+            return { success: true, ...response.data };
+        }
+        return response;
+    }
+
+    /** Which sign-in options the server offers. Older servers only know /registration. */
+    async getAuthConfig(): Promise<AuthServerConfig> {
+        try {
+            const response = await this.get<{ success: boolean; data: AuthServerConfig }>('/api/auth/config');
+            if (response?.data) return response.data;
+        } catch (error) {
+            // Only a server without this endpoint falls back. Any other failure
+            // (rate limit, outage) must not pass off an SSO-only server as a
+            // password one.
+            if (!(error instanceof ApiError && error.status === 404)) throw error;
+        }
+        const legacy = await this.get<{ success: boolean; data?: { open?: boolean } }>('/api/auth/registration');
+        return {
+            passwordLogin: true,
+            passwordSignup: legacy?.data?.open !== false,
+            passwordReset: true,
+            oidc: { enabled: false, name: null, signup: false },
+        };
+    }
+
+    /** Redeems the one-time code from the SSO callback. Login mode stores the new session. */
+    async exchangeSso(code: string, clientVerifier: string) {
+        const response = await this.post<{ success: boolean; data: SsoExchangeResult }>(
+            '/api/auth/oidc/exchange',
+            { code, clientVerifier }
+        );
+        if (response.data.mode === 'login') {
+            this.setToken(response.data.token);
+        }
+        return response.data;
+    }
+
+    /** Unlinks SSO. Other devices are signed out; this one continues with a fresh token. */
+    async unlinkSso() {
+        const response = await this.delete<{ success: boolean; data: { token: string } }>('/api/auth/oidc/link');
+        this.setToken(response.data.token);
+    }
+
+    /** Signs this account out of every device, this one included. */
+    async logoutEverywhere() {
+        await this.post('/api/auth/logout-all', {});
+        this.setToken(null);
+    }
+
+    logout() {
+        this.setToken(null);
+    }
+}
+
+export interface AuthServerConfig {
+    passwordLogin: boolean;
+    passwordSignup: boolean;
+    passwordReset: boolean;
+    oidc: { enabled: boolean; name: string | null; signup: boolean };
+}
+
+export type SsoExchangeResult =
+    | { mode: 'login'; created: boolean; token: string; user: any }
+    | { mode: 'link'; email: string | null };
+
+export const api = new ApiClient();

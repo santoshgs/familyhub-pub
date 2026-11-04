@@ -1,0 +1,112 @@
+import { Request, Response, NextFunction } from 'express';
+import { query } from '../db';
+import { InvalidTokenError, verifyAccessToken } from '../lib/authTokens';
+
+export interface AuthRequest extends Request {
+    /** Effective family-owner user ID — used by all data queries */
+    userId?: string;
+    /** Actual logged-in user's ID (may differ from userId when the user is a family member) */
+    actualUserId?: string;
+    /** True when the logged-in user IS the family owner (or a standalone user) */
+    isOwner?: boolean;
+    readOnly?: boolean;
+    ambientOnly?: boolean;
+    displaySessionId?: string;
+}
+
+/** The token in the Authorization header, or '' when there is none. */
+export const bearerToken = (req: Request): string => {
+    const header = req.headers.authorization;
+    return header?.startsWith('Bearer ') ? header.slice(7).trim() : '';
+};
+
+export const authMiddleware = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    const token = bearerToken(req);
+
+    if (!token) {
+        return res.status(401).json({ success: false, error: 'No token provided' });
+    }
+
+    try {
+        const verified = await verifyAccessToken(token);
+        req.readOnly = verified.readOnly;
+        req.ambientOnly = verified.ambientOnly;
+        req.displaySessionId = verified.displaySessionId;
+        if (verified.readOnly) {
+            const path = req.originalUrl.split('?')[0].replace(/\/+$/, '');
+            // Ambient tokens are narrower than the older protected overview
+            // scope: they cannot read notes, the general snapshot or Google API.
+            const allowed = verified.ambientOnly
+                ? ['/api/familyhub/ambient', '/api/familyhub/ambient/article', '/api/familyhub/modules', '/api/auth/me', '/api/auth/dashboard-prefs']
+                : ['/api/familyhub', '/api/familyhub/modules', '/api/familyhub/preferences', '/api/familyhub/ambient', '/api/familyhub/google/calendar', '/api/notes', '/api/auth/me', '/api/auth/modules', '/api/auth/dashboard-prefs'];
+            const canRefreshDisplay = verified.ambientOnly && req.method === 'POST' && path === '/api/familyhub/display/refresh';
+            if ((req.method !== 'GET' || !allowed.includes(path)) && !canRefreshDisplay) {
+                return res.status(403).json({ success: false, error: 'This display session is read-only.' });
+            }
+        }
+        req.actualUserId = verified.userId;
+        req.userId = verified.ownerId;
+        req.isOwner = verified.ownerId === verified.userId;
+    } catch (error) {
+        if (error instanceof InvalidTokenError) {
+            return res.status(401).json({ success: false, error: 'Invalid token' });
+        }
+        // The session check needs the database: never let a request through
+        // when it cannot be made.
+        return res.status(503).json({ success: false, error: 'Service unavailable' });
+    }
+    return next();
+};
+
+/**
+ * Authoritative (DB-backed) check: is the logged-in account a parent or the
+ * family owner? Used by routes that change behaviour for child accounts
+ * without rejecting the request outright (e.g. task completion → approval).
+ */
+export const isParentAccount = async (actualUserId: string | undefined): Promise<boolean> => {
+    const result = await query(
+        'SELECT role, (family_owner_id IS NULL) AS is_owner FROM users WHERE id = $1',
+        [actualUserId]
+    );
+    const row = result.rows[0] as { role?: string; is_owner?: boolean } | undefined;
+    if (!row) return false;
+    if (row.is_owner) return true;
+    return row.role !== 'enfant';
+};
+
+/**
+ * Restrict a route to "parent" (or owner) accounts. Accounts with the "enfant"
+ * role get read-only access and are rejected on write operations guarded by this.
+ * Must run after authMiddleware.
+ */
+export const requireParent = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+        // Authoritative check: read the CURRENT owner status and role from the DB,
+        // never from (potentially stale) JWT claims.
+        const result = await query(
+            'SELECT role, (family_owner_id IS NULL) AS is_owner FROM users WHERE id = $1',
+            [req.actualUserId]
+        );
+        const row = result.rows[0] as { role?: string; is_owner?: boolean } | undefined;
+
+        if (!row) {
+            return res.status(401).json({ success: false, error: 'Invalid token' });
+        }
+
+        // The family owner always has full rights.
+        if (row.is_owner) {
+            return next();
+        }
+
+        if (row.role === 'enfant') {
+            return res.status(403).json({
+                success: false,
+                error: 'Action réservée aux parents.',
+            });
+        }
+
+        return next();
+    } catch {
+        return res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+};

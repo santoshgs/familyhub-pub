@@ -1,0 +1,8 @@
+import { Flower2, ArrowRight } from 'lucide-react';
+export interface DaycareUpdate { id: string; title: string; text: string; receivedAt: string; kind: string; activityType?: string; hasDetails: boolean; link?: string }
+export function DaycareSummary({ updates, emptyMessage, onOpen }: { updates: DaycareUpdate[]; emptyMessage?: string; onOpen: () => void }) {
+    return <>{updates.slice(0, 3).map((update) => <article className="fh-daycare-entry" key={update.id}><p className="fh-eyebrow">{update.kind === 'activity' ? update.activityType ?? 'Activity' : update.kind === 'message' ? 'Message from daycare' : 'Notification'}</p><h3>{update.title}</h3><p>{update.text.slice(0, 240)}{update.text.length > 240 ? '…' : ''}</p><time>{new Date(update.receivedAt).toLocaleString()}</time></article>)}{!updates.length && <div className="fh-empty"><p>{emptyMessage}</p></div>}<button className="fh-text-button" onClick={onOpen}>See all updates<ArrowRight size={15} /></button></>;
+}
+export function DaycareTimeline({ updates }: { updates: DaycareUpdate[] }) {
+    return <div className="fh-timeline">{updates.map((update) => <article key={update.id}><span className="fh-timeline-icon fh-tint-sage"><Flower2 size={18} /></span><div><time>{new Date(update.receivedAt).toLocaleString()}</time><h3>{update.title}</h3><p style={{ whiteSpace: 'pre-wrap' }}>{update.text}</p>{!update.hasDetails && <p>Open the original notification for further details.</p>}{update.link && <a className="fh-text-button" href={update.link} target="_blank" rel="noreferrer">Open daycare notification<ArrowRight size={14} /></a>}</div></article>)}{!updates.length && <p>No daycare updates are available.</p>}</div>;
+}

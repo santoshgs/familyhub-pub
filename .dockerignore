@@ -1,0 +1,16 @@
+.git
+.familyhub-local/
+release-output/
+**/__pycache__/
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules
+**/dist
+**/*.tsbuildinfo
+server/uploads/
+postgres-data/
+*.log

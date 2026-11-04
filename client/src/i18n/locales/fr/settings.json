@@ -1,0 +1,140 @@
+{
+  "title": "Paramètres",
+  "subtitle": "Gérez vos données et préférences.",
+  "language": {
+    "title": "Langue",
+    "subtitle": "Choisissez la langue de l'interface de l'application."
+  },
+  "profile": {
+    "title": "Photo de profil",
+    "subtitle": "Choisissez une photo qui apparaîtra dans le menu de l'application.",
+    "change": "Changer la photo",
+    "choose": "Choisir une photo",
+    "remove": "Retirer"
+  },
+  "notif": {
+    "title": "Notifications push",
+    "subtitle": "Recevez des rappels pour vos rendez-vous directement sur cet appareil, même quand l'application est fermée.",
+    "unsupported": "Notifications non supportées sur ce navigateur.",
+    "denied": "Permission refusée. Autorisez les notifications dans les paramètres de votre navigateur.",
+    "enable": "Activer les notifications",
+    "disable": "Désactiver les notifications",
+    "inProgress": "En cours…",
+    "active": "Notifications activées sur cet appareil."
+  },
+  "currency": {
+    "title": "Devise",
+    "subtitle": "Sélectionnez la devise pour afficher les montants dans votre application."
+  },
+  "modules": {
+    "title": "Modules",
+    "subtitle": "Activez ou masquez les modules optionnels pour ne garder que ceux que votre famille utilise.",
+    "parentOnly": "Seuls les parents peuvent modifier les modules.",
+    "error": "Erreur lors de la mise à jour des modules.",
+    "names": {
+      "kiosk": "Mode kiosque",
+      "notes": "Notes du tableau de bord",
+      "ai": "Assistant IA"
+    },
+    "descriptions": {
+      "budget": "Suivi du budget familial, dépenses et revenus.",
+      "rewards": "Argent de poche et récompenses des enfants.",
+      "meals": "Planification des repas de la semaine.",
+      "recipes": "Carnet de recettes de la famille.",
+      "planning": "Plannings hebdomadaires (travail, école, activités).",
+      "integrations": "Connexions à des services tiers (Mealie, Home Assistant…).",
+      "kiosk": "Affichage plein écran pour un écran partagé de la maison.",
+      "notes": "Pense-bêtes affichés sur le tableau de bord.",
+      "ai": "Assistant intelligent pour saisir et organiser rapidement."
+    }
+  },
+  "export": {
+    "title": "Exporter les données",
+    "subtitle": "Télécharge une copie JSON portable des données de votre famille et des préférences familiales. Les identifiants d’authentification, secrets d’intégration, notifications et données de sécurité temporaires ne sont pas inclus.",
+    "button": "Exporter",
+    "inProgress": "Export en cours…"
+  },
+  "import": {
+    "title": "Importer des données",
+    "subtitle": "Restaure un export portable Family Hub. Les données existantes sont conservées et les doublons ignorés ; les préférences familiales du fichier sont restaurées.",
+    "success": "Import réussi",
+    "itemsImported_one": "élément importé",
+    "itemsImported_other": "éléments importés",
+    "chooseFile": "Choisir un fichier…",
+    "button": "Importer",
+    "inProgress": "Import en cours…",
+    "invalidJson": "Fichier JSON invalide."
+  },
+  "entities": {
+    "family_settings": "Préférences familiales",
+    "account_preferences": "Préférences des comptes",
+    "family_members": "Membres de la famille",
+    "tasks": "Tâches",
+    "recipes": "Recettes",
+    "meal_plans": "Repas planifiés",
+    "budget_entries": "Entrées budget",
+    "budget_limits": "Limites budget",
+    "shopping_items": "Articles de courses",
+    "shopping_list_templates": "Modèles de courses",
+    "appointments": "Rendez-vous",
+    "appointment_recurrence_exceptions": "Exceptions de rendez-vous",
+    "schedule_entries": "Plannings",
+    "schedule_entry_members": "Participants aux plannings",
+    "schedule_entry_exceptions": "Exceptions de planning",
+    "reward_transactions": "Transactions de récompenses",
+    "reward_settings": "Réglages des récompenses",
+    "reward_goals": "Objectifs d’épargne",
+    "family_notes": "Pense-bêtes familiaux",
+    "recurring_expenses": "Dépenses récurrentes",
+    "recurring_expense_logs": "Pointages des dépenses récurrentes",
+    "kakeibo_months": "Mois Kakeibo",
+    "family_posts": "Publications familiales",
+    "family_post_seen": "État de lecture des publications"
+  },
+  "errors": {
+    "notif": "Erreur lors de la configuration des notifications.",
+    "currency": "Erreur lors de la mise à jour de la devise.",
+    "avatarImage": "Veuillez choisir une image.",
+    "avatarRead": "Lecture du fichier impossible.",
+    "avatarInvalid": "Image invalide.",
+    "avatarCanvas": "Canvas indisponible.",
+    "avatarUpdate": "Erreur lors de la mise à jour de la photo.",
+    "avatarRemove": "Erreur lors de la suppression de la photo.",
+    "export": "Erreur lors de l'export.",
+    "import": "Erreur lors de l'import."
+  },
+  "regional": {
+    "title": "Semaine",
+    "subtitle": "Choisissez le jour qui commence vos semaines dans l’agenda, le planning, les repas et le tableau de bord. Ce réglage n’appartient qu’à vous.",
+    "weekStart": "Premier jour de la semaine",
+    "weekStartHelp": "Automatique suit les usages de votre langue et de votre région.",
+    "automatic": "Automatique ({{day}})",
+    "saveError": "Impossible d’enregistrer votre préférence.",
+    "days": {
+      "monday": "Lundi",
+      "tuesday": "Mardi",
+      "wednesday": "Mercredi",
+      "thursday": "Jeudi",
+      "friday": "Vendredi",
+      "saturday": "Samedi",
+      "sunday": "Dimanche"
+    }
+  },
+  "signIn": {
+    "title": "Connexion",
+    "subtitle": "Comment vous vous connectez à Family Hub, sur cet appareil et les autres.",
+    "ssoLinked": "Votre compte est lié à {{name}}.",
+    "ssoNotLinked": "Liez votre compte {{name}} pour vous connecter avec.",
+    "link": "Lier {{name}}",
+    "unlink": "Délier",
+    "confirmUnlink": "Délier {{name}} ? Vous vous connecterez avec votre mot de passe, et vos autres appareils seront déconnectés.",
+    "unlinkNeedsPassword": "Votre compte n'a pas encore de mot de passe. Définissez-en un avec « Mot de passe oublié ? » sur la page de connexion pour pouvoir délier.",
+    "unlinkPasswordOff": "La connexion par mot de passe est désactivée sur ce serveur : la connexion unique ne peut pas être déliée.",
+    "relinkNote": "Une fois le lien supprimé, la connexion avec {{name}} n'ouvre plus ce compte. Vous pourrez le lier à nouveau ici.",
+    "linked": "La connexion unique est maintenant liée.",
+    "unlinked": "La connexion unique est déliée. Vos autres appareils ont été déconnectés.",
+    "logoutEverywhere": "Se déconnecter de tous les appareils",
+    "logoutEverywhereDesc": "Téléphone perdu, ou connexion sur un ordinateur partagé ? Ceci vous déconnecte partout, y compris ici.",
+    "confirmLogoutEverywhere": "Se déconnecter de tous les appareils, y compris celui-ci ?"
+  }
+}

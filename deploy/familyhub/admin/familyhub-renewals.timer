@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily FamilyHub renewal check (warnings 30 days ahead)
+
+[Timer]
+OnCalendar=*-*-* 09:17
+Persistent=true
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target

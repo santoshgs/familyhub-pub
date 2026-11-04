@@ -1,0 +1,25 @@
+# Snyk (https://snyk.io) policy file.
+# Accepted risks for build-time tooling with no patched release.
+# Reviewed 2026-11-04; each ignore expires so Snyk reports it again for review.
+version: v1.25.0
+ignore:
+  SNYK-JS-BRACES-19963945:
+    - '*':
+        reason: >-
+          Build-time only (tailwindcss 3 -> chokidar/micromatch -> braces 3.0.3).
+          No patched braces release exists. Input is our own Tailwind content
+          globs, not user data. The only remedy, Tailwind 4, requires Chrome 111+
+          and Safari 16.4+, but the photo frame runs Android WebView 107 and the
+          app targets Safari 15.4+. Revisit if the frame is replaced.
+        expires: 2027-02-04T00:00:00.000Z
+        created: 2026-11-04T05:30:00.000Z
+  SNYK-JS-DEEPMERGE-19964053:
+    - '*':
+        reason: >-
+          Build-time only (vite-plugin-pwa -> workbox-build ->
+          @rollup/plugin-node-resolve -> deepmerge 4.3.1). No patched release
+          exists; merged input is our own build configuration. Same advisory as
+          Dependabot alert #1 (GHSA-gcqx-w48m-w2h4).
+        expires: 2027-02-04T00:00:00.000Z
+        created: 2026-11-04T05:30:00.000Z
+patch: {}

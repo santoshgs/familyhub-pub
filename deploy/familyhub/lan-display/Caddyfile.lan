@@ -1,0 +1,67 @@
+# FamilyHub LAN display listener (host Caddy on the Pi).
+# Serves only the read-only photo-frame display on the Pi's LAN address.
+# Management stays on the tailnet (Tailscale Serve -> 127.0.0.1:8080).
+{
+	auto_https disable_redirects
+	servers {
+		protocols h1 h2
+	}
+}
+
+https://{$FAMILYHUB_LAN_HOST} {
+	bind {$FAMILYHUB_LAN_IP}
+	tls /etc/family-hub-lan/lan-cert.pem /etc/family-hub-lan/lan-key.pem
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+	}
+
+	@display_pages {
+		method GET HEAD
+		path /display /display-pair
+	}
+	handle @display_pages {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	@static_assets {
+		method GET HEAD
+		path /assets/* /fonts/* /OpenFamily.png /apple-touch-icon.png /favicon-16x16.png /favicon-32x32.png /icon-192.png /icon-512.png /manifest.webmanifest /registerSW.js /sw.js
+	}
+	handle @static_assets {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	# The only API calls a paired frame makes. The server also limits ambient
+	# tokens to these endpoints.
+	@display_reads {
+		method GET
+		path /api/auth/me /api/auth/dashboard-prefs /api/familyhub/modules /api/familyhub/ambient /api/familyhub/ambient/article
+	}
+	handle @display_reads {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	@display_writes {
+		method POST
+		path /api/familyhub/display/pair /api/familyhub/display/refresh
+	}
+	handle @display_writes {
+		reverse_proxy 127.0.0.1:8080
+	}
+
+	# Any other page (/, /login, a stale bookmark, a sign-out) goes back to the
+	# display, which shows the pairing screen when the frame is not paired.
+	@other_pages {
+		method GET HEAD
+		not path /api/* /ws /ws/* /health /ready /assets/* /fonts/*
+	}
+	handle @other_pages {
+		redir * /display 302
+	}
+
+	handle {
+		respond "Not Found" 404
+	}
+}

@@ -1,0 +1,9 @@
+[Unit]
+Description=Check FamilyHub credential and certificate expiry
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+Environment=STATUS_JSON=/opt/familyhub/admin-exchange/status.json
+ExecStart=/opt/familyhub/check-renewals.sh

@@ -1,0 +1,5 @@
+{
+  "rollbackSafe": true,
+  "policy": "Only additive, backward-compatible database migrations may be marked safe, with one exception: a migration may drop the tables of modules this release removes, if an app rollback to the previous release has been tested against it (the old release must still start). Their data then lives only in the updater's pre-update dump. Review this for every release. App rollback never restores the database automatically.",
+  "v1.0.0": "familyhub/0009 drops recipes, meal_plans, family_posts and family_post_seen (removed modules). Rollback to v0.3.7 tested on November 4, 2026: it starts and recreates those tables empty."
+}

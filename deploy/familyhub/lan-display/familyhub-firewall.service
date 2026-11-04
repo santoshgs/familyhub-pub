@@ -1,0 +1,16 @@
+[Unit]
+Description=Restrict Pi LAN input to the FamilyHub frame, home-network SSH and Tailscale transport
+DefaultDependencies=no
+Wants=network-pre.target
+Before=network-pre.target caddy.service
+After=local-fs.target
+
+[Service]
+Type=oneshot
+# The rules file replaces only the inet familyhub_lan table, atomically.
+# There is deliberately no ExecStop: stopping this unit never opens the LAN.
+ExecStart=/usr/sbin/nft -f /etc/family-hub-lan/firewall.nft
+RemainAfterExit=yes
+
+[Install]
+WantedBy=sysinit.target

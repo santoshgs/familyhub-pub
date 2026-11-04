@@ -1,0 +1,206 @@
+import React, {
+    createContext,
+    useContext,
+    useEffect,
+    useRef,
+    useCallback,
+    ReactNode,
+} from 'react';
+import { useAuth } from './AuthContext';
+import { api } from '../lib/api';
+import { wsBase } from '../lib/serverConfig';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type WsEntity =
+    | 'tasks'
+    | 'shopping'
+    | 'appointments'
+    | 'family'
+    | 'budget'
+    | 'planning'
+    | 'notifications'
+    | 'integrations'
+    | 'rewards'
+    | 'notes';
+
+export type WsAction = 'created' | 'updated' | 'deleted';
+
+export interface WsUpdateMessage {
+    type: 'update';
+    entity: WsEntity;
+    action: WsAction;
+}
+
+type Subscriber = () => void;
+
+interface WebSocketContextType {
+    /** Subscribe to updates for a given entity. Returns an unsubscribe function. */
+    subscribe: (entity: WsEntity, cb: Subscriber) => () => void;
+}
+
+// ─── Context ──────────────────────────────────────────────────────────────────
+
+const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
+
+// The WebSocket base is resolved by `wsBase()` (serverConfig): same-origin on the
+// web, derived from the configured server URL in the native app.
+const IS_DEMO = Boolean(import.meta.env.VITE_DEMO);
+
+const RECONNECT_DELAY_MS = 2_000;
+const RECONNECT_MAX_DELAY_MS = 30_000;
+const PING_INTERVAL_MS = 25_000;
+// Close code the server uses when a session is refused or revoked.
+const WS_SESSION_ENDED = 4001;
+
+// ─── Provider ────────────────────────────────────────────────────────────────
+
+export const WebSocketProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+    const { user } = useAuth();
+
+    // Map entity → set of subscriber callbacks
+    const subscribers = useRef<Map<WsEntity, Set<Subscriber>>>(new Map());
+
+    const wsRef = useRef<WebSocket | null>(null);
+    const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const pingTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+    const reconnectDelay = useRef(RECONNECT_DELAY_MS);
+    const unmounted = useRef(false);
+
+    // Notify all subscribers for a given entity
+    const notify = useCallback((entity: WsEntity) => {
+        const cbs = subscribers.current.get(entity);
+        if (cbs) {
+            cbs.forEach((cb) => cb());
+        }
+    }, []);
+
+    const clearPing = () => {
+        if (pingTimer.current) {
+            clearInterval(pingTimer.current);
+            pingTimer.current = null;
+        }
+    };
+
+    const connect = useCallback(() => {
+        // Read-only displays poll their snapshot; the LAN display listener does
+        // not expose the socket, so never open (and endlessly retry) it there.
+        if (unmounted.current || !user || IS_DEMO || user.is_display) return;
+
+        // Close any existing socket
+        if (wsRef.current) {
+            wsRef.current.onclose = null;
+            wsRef.current.close();
+        }
+
+        const ws = new WebSocket(`${wsBase()}/ws`);
+        wsRef.current = ws;
+        let authenticated = false;
+
+        ws.onopen = () => {
+            reconnectDelay.current = RECONNECT_DELAY_MS;
+
+            // Authenticate with JWT; never send the raw userId
+            ws.send(JSON.stringify({ type: 'auth', token: api.getToken() }));
+
+            // Heartbeat to keep connection alive through proxies
+            clearPing();
+            pingTimer.current = setInterval(() => {
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'ping' }));
+                }
+            }, PING_INTERVAL_MS);
+        };
+
+        ws.onmessage = (event: MessageEvent) => {
+            try {
+                const msg = JSON.parse(event.data as string) as WsUpdateMessage | { type: 'auth'; success: boolean };
+                if (msg.type === 'auth') {
+                    authenticated = msg.success;
+                } else if (msg.type === 'update' && msg.entity) {
+                    notify(msg.entity);
+                }
+            } catch {
+                // ignore malformed frames
+            }
+        };
+
+        ws.onclose = (event: CloseEvent) => {
+            clearPing();
+            if (unmounted.current) return;
+
+            // 4001 on a socket that was signed in: its session was revoked.
+            // That also happens to this device when it leaves a family or
+            // unlinks SSO, and the response carrying its fresh token may still
+            // be on its way: just reconnect below, with whatever token is
+            // current by then. 4001 at sign-in: the token is refused, so ask
+            // the API, whose 401 signs the app out.
+            if (event.code === WS_SESSION_ENDED && !authenticated) {
+                api.get('/api/auth/me').catch(() => undefined);
+            }
+
+            // Exponential back-off reconnection
+            reconnectTimer.current = setTimeout(() => {
+                reconnectDelay.current = Math.min(
+                    reconnectDelay.current * 2,
+                    RECONNECT_MAX_DELAY_MS,
+                );
+                connect();
+            }, reconnectDelay.current);
+        };
+
+        ws.onerror = () => {
+            // onclose will fire after onerror, reconnect handled there
+            ws.close();
+        };
+    }, [user, notify]);
+
+    // Connect when user is available, disconnect on logout
+    useEffect(() => {
+        unmounted.current = false;
+
+        if (user) {
+            connect();
+        }
+
+        return () => {
+            unmounted.current = true;
+            clearPing();
+            if (reconnectTimer.current) {
+                clearTimeout(reconnectTimer.current);
+            }
+            if (wsRef.current) {
+                wsRef.current.onclose = null;
+                wsRef.current.close();
+                wsRef.current = null;
+            }
+        };
+    }, [user, connect]);
+
+    const subscribe = useCallback((entity: WsEntity, cb: Subscriber): (() => void) => {
+        if (!subscribers.current.has(entity)) {
+            subscribers.current.set(entity, new Set());
+        }
+        subscribers.current.get(entity)!.add(cb);
+
+        return () => {
+            subscribers.current.get(entity)?.delete(cb);
+        };
+    }, []);
+
+    return (
+        <WebSocketContext.Provider value={{ subscribe }}>
+            {children}
+        </WebSocketContext.Provider>
+    );
+};
+
+// ─── Hook ─────────────────────────────────────────────────────────────────────
+
+export const useWebSocket = (): WebSocketContextType => {
+    const ctx = useContext(WebSocketContext);
+    if (!ctx) {
+        throw new Error('useWebSocket must be used inside <WebSocketProvider>');
+    }
+    return ctx;
+};

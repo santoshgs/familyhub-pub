@@ -1,0 +1,105 @@
+# Standalone stack; do not merge with the upstream docker-compose.yml.
+name: familyhub
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: familyhub
+      POSTGRES_USER: familyhub
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a private database password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U familyhub -d familyhub']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  server:
+    build:
+      context: ../..
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      SERVER_PORT: 3001
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: familyhub
+      POSTGRES_USER: familyhub
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a private database password}
+      JWT_SECRET: ${JWT_SECRET:?Preserve your JWT and AI encryption secret}
+      TZ: ${TZ:-America/New_York}
+      REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-false}
+      CORS_ORIGINS: https://${FAMILYHUB_HOST:?Set the HTTPS hostname}
+      APP_PUBLIC_URL: https://${FAMILYHUB_HOST}
+      FAMILYHUB_APP_URL: https://${FAMILYHUB_HOST}/
+      GOOGLE_REDIRECT_URI: https://${FAMILYHUB_HOST}/api/familyhub/google/callback
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      FAMILYHUB_GOOGLE_EMAIL: ${FAMILYHUB_GOOGLE_EMAIL:-}
+      FAMILYHUB_TOKEN_KEY: ${FAMILYHUB_TOKEN_KEY:-}
+      # Sign in with Google (OpenID Connect). Empty = off, so nothing changes
+      # until the owner fills these in. See docs/familyhub/GOOGLE_SIGNIN.md.
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_PROVIDER_NAME: ${OIDC_PROVIDER_NAME:-Google}
+      # New accounts only through an invitation, never from a Google sign-in alone.
+      OIDC_REGISTRATION_ENABLED: ${OIDC_REGISTRATION_ENABLED:-false}
+      # false = Google only. Ignored until sign-in with Google is configured,
+      # so the server can never lock everyone out.
+      PASSWORD_LOGIN_ENABLED: ${PASSWORD_LOGIN_ENABLED:-true}
+      # Settings → Advanced → Server credentials hands tokens to the host's
+      # root-only applier through this folder (deploy/familyhub/admin).
+      FAMILYHUB_ADMIN_EXCHANGE: /app/admin-exchange
+    volumes:
+      - uploads:/app/uploads
+      - ${FAMILYHUB_ADMIN_EXCHANGE_DIR:-/opt/familyhub/admin-exchange}:/app/admin-exchange
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, 'wget -qO- http://127.0.0.1:3001/ready >/dev/null 2>&1 || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+  client:
+    build:
+      context: ../..
+      dockerfile: client/Dockerfile
+      args:
+        VITE_API_URL: ''
+        VITE_WS_URL: ''
+        VITE_FAMILYHUB_LOCAL: 'true'
+        VITE_REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-false}
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, 'wget -qO- http://127.0.0.1/ >/dev/null 2>&1 || exit 1']
+      interval: 20s
+      timeout: 5s
+      retries: 5
+  gateway:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      FAMILYHUB_HOST: ${FAMILYHUB_HOST:?Set the HTTPS hostname}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      client:
+        condition: service_healthy
+volumes:
+  postgres-data:
+  uploads:
+  caddy-data:
+  caddy-config:

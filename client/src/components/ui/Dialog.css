@@ -1,0 +1,9 @@
+@media (max-width: 639px) {
+  html[data-soft-keyboard='open'] [data-viewport-aware='true'] {
+    top: calc(var(--openfamily-keyboard-top, 0px) + 8px);
+    bottom: auto;
+    max-height: calc(var(--openfamily-keyboard-height, 100vh) - 16px);
+    border-radius: 18px;
+    overscroll-behavior: contain;
+  }
+}

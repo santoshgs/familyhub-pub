@@ -1,0 +1,73 @@
+{
+  "heading": {
+    "before": "Your ",
+    "highlight": "day",
+    "after": ", at a glance."
+  },
+  "budgetAlert": {
+    "title": "Budget warning",
+    "message_one": "{{count}} category has exceeded its monthly budget.",
+    "message_other": "{{count}} categories have exceeded their monthly budget.",
+    "cta": "View details"
+  },
+  "stats": {
+    "appointments": "Appointments",
+    "tasks": "Tasks",
+    "shopping": "Shopping",
+    "monthExpenses": "This month's expenses"
+  },
+  "today": {
+    "title": "Today",
+    "viewWeek": "Week",
+    "emptyTitle": "Nothing planned.",
+    "emptySubtitle": "Add an appointment to see it appear here.",
+    "emptyCta": "Add an appointment",
+    "weekTitle": "This week",
+    "viewDay": "Day",
+    "emptyWeekSubtitle": "No appointments this week."
+  },
+  "aside": {
+    "shopping": "Shopping",
+    "shoppingCount_one": "item to buy",
+    "shoppingCount_other": "items to buy",
+    "budget": "This month's budget",
+    "budgetSubtitle": "spent this month",
+    "tasks": "Pending tasks",
+    "tasksCount_one": "task to complete",
+    "tasksCount_other": "tasks to complete"
+  },
+  "planning": {
+    "title": "This week's schedules",
+    "viewAll": "View schedule",
+    "empty": "No schedule saved for this week."
+  },
+  "customize": {
+    "button": "Customise",
+    "title": "Customise your home page",
+    "description": "Choose what appears on your home page, and in which order. This setting is specific to your account.",
+    "agendaViewLabel": "Agenda display",
+    "widgetsLabel": "Displayed blocks",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "show": "Show",
+    "hide": "Hide",
+    "reset": "Reset",
+    "allHidden": "Every block is hidden. Customise your home page to show some again.",
+    "moduleDisabled": "(module disabled)",
+    "widgets": {
+      "stats": "Key figures",
+      "agenda": "Agenda (appointments)",
+      "planning": "This week's schedules",
+      "quick": "Quick access (shopping, budget, tasks)",
+      "notes": "Family notes"
+    }
+  },
+  "latestPost": {
+    "title": "Latest family post",
+    "viewAll": "View all posts",
+    "seenBy": "Seen by: {{names}}",
+    "notSeen": "Not seen by anyone yet",
+    "seen": "Seen",
+    "markSeen": "Mark seen"
+  }
+}

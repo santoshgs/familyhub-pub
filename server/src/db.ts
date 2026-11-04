@@ -1,0 +1,720 @@
+import { Pool, QueryResult, types } from 'pg';
+import { loadEnv } from './config/loadEnv';
+import logger from './lib/logger';
+import { MIGRATIONS_TABLE, runVersionedMigrations } from './migrations/runner';
+import { coreMigrations } from './migrations/registry';
+import { REMOVED_TABLES_MIGRATION_ID } from './migrations/familyhub/v1Cleanup';
+
+// Tables removed in Family Hub v1.0 (see migrations/familyhub/v1Cleanup.ts).
+const REMOVED_TABLES = /\b(recipes|meal_plans|family_posts|family_post_seen)\b/;
+import { familyHubMigrations } from './migrations/familyhub/registry';
+
+loadEnv();
+
+// Return DATE columns as plain 'YYYY-MM-DD' strings instead of JavaScript Date objects.
+// This prevents timezone-related date shifts (e.g. '2026-03-09' → '2026-03-08T23:00:00.000Z').
+types.setTypeParser(1082, (val: string) => val);
+
+// Return TIMESTAMP (without time zone, OID 1114) columns as naive local ISO strings
+// ('YYYY-MM-DDTHH:mm:ss', no 'Z', fractional seconds stripped) instead of JS Date
+// objects. pg would otherwise build a Date in server-local time that serializes to a
+// UTC ISO string in JSON, shifting appointment times by the server's UTC offset.
+types.setTypeParser(1114, (val: string) => val.replace(' ', 'T').replace(/\.\d+$/, ''));
+
+if (!process.env.POSTGRES_PASSWORD) {
+    if (process.env.NODE_ENV === 'production') {
+        logger.error('db.missing_password', {
+            message: 'POSTGRES_PASSWORD is not set. Refusing to start in production with the default password — set it in your .env file.',
+        });
+        process.exit(1);
+    }
+    logger.warn('db.missing_password', {
+        message: 'POSTGRES_PASSWORD is not set — falling back to default (development only). Set it in your .env file.',
+    });
+}
+
+const pool = new Pool({
+    host: process.env.POSTGRES_HOST || 'localhost',
+    port: parseInt(process.env.POSTGRES_PORT || '5432'),
+    database: process.env.POSTGRES_DB || 'openfamily',
+    user: process.env.POSTGRES_USER || 'openfamily',
+    password: process.env.POSTGRES_PASSWORD || 'changeme',
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 2000,
+});
+
+pool.on('error', (err) => {
+    logger.error('db.pool_error', {
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error && process.env.NODE_ENV !== 'production' ? err.stack : undefined,
+    });
+    process.exit(-1);
+});
+
+export const query: QueryFn = async (text, params) => {
+    const start = Date.now();
+    const operation = text.trim().split(/\s+/)[0]?.toUpperCase() || 'UNKNOWN';
+
+    try {
+        const res = await pool.query(text, params);
+        const duration = Date.now() - start;
+        logger.debug('db.query', {
+            operation,
+            durationMs: duration,
+            rows: res.rowCount ?? 0,
+            hasParams: Array.isArray(params) && params.length > 0,
+        });
+        return res;
+    } catch (error) {
+        logger.error('db.query_error', {
+            operation,
+            error: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error && process.env.NODE_ENV !== 'production' ? error.stack : undefined,
+        });
+        throw error;
+    }
+};
+
+export const getClient = async () => {
+    const client = await pool.connect();
+    const query = client.query.bind(client);
+    const release = client.release.bind(client);
+
+    // Set a timeout of 5 seconds, after which we will log this client's last query
+    const timeout = setTimeout(() => {
+        logger.warn('db.client_checkout_timeout', { timeoutMs: 5000 });
+    }, 5000);
+
+    // Monkey patch the query method to keep track of the last query executed
+    client.query = ((...args: Parameters<typeof query>) => {
+        return query(...args);
+    }) as typeof client.query;
+
+    client.release = () => {
+        clearTimeout(timeout);
+        return release();
+    };
+
+    return client;
+};
+
+/** Signature shared by query() and Transaction.query, for helpers that run either way. */
+export type QueryFn = (text: string, params?: any[]) => Promise<QueryResult<any>>;
+
+export interface Transaction {
+    query: QueryFn;
+    /** Runs `fn` once the transaction has committed; dropped if it rolls back. */
+    afterCommit: (fn: () => void) => void;
+}
+
+/**
+ * Runs `fn` inside BEGIN/COMMIT on one pooled connection, rolling back on any
+ * error. Side effects that must only happen for committed changes (closing the
+ * sockets of revoked sessions, for instance) are registered with afterCommit.
+ */
+export const withTransaction = async <T>(fn: (tx: Transaction) => Promise<T>): Promise<T> => {
+    const client = await getClient();
+    const hooks: Array<() => void> = [];
+    try {
+        await client.query('BEGIN');
+        const result = await fn({
+            query: (text, params) => client.query(text, params),
+            afterCommit: (hook) => hooks.push(hook),
+        });
+        await client.query('COMMIT');
+        for (const hook of hooks) {
+            try {
+                hook();
+            } catch (error) {
+                logger.warn('db.after_commit_hook_failed', {
+                    error: error instanceof Error ? error.message : String(error),
+                });
+            }
+        }
+        return result;
+    } catch (error) {
+        await client.query('ROLLBACK').catch(() => undefined);
+        throw error;
+    } finally {
+        client.release();
+    }
+};
+
+// Serialises schema changes between server instances starting at the same time.
+const MIGRATION_LOCK = "hashtext('openfamily.migrations')";
+
+export const runMigrations = async () => {
+    // The historical list below is idempotent and runs on every start, as it
+    // always has. It is closed: do not add to it. New schema changes go into
+    // migrations/registry.ts, where each runs once and is recorded.
+    logger.info('db.migrations_start');
+
+    const migrations = [
+        // Migration 000: base schema. Previously this table set existed only
+        // via server/schema.sql, applied out-of-band by postgres'
+        // docker-entrypoint-initdb.d on a brand-new data directory — every
+        // deployment target (plain docker-compose, TrueNAS, CasaOS, Runtipi,
+        // Unraid, the Windows installer) had to separately mount or fetch that
+        // file, and it had already drifted (notifications/push_subscriptions
+        // existed in schema.sql but were never created for upgrading installs
+        // that predated them). Recreating the original shape of each table
+        // here, idempotently, means the app owns its schema end-to-end: point
+        // it at a completely empty Postgres database and it bootstraps itself,
+        // exactly like every migration below already does.
+        'CREATE EXTENSION IF NOT EXISTS "uuid-ossp"',
+        `CREATE TABLE IF NOT EXISTS users (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            email VARCHAR(255) UNIQUE NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            name VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS family_members (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name VARCHAR(255) NOT NULL,
+            birth_date DATE,
+            color VARCHAR(7) NOT NULL DEFAULT '#3B82F6',
+            blood_type VARCHAR(3),
+            allergies TEXT,
+            vaccines TEXT,
+            emergency_contact TEXT,
+            medical_notes TEXT,
+            avatar_url TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS shopping_items (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name VARCHAR(255) NOT NULL,
+            category VARCHAR(50) NOT NULL,
+            quantity DECIMAL(10, 2),
+            unit VARCHAR(50),
+            price DECIMAL(10, 2),
+            is_checked BOOLEAN DEFAULT FALSE,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS shopping_list_templates (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name VARCHAR(255) NOT NULL,
+            items JSONB NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS tasks (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            title VARCHAR(255) NOT NULL,
+            description TEXT,
+            is_completed BOOLEAN DEFAULT FALSE,
+            due_date TIMESTAMP,
+            frequency VARCHAR(50),
+            priority VARCHAR(50),
+            assigned_to JSONB DEFAULT '[]'::jsonb,
+            completed_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS appointments (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            title VARCHAR(255) NOT NULL,
+            description TEXT,
+            start_time TIMESTAMP NOT NULL,
+            end_time TIMESTAMP,
+            location TEXT,
+            family_member_ids JSONB DEFAULT '[]'::jsonb,
+            reminder_30min BOOLEAN DEFAULT FALSE,
+            reminder_1hour BOOLEAN DEFAULT FALSE,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS recipes (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            name VARCHAR(255) NOT NULL,
+            category VARCHAR(50) NOT NULL,
+            description TEXT,
+            ingredients JSONB NOT NULL,
+            instructions JSONB NOT NULL,
+            prep_time INTEGER,
+            cook_time INTEGER,
+            servings INTEGER,
+            difficulty VARCHAR(50),
+            tags JSONB,
+            image_url TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS meal_plans (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            date DATE NOT NULL,
+            meal_type VARCHAR(50) NOT NULL,
+            recipe_id UUID REFERENCES recipes(id) ON DELETE SET NULL,
+            custom_meal TEXT,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, date, meal_type)
+        )`,
+        `CREATE TABLE IF NOT EXISTS budget_entries (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            category VARCHAR(50) NOT NULL,
+            amount DECIMAL(10, 2) NOT NULL,
+            description TEXT,
+            date DATE NOT NULL,
+            is_expense BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS budget_limits (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            category VARCHAR(50) NOT NULL,
+            monthly_limit DECIMAL(10, 2) NOT NULL,
+            month INTEGER NOT NULL CHECK (month >= 1 AND month <= 12),
+            year INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, category, month, year)
+        )`,
+        // notifications/push_subscriptions existed in schema.sql but had no
+        // corresponding entry here, so upgrading installs that predated them
+        // in schema.sql never actually got these tables. Fixed by that same
+        // move: they're now created like everything else the app owns.
+        `CREATE TABLE IF NOT EXISTS notifications (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            title VARCHAR(255) NOT NULL,
+            message TEXT NOT NULL,
+            type VARCHAR(50) NOT NULL,
+            is_read BOOLEAN DEFAULT FALSE,
+            related_id UUID,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS push_subscriptions (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            endpoint TEXT NOT NULL,
+            keys JSONB NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, endpoint)
+        )`,
+        'CREATE INDEX IF NOT EXISTS idx_shopping_items_user_id ON shopping_items(user_id)',
+        'CREATE INDEX IF NOT EXISTS idx_shopping_items_category ON shopping_items(category)',
+        'CREATE INDEX IF NOT EXISTS idx_tasks_user_id ON tasks(user_id)',
+        'CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date)',
+        'CREATE INDEX IF NOT EXISTS idx_tasks_assigned_to ON tasks USING GIN (assigned_to)',
+        'CREATE INDEX IF NOT EXISTS idx_appointments_user_id ON appointments(user_id)',
+        'CREATE INDEX IF NOT EXISTS idx_appointments_start_time ON appointments(start_time)',
+        'CREATE INDEX IF NOT EXISTS idx_recipes_user_id ON recipes(user_id)',
+        'CREATE INDEX IF NOT EXISTS idx_recipes_category ON recipes(category)',
+        'CREATE INDEX IF NOT EXISTS idx_meal_plans_user_id ON meal_plans(user_id)',
+        'CREATE INDEX IF NOT EXISTS idx_meal_plans_date ON meal_plans(date)',
+        'CREATE INDEX IF NOT EXISTS idx_budget_entries_user_id ON budget_entries(user_id)',
+        'CREATE INDEX IF NOT EXISTS idx_budget_entries_date ON budget_entries(date)',
+        'CREATE INDEX IF NOT EXISTS idx_budget_entries_category ON budget_entries(category)',
+        'CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)',
+        'CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read)',
+        `CREATE OR REPLACE FUNCTION update_updated_at_column()
+        RETURNS TRIGGER AS $$
+        BEGIN
+            NEW.updated_at = CURRENT_TIMESTAMP;
+            RETURN NEW;
+        END;
+        $$ language 'plpgsql'`,
+        ...[
+            'users',
+            'family_members',
+            'shopping_items',
+            'tasks',
+            'appointments',
+            'recipes',
+            'meal_plans',
+            'budget_entries',
+            'notifications',
+        ].map(
+            (table) => `DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_trigger WHERE tgname = 'update_${table}_updated_at'
+                ) THEN
+                    CREATE TRIGGER update_${table}_updated_at
+                    BEFORE UPDATE ON ${table}
+                    FOR EACH ROW
+                    EXECUTE FUNCTION update_updated_at_column();
+                END IF;
+            END
+            $$`
+        ),
+        "ALTER TABLE family_members ADD COLUMN IF NOT EXISTS role VARCHAR(50) NOT NULL DEFAULT 'Autre'",
+        'ALTER TABLE family_members ADD COLUMN IF NOT EXISTS medications TEXT',
+        'ALTER TABLE family_members ADD COLUMN IF NOT EXISTS emergency_contact_name TEXT',
+        'ALTER TABLE family_members ADD COLUMN IF NOT EXISTS emergency_contact_phone TEXT',
+        'ALTER TABLE family_members ADD COLUMN IF NOT EXISTS notes TEXT',
+        "UPDATE family_members SET notes = medical_notes WHERE notes IS NULL AND medical_notes IS NOT NULL",
+        "UPDATE family_members SET medications = vaccines WHERE medications IS NULL AND vaccines IS NOT NULL",
+        `CREATE TABLE IF NOT EXISTS schedule_entries (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            family_member_id UUID NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+            schedule_type VARCHAR(30) NOT NULL DEFAULT 'work',
+            title VARCHAR(255) NOT NULL,
+            day_of_week INTEGER NOT NULL CHECK (day_of_week >= 1 AND day_of_week <= 7),
+            start_time TIME NOT NULL,
+            end_time TIME NOT NULL,
+            specific_date DATE,
+            location TEXT,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        'CREATE INDEX IF NOT EXISTS idx_schedule_entries_user_day ON schedule_entries(user_id, day_of_week)',
+        'CREATE INDEX IF NOT EXISTS idx_schedule_entries_member ON schedule_entries(family_member_id)',
+        'ALTER TABLE budget_entries ADD COLUMN IF NOT EXISTS assigned_to UUID REFERENCES family_members(id) ON DELETE SET NULL',
+        'CREATE INDEX IF NOT EXISTS idx_budget_entries_assigned_to ON budget_entries(assigned_to)',
+        `DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_trigger WHERE tgname = 'update_schedule_entries_updated_at'
+            ) THEN
+                CREATE TRIGGER update_schedule_entries_updated_at
+                BEFORE UPDATE ON schedule_entries
+                FOR EACH ROW
+                EXECUTE FUNCTION update_updated_at_column();
+            END IF;
+        END
+        $$`,
+        // Issue #43: fix for existing installations – drop constraint preventing cross-midnight schedules,
+        // add missing columns (specific_date, location) used by the planning routes.
+        'ALTER TABLE schedule_entries DROP CONSTRAINT IF EXISTS schedule_entries_check',
+        'ALTER TABLE schedule_entries ADD COLUMN IF NOT EXISTS specific_date DATE',
+        'ALTER TABLE schedule_entries ADD COLUMN IF NOT EXISTS location TEXT',
+        // Migration 002: family account sharing
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS family_owner_id UUID REFERENCES users(id) ON DELETE SET NULL',
+        `CREATE TABLE IF NOT EXISTS family_invites (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            token VARCHAR(64) UNIQUE NOT NULL,
+            invitee_email TEXT,
+            status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'accepted', 'revoked')),
+            expires_at TIMESTAMP NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        'CREATE INDEX IF NOT EXISTS idx_family_invites_token ON family_invites(token)',
+        'CREATE INDEX IF NOT EXISTS idx_family_invites_owner ON family_invites(owner_id)',
+        // Migration 003: user role (parent / enfant)
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'parent'",
+        // Migration 004: configurable currency
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS currency VARCHAR(3) DEFAULT 'EUR'",
+        // Migration 004 (join requests): a standalone user can ask to join an existing family
+        `CREATE TABLE IF NOT EXISTS family_join_requests (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            owner_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            requester_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            status VARCHAR(20) DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'cancelled')),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            responded_at TIMESTAMP
+        )`,
+        'CREATE INDEX IF NOT EXISTS idx_family_join_requests_owner ON family_join_requests(owner_id)',
+        'CREATE INDEX IF NOT EXISTS idx_family_join_requests_requester ON family_join_requests(requester_id)',
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_family_join_requests_pending ON family_join_requests(requester_id) WHERE status = 'pending'",
+        // Migration 005: per-user iCal calendar feed token
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS calendar_token VARCHAR(64)',
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_calendar_token ON users(calendar_token)',
+        // Migration 006: user profile photo (stored as a compact data URL)
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT',
+        // Migration 007: third-party integrations (Mealie, Tandoor, Home Assistant, Grocy)
+        `CREATE TABLE IF NOT EXISTS integrations (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            family_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            type VARCHAR(50) NOT NULL,
+            display_name VARCHAR(100),
+            base_url TEXT NOT NULL,
+            encrypted_credentials TEXT,
+            config JSONB DEFAULT '{}',
+            status VARCHAR(20) DEFAULT 'connected',
+            last_synced_at TIMESTAMP WITH TIME ZONE,
+            last_error TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(family_id, type)
+        )`,
+        'CREATE INDEX IF NOT EXISTS idx_integrations_family_id ON integrations(family_id)',
+        // Migration 008: CalDAV UID for reliable Nextcloud event deduplication
+        'ALTER TABLE appointments ADD COLUMN IF NOT EXISTS caldav_uid TEXT',
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_appointments_caldav_uid ON appointments(user_id, caldav_uid) WHERE caldav_uid IS NOT NULL',
+        // Migration 009: per-user interface/notification language
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS language VARCHAR(8) NOT NULL DEFAULT 'fr'",
+        // Migration 010: invite carries the account role assigned by the inviter
+        "ALTER TABLE family_invites ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'parent'",
+        // Migration 011: gamified kids mode — chore points and pocket-money ledger
+        'ALTER TABLE tasks ADD COLUMN IF NOT EXISTS points INTEGER NOT NULL DEFAULT 0',
+        'ALTER TABLE tasks ADD COLUMN IF NOT EXISTS pending_approval BOOLEAN NOT NULL DEFAULT false',
+        `CREATE TABLE IF NOT EXISTS reward_transactions (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            member_id UUID NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+            task_id UUID REFERENCES tasks(id) ON DELETE SET NULL,
+            points INTEGER NOT NULL,
+            type VARCHAR(20) NOT NULL CHECK (type IN ('earn', 'adjust', 'redeem')),
+            note TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        'CREATE INDEX IF NOT EXISTS idx_reward_transactions_user ON reward_transactions(user_id)',
+        'CREATE INDEX IF NOT EXISTS idx_reward_transactions_member ON reward_transactions(member_id)',
+        'CREATE INDEX IF NOT EXISTS idx_reward_transactions_task ON reward_transactions(task_id)',
+        `CREATE TABLE IF NOT EXISTS reward_settings (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+            points_value NUMERIC(10,4) NOT NULL DEFAULT 0.10,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        // Migration 012: savings goals + linking a user account to a member profile
+        'ALTER TABLE family_members ADD COLUMN IF NOT EXISTS linked_user_id UUID REFERENCES users(id) ON DELETE SET NULL',
+        `CREATE TABLE IF NOT EXISTS reward_goals (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            member_id UUID NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+            title VARCHAR(200) NOT NULL,
+            emoji VARCHAR(16),
+            target_amount NUMERIC(10,2) NOT NULL CHECK (target_amount > 0),
+            status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'achieved', 'archived')),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            achieved_at TIMESTAMP
+        )`,
+        'CREATE INDEX IF NOT EXISTS idx_reward_goals_user_member ON reward_goals(user_id, member_id)',
+        // Migration 013: family post-its (digital fridge notes)
+        `CREATE TABLE IF NOT EXISTS family_notes (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            author_name VARCHAR(100) NOT NULL,
+            content VARCHAR(500) NOT NULL,
+            color VARCHAR(20) NOT NULL DEFAULT 'yellow',
+            expires_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        // Widen content for installs that created the table at VARCHAR(300) (idempotent)
+        'ALTER TABLE family_notes ALTER COLUMN content TYPE VARCHAR(500)',
+        'CREATE INDEX IF NOT EXISTS idx_family_notes_user ON family_notes(user_id)',
+        // Migration 014: local-first AI assistant — provider settings (one row per family)
+        `CREATE TABLE IF NOT EXISTS ai_settings (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            provider VARCHAR(20) NOT NULL CHECK (provider IN ('ollama', 'openai', 'anthropic', 'gemini')),
+            base_url TEXT,
+            encrypted_api_key TEXT,
+            model VARCHAR(100) NOT NULL,
+            enabled BOOLEAN NOT NULL DEFAULT true,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        // Migration 015: family-wide optional modules — JSON array of disabled module keys,
+        // stored on the family owner's row. Default '[]' = nothing disabled (no behaviour change).
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS disabled_modules TEXT NOT NULL DEFAULT '[]'",
+        // Migration 016: recurring expenses (prélèvements) + monthly "pointing" logs.
+        // These tables previously lived only in migrations/003_recurring_expenses.sql, which
+        // runMigrations() never applied — so adding a direct debit failed with
+        // 'relation "recurring_expenses" does not exist' (issue #70).
+        `CREATE TABLE IF NOT EXISTS recurring_expenses (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            label VARCHAR(255) NOT NULL,
+            amount DECIMAL(10, 2) NOT NULL,
+            category VARCHAR(50) NOT NULL DEFAULT 'Maison',
+            debit_day INTEGER NOT NULL DEFAULT 1 CHECK (debit_day >= 1 AND debit_day <= 31),
+            is_active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`,
+        `CREATE TABLE IF NOT EXISTS recurring_expense_logs (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            recurring_expense_id UUID NOT NULL REFERENCES recurring_expenses(id) ON DELETE CASCADE,
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            month INTEGER NOT NULL CHECK (month >= 1 AND month <= 12),
+            year INTEGER NOT NULL,
+            is_pointed BOOLEAN DEFAULT FALSE,
+            pointed_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(recurring_expense_id, month, year)
+        )`,
+        'CREATE INDEX IF NOT EXISTS idx_recurring_expenses_user_id ON recurring_expenses(user_id)',
+        'CREATE INDEX IF NOT EXISTS idx_recurring_expense_logs_user_id ON recurring_expense_logs(user_id)',
+        'CREATE INDEX IF NOT EXISTS idx_recurring_expense_logs_month_year ON recurring_expense_logs(month, year)',
+        // Migration 017: per-family customizable categories (issue #68). JSON object
+        // { shopping: string[], recipe: string[], budget: string[] } stored as text on
+        // the family owner's row — NULL/empty means "use the defaults" (no behaviour
+        // change for existing installs). Same pattern as disabled_modules.
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_categories TEXT',
+        // Migration 018: kakeibo budgeting mode.
+        // - monthly_income: fixed salary carried over every month for each earning
+        //   member (0 = does not earn).
+        // - kakeibo_months: per-month savings goal + end-of-month review notes.
+        // - users.kakeibo_pillars: JSON map { budgetCategory: pillar } where pillar is
+        //   one of survival/wants/culture/extra (defaults applied server-side).
+        'ALTER TABLE family_members ADD COLUMN IF NOT EXISTS monthly_income DECIMAL(10, 2) NOT NULL DEFAULT 0',
+        `CREATE TABLE IF NOT EXISTS kakeibo_months (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            month INTEGER NOT NULL CHECK (month >= 1 AND month <= 12),
+            year INTEGER NOT NULL,
+            savings_goal DECIMAL(10, 2) NOT NULL DEFAULT 0,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, month, year)
+        )`,
+        'CREATE INDEX IF NOT EXISTS idx_kakeibo_months_user_id ON kakeibo_months(user_id)',
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS kakeibo_pillars TEXT',
+        // Migration 019: password reset by email link. Only the token's SHA-256 is
+        // stored; the raw token lives solely in the emailed link. used_at marks a
+        // consumed token (kept for audit); unconsumed tokens are replaced on each
+        // new request and ignored once expired.
+        `CREATE TABLE IF NOT EXISTS password_resets (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            token_hash VARCHAR(64) NOT NULL,
+            expires_at TIMESTAMPTZ NOT NULL,
+            used_at TIMESTAMPTZ,
+            created_at TIMESTAMPTZ DEFAULT now()
+        )`,
+        'CREATE INDEX IF NOT EXISTS idx_password_resets_user ON password_resets(user_id)',
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_password_resets_token_hash ON password_resets(token_hash)',
+        // Migration 020: per-user dashboard personalisation (widget order, hidden
+        // widgets, day/week agenda). JSON text on the MEMBER's own row (unlike
+        // disabled_modules which is family-wide on the owner's row); NULL = defaults.
+        'ALTER TABLE users ADD COLUMN IF NOT EXISTS dashboard_prefs TEXT',
+        // Migration 021: an activity can involve several people (swimming with both
+        // kids, a family outing). This table holds ALL of them and is what the API
+        // reads. schedule_entries.family_member_id stays, always mirroring the first
+        // participant: backups exported before this migration carry that column, and
+        // dropping it would make them un-importable.
+        `CREATE TABLE IF NOT EXISTS schedule_entry_members (
+            entry_id UUID NOT NULL REFERENCES schedule_entries(id) ON DELETE CASCADE,
+            family_member_id UUID NOT NULL REFERENCES family_members(id) ON DELETE CASCADE,
+            PRIMARY KEY (entry_id, family_member_id)
+        )`,
+        'CREATE INDEX IF NOT EXISTS idx_schedule_entry_members_member ON schedule_entry_members(family_member_id)',
+        // Backfill: every existing entry has exactly one participant today. Safe to
+        // re-run, and a no-op once done.
+        `INSERT INTO schedule_entry_members (entry_id, family_member_id)
+         SELECT id, family_member_id FROM schedule_entries
+         ON CONFLICT DO NOTHING`,
+        // Migration 022: skip a single occurrence of a weekly entry, for a day off or
+        // a cancelled lesson, without touching the series itself. Same idea as EXDATE
+        // in iCalendar: the series stays whole and the exception is a subtraction.
+        `CREATE TABLE IF NOT EXISTS schedule_entry_exceptions (
+            entry_id UUID NOT NULL REFERENCES schedule_entries(id) ON DELETE CASCADE,
+            excluded_date DATE NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT now(),
+            PRIMARY KEY (entry_id, excluded_date)
+        )`,
+        // Migration 023: recurring calendar appointments.
+        "ALTER TABLE appointments ADD COLUMN IF NOT EXISTS recurrence_frequency VARCHAR(16) NOT NULL DEFAULT 'none'",
+        "ALTER TABLE appointments ADD COLUMN IF NOT EXISTS recurrence_interval INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE appointments ADD COLUMN IF NOT EXISTS recurrence_until DATE",
+        `CREATE TABLE IF NOT EXISTS appointment_recurrence_exceptions (
+            appointment_id UUID NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+            occurrence_date DATE NOT NULL,
+            exception_type VARCHAR(16) NOT NULL DEFAULT 'skip',
+            override_data JSONB,
+            created_at TIMESTAMPTZ DEFAULT now(),
+            PRIMARY KEY (appointment_id, occurrence_date)
+        )`,
+        'CREATE INDEX IF NOT EXISTS idx_appointment_recurrence_exceptions_appointment ON appointment_recurrence_exceptions(appointment_id)',
+        // Migration 024: shared color for calendar appointments.
+        "ALTER TABLE appointments ADD COLUMN IF NOT EXISTS color VARCHAR(7) NOT NULL DEFAULT '#DC4A60'",
+        // Migration 025: an appointment can cover a whole day rather than a time
+        // slot. The times are still stored, spanning 00:00 to 23:59, so every
+        // existing query keeps working; the flag only says how to show it and
+        // silences the reminders, which mean nothing without a start time.
+        'ALTER TABLE appointments ADD COLUMN IF NOT EXISTS is_all_day BOOLEAN NOT NULL DEFAULT false',
+        // Migration 026: family posts. A private feed inside the family: text, a
+        // photo carried as a data URI (the client resizes it first and the route
+        // caps it at 2 MB), or a link. Seen-status is one row per reader.
+        `CREATE TABLE IF NOT EXISTS family_posts (
+            id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            author_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            content TEXT,
+            image_url TEXT,
+            link_url TEXT,
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )`,
+        'CREATE INDEX IF NOT EXISTS idx_family_posts_user_created ON family_posts(user_id, created_at DESC)',
+        'CREATE INDEX IF NOT EXISTS idx_family_posts_author ON family_posts(author_user_id)',
+        `CREATE TABLE IF NOT EXISTS family_post_seen (
+            post_id UUID NOT NULL REFERENCES family_posts(id) ON DELETE CASCADE,
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (post_id, user_id)
+        )`,
+        'CREATE INDEX IF NOT EXISTS idx_family_post_seen_user ON family_post_seen(user_id)',
+        // Migration 027: Google Gemini as an AI provider. A fresh install gets the
+        // wider CHECK from the CREATE TABLE above; an existing one still carries
+        // the three-provider constraint, which Postgres named
+        // ai_settings_provider_check. Swap it once, only when it lacks gemini.
+        `DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'ai_settings_provider_check'
+                  AND pg_get_constraintdef(oid) NOT ILIKE '%gemini%'
+            ) THEN
+                ALTER TABLE ai_settings DROP CONSTRAINT ai_settings_provider_check;
+                ALTER TABLE ai_settings ADD CONSTRAINT ai_settings_provider_check
+                    CHECK (provider IN ('ollama', 'openai', 'anthropic', 'gemini'));
+            END IF;
+        END
+        $$`,
+        // End of the historical list. New migrations: migrations/registry.ts.
+    ];
+
+    const client = await pool.connect();
+    try {
+        await client.query(`SELECT pg_advisory_lock(${MIGRATION_LOCK})`);
+        try {
+            // Family Hub v1.0 dropped some OpenFamily tables in a recorded
+            // migration. Once it has run, skip every historical statement that
+            // touches them, or they would come back empty on each start.
+            const removedTablesDropped = (await client.query(
+                `SELECT to_regclass('${MIGRATIONS_TABLE}') IS NOT NULL AS ready`,
+            )).rows[0]?.ready && (await client.query(
+                `SELECT 1 FROM ${MIGRATIONS_TABLE} WHERE id = $1`, [REMOVED_TABLES_MIGRATION_ID],
+            )).rowCount;
+            for (const migration of migrations) {
+                if (removedTablesDropped && REMOVED_TABLES.test(migration)) continue;
+                await client.query(migration);
+            }
+            const report = await runVersionedMigrations(client, [...coreMigrations, ...familyHubMigrations]);
+            if (report.unknown.length > 0) {
+                // A newer OpenFamily ran against this database before this one.
+                // Its tables are still there; say so rather than refuse to start.
+                logger.warn('db.migrations_unknown', { ids: report.unknown });
+            }
+            logger.info('db.migrations_complete', {
+                historical: migrations.length,
+                applied: report.applied,
+                alreadyApplied: report.alreadyApplied,
+            });
+        } finally {
+            await client.query(`SELECT pg_advisory_unlock(${MIGRATION_LOCK})`).catch(() => {});
+        }
+    } finally {
+        client.release();
+    }
+};
+
+export default pool;

@@ -1,0 +1,125 @@
+name: Family Hub release
+on:
+  push:
+    tags: ['familyhub-v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'New release tag, e.g. familyhub-v0.1.0 (never reuse a version)'
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: familyhub-release-${{ github.event.inputs.version || github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    if: github.repository == 'santoshgs/familyhub'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: openfamily_test
+          POSTGRES_USER: openfamily
+          POSTGRES_PASSWORD: openfamily
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U openfamily" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - run: node scripts/check-public-safe.mjs
+      - run: npm run build:familyhub:local
+      - run: npm test --workspace=@openfamily/server
+      - run: npm run test:familyhub
+      - run: FAMILYHUB_TEST_BUILT_SW=true node --test scripts/service-worker.test.mjs
+      - run: python3 -m unittest discover -s deploy/familyhub -p 'test_release.py'
+  package:
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      INPUT_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate unique release version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${INPUT_VERSION:-$GITHUB_REF_NAME}"
+          [[ "$version" =~ ^familyhub-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 1
+          if gh release view "$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Release version already exists; create a new version.' >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build server
+        id: server
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: server/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/santoshgs/familyhub-server:${{ steps.version.outputs.version }}
+          cache-from: type=gha,scope=familyhub-server
+          cache-to: type=gha,scope=familyhub-server,mode=max
+          labels: org.opencontainers.image.source=https://github.com/santoshgs/FamilyHub
+      - name: Build client
+        id: client
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: client/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/santoshgs/familyhub-client:${{ steps.version.outputs.version }}
+          cache-from: type=gha,scope=familyhub-client
+          cache-to: type=gha,scope=familyhub-client,mode=max
+          labels: org.opencontainers.image.source=https://github.com/santoshgs/FamilyHub
+          build-args: |
+            VITE_FAMILYHUB_LOCAL=true
+            VITE_API_URL=
+            VITE_WS_URL=
+            VITE_REGISTRATION_ENABLED=false
+            VITE_FAMILYHUB_VERSION=${{ steps.version.outputs.version }}
+      - name: Create versioned package and corresponding source
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          SERVER_DIGEST: ${{ steps.server.outputs.digest }}
+          CLIENT_DIGEST: ${{ steps.client.outputs.digest }}
+        run: |
+          python3 scripts/package-familyhub-release.py
+          git archive --format=tar.gz --prefix=familyhub/ --output=familyhub-source.tar.gz HEAD
+      - name: Verify packaged containers before publishing
+        env:
+          FAMILYHUB_HOST: familyhub.example.test
+          POSTGRES_PASSWORD: fictional-ci-database-password
+          JWT_SECRET: fictional-ci-signing-secret-not-for-production-0123456789
+          FAMILYHUB_SERVER_IMAGE: ghcr.io/santoshgs/familyhub-server@${{ steps.server.outputs.digest }}
+          FAMILYHUB_CLIENT_IMAGE: ghcr.io/santoshgs/familyhub-client@${{ steps.client.outputs.digest }}
+        run: |
+          docker compose -f deploy/familyhub/compose.yml -f deploy/familyhub/compose.vpn.yml -f deploy/familyhub/images.yml config --quiet
+          docker compose -f deploy/familyhub/compose.yml -f deploy/familyhub/compose.vpn.yml -f deploy/familyhub/images.yml pull postgres server client
+          docker compose -f deploy/familyhub/compose.yml -f deploy/familyhub/compose.vpn.yml -f deploy/familyhub/images.yml up -d --no-build --pull never --wait --wait-timeout 180
+          node scripts/familyhub-smoke.mjs http://127.0.0.1:8080
+      - name: Publish release after validation and packaging
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "$VERSION" "release-output/$VERSION.tar.gz" familyhub-source.tar.gz --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Family Hub $VERSION" --notes "Versioned ARM64/AMD64 images pinned by digest. Includes deployment package, corresponding source, pre-update backup and app rollback support. Review release-policy.json before enabling automatic updates."

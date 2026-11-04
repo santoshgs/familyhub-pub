@@ -1,0 +1,6 @@
+# Merge after compose.yml; deployment always uses --no-build.
+services:
+  server:
+    image: ${FAMILYHUB_SERVER_IMAGE:?Select a released server digest}
+  client:
+    image: ${FAMILYHUB_CLIENT_IMAGE:?Select a released client digest}

@@ -1,0 +1,8 @@
+# Private ingress: Tailscale Serve terminates HTTPS on the host.
+# No router forwarding or public Caddy listener is needed.
+services:
+  gateway:
+    profiles: [public-ingress]
+  client:
+    ports:
+      - '127.0.0.1:8080:80'

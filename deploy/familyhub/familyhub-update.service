@@ -1,0 +1,14 @@
+[Unit]
+Description=Update Family Hub from stable GitHub releases
+Wants=network-online.target
+After=network-online.target docker.service tailscaled.service
+
+[Service]
+Type=oneshot
+# Docker and the private deployment files require administrator access. The
+# release token is restricted to read-only access to the FamilyHub repository.
+User=root
+EnvironmentFile=/opt/familyhub/github-release.env
+UMask=0077
+ExecStart=/usr/bin/python3 /opt/familyhub/release.py update --state-dir /opt/familyhub/state --env-file /opt/familyhub/private.env
+TimeoutStartSec=20min

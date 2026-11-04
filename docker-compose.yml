@@ -1,0 +1,115 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: openfamily-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-openfamily}
+      POSTGRES_USER: ${POSTGRES_USER:-openfamily}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-openfamily}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: ./server/Dockerfile
+    container_name: openfamily-server
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-openfamily}
+      POSTGRES_USER: ${POSTGRES_USER:-openfamily}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      SERVER_PORT: 3001
+      NODE_ENV: production
+      JWT_SECRET: ${JWT_SECRET}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      VAPID_SUBJECT: ${VAPID_SUBJECT}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
+      # The family's time zone. Appointments are stored in local time; without
+      # it the container runs in UTC and reminders arrive one or two hours late.
+      TZ: ${TZ:-Europe/Paris}
+      # Optional features documented in .env.example. A variable set in .env
+      # only reaches the server if it is listed here; without these lines,
+      # invitation and password-reset e-mails could never be sent from a
+      # Docker install, however .env was filled. Empty = feature off.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-}
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-}
+      # Single sign-on through an OpenID Connect provider (see the upstream INSTALLATION.md: https://github.com/NexaFlowFrance/OpenFamily/blob/a6fb4dc4ef0f2025cf4fabe3dc48e0f7c5f34f01/INSTALLATION.md).
+      # Empty OIDC_ISSUER_URL = off.
+      PASSWORD_LOGIN_ENABLED: ${PASSWORD_LOGIN_ENABLED:-true}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-}
+      FAMILYHUB_GOOGLE_EMAIL: ${FAMILYHUB_GOOGLE_EMAIL:-}
+      FAMILYHUB_TOKEN_KEY: ${FAMILYHUB_TOKEN_KEY:-}
+      FAMILYHUB_APP_URL: ${FAMILYHUB_APP_URL:-}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-}
+      OIDC_PROVIDER_NAME: ${OIDC_PROVIDER_NAME:-}
+      OIDC_SCOPES: ${OIDC_SCOPES:-}
+      OIDC_REGISTRATION_ENABLED: ${OIDC_REGISTRATION_ENABLED:-}
+      OIDC_ALLOW_INSECURE_HTTP: ${OIDC_ALLOW_INSECURE_HTTP:-false}
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:3001/health >/dev/null 2>&1 || exit 1" ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    volumes:
+      - ./server/uploads:/app/uploads
+
+  client:
+    build:
+      context: .
+      dockerfile: ./client/Dockerfile
+      args:
+        # Empty → same-origin; nginx proxies /api and /ws to the server, so the app
+        # works from any device. Set these only to serve the API from a separate origin.
+        VITE_API_URL: ${VITE_API_URL:-}
+        VITE_WS_URL: ${VITE_WS_URL:-}
+        # The login page asks the server whether sign-ups are open; this only
+        # sets what it shows until the server has answered.
+        VITE_REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
+        VITE_FAMILYHUB_LOCAL: ${VITE_FAMILYHUB_LOCAL:-false}
+    container_name: openfamily-client
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      server:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://127.0.0.1 >/dev/null 2>&1 || exit 1" ]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  postgres-data:
+    driver: local

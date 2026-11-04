@@ -1,0 +1,395 @@
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { api } from '../lib/api';
+import { applyServerLanguage } from '../lib/language';
+import { applyRegionalPreferences } from '../i18n/format';
+import { DEFAULT_DISABLED_MODULES } from '../familyhub/modules';
+
+interface User {
+    id: string;
+    email: string;
+    name: string;
+    is_owner?: boolean;
+    is_display?: boolean;
+    role?: string;
+    currency?: string;
+    avatar_url?: string | null;
+    language?: string;
+    /** ISO first day of the week (Monday = 1), null = automatic. */
+    week_start_day?: number | null;
+    /** Family-wide list of optional modules the family has hidden. */
+    disabled_modules?: string[];
+}
+
+/** Dashboard widgets, in default display order (mirrors the server's list). */
+export const DASHBOARD_WIDGETS = ['stats', 'agenda', 'planning', 'quick', 'notes'] as const;
+export type DashboardWidget = typeof DASHBOARD_WIDGETS[number];
+
+export interface DashboardPrefs {
+    order: DashboardWidget[];
+    hidden: DashboardWidget[];
+    agendaView: 'day' | 'week';
+}
+
+export const DEFAULT_DASHBOARD_PREFS: DashboardPrefs = {
+    order: [...DASHBOARD_WIDGETS],
+    hidden: [],
+    agendaView: 'day',
+};
+
+const isWidget = (value: unknown): value is DashboardWidget =>
+    typeof value === 'string' && (DASHBOARD_WIDGETS as readonly string[]).includes(value);
+
+/**
+ * A layout as a server returns it, made safe for the dashboard: unknown
+ * widgets are dropped, widgets the server does not know yet (an older server
+ * behind a newer client) are appended, and a missing or malformed part falls
+ * back to the default. The dashboard indexes `order` and `hidden` directly,
+ * so a surprising shape must never reach it.
+ */
+export function normalizeDashboardPrefs(raw: unknown): DashboardPrefs {
+    const src = raw && typeof raw === 'object' && !Array.isArray(raw)
+        ? (raw as Partial<Record<keyof DashboardPrefs, unknown>>)
+        : {};
+    const order = Array.isArray(src.order) ? src.order.filter(isWidget) : [];
+    for (const widget of DASHBOARD_WIDGETS) if (!order.includes(widget)) order.push(widget);
+    const hidden = Array.isArray(src.hidden) ? src.hidden.filter(isWidget) : [];
+    const agendaView = src.agendaView === 'week' ? 'week' : 'day';
+    return { order, hidden, agendaView };
+}
+
+interface AuthContextType {
+    user: User | null;
+    loading: boolean;
+    login: (email: string, password: string) => Promise<void>;
+    register: (email: string, password: string, name: string, inviteToken?: string, role?: string) => Promise<void>;
+    joinFamily: (inviteToken: string) => Promise<void>;
+    leaveFamily: () => Promise<void>;
+    refreshToken: () => Promise<void>;
+    /** Adopts the session the SSO exchange returned (its token is already stored). */
+    completeSsoLogin: (user: User) => void;
+    /** Signs this account out of every device, this one included. */
+    logoutEverywhere: () => Promise<void>;
+    logout: () => void;
+    isAuthenticated: boolean;
+    updateCurrency: (currency: string) => Promise<void>;
+    updateRegionalPreferences: (prefs: { week_start_day: number | null }) => Promise<void>;
+    updateProfile: (data: { name?: string; avatar_url?: string | null }) => Promise<void>;
+    /** This member's dashboard layout (null until loaded). */
+    dashboardPrefs: DashboardPrefs | null;
+    /** Persist this member's dashboard layout and update the context. */
+    updateDashboardPrefs: (prefs: DashboardPrefs) => Promise<void>;
+    /** Family-wide list of hidden optional modules (empty when nothing is hidden). */
+    disabledModules: string[];
+    /** True when a module is not hidden by the family. Always-on modules are always enabled. */
+    isModuleEnabled: (key: string) => boolean;
+    /** Persist the family's hidden-modules list (parents only) and update the context. */
+    updateDisabledModules: (modules: string[]) => Promise<void>;
+    /** Modules this member left out of their own menu and overview (Family Hub). */
+    hiddenModules: string[];
+    /** Enabled for the household and not hidden by this member: shown in menus and the overview. */
+    isModuleShown: (key: string) => boolean;
+    /** Persist this member's own menu choice. */
+    updateHiddenModules: (modules: string[]) => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AUTH_EXPIRED_EVENT = 'openfamily:auth-expired';
+const IS_DEMO = Boolean(import.meta.env.VITE_DEMO);
+
+export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+    const [user, setUser] = useState<User | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [dashboardPrefs, setDashboardPrefs] = useState<DashboardPrefs | null>(null);
+    const familyHub = import.meta.env.VITE_FAMILYHUB_LOCAL === 'true';
+    const [hubModules, setHubModules] = useState<{ ownerSession: string; disabled: string[] } | null>(null);
+    useEffect(() => {
+        if (!familyHub || !user?.id) return;
+        let active = true;
+        const load = () => api.get<{ data: { disabled_modules: string[] } }>('/api/familyhub/modules')
+            .then((response) => { if (active) setHubModules({ ownerSession: user.id, disabled: response.data.disabled_modules }); })
+            .catch(() => {
+                if (active) setHubModules((previous) => previous?.ownerSession === user.id ? previous : { ownerSession: user.id, disabled: DEFAULT_DISABLED_MODULES });
+            });
+        void load();
+        window.addEventListener('focus', load);
+        return () => { active = false; window.removeEventListener('focus', load); };
+    }, [familyHub, user?.id]);
+    const [hidden, setHidden] = useState<{ owner: string; modules: string[] } | null>(null);
+    useEffect(() => {
+        if (!familyHub || !user?.id || user.is_display) return;
+        let active = true;
+        api.get<{ data: { hiddenModules?: string[] } }>('/api/familyhub/preferences')
+            .then((response) => { if (active) setHidden({ owner: user.id, modules: response.data.hiddenModules ?? [] }); })
+            .catch(() => undefined);
+        return () => { active = false; };
+    }, [familyHub, user?.id, user?.is_display]);
+
+    useEffect(() => {
+        let mounted = true;
+
+        const clearSession = () => {
+            api.logout();
+            localStorage.removeItem('user');
+            if (mounted) {
+                setUser(null);
+            }
+        };
+
+        const onAuthExpired = () => {
+            clearSession();
+        };
+
+        window.addEventListener(AUTH_EXPIRED_EVENT, onAuthExpired);
+
+        const bootstrapSession = async () => {
+            const token = api.getToken();
+            // In the static demo there is no real auth: load the seeded user directly.
+            if (!token && !IS_DEMO) {
+                if (mounted) {
+                    setLoading(false);
+                }
+                return;
+            }
+
+            try {
+                const response = await api.get<{ success: boolean; data: { user: User } }>('/api/auth/me');
+                if (!mounted) {
+                    return;
+                }
+
+                if (response.success && response.data?.user) {
+                    setUser(response.data.user);
+                    localStorage.setItem('user', JSON.stringify(response.data.user));
+                    // Once per session load: reconcile UI language with the account.
+                    applyServerLanguage(response.data.user.language);
+                    applyRegionalPreferences(response.data.user.week_start_day);
+                } else {
+                    clearSession();
+                }
+            } catch (error) {
+                console.error('Failed to restore session:', error);
+                // A network failure (offline, flaky Wi-Fi, a reload while the check
+                // was in flight) or a server error says nothing about the session:
+                // keep the account that was signed in. A rejected token has already
+                // cleared everything through AUTH_EXPIRED_EVENT, which also drops
+                // the token, so this falls through to clearSession() then.
+                let cached: User | null = null;
+                try {
+                    cached = JSON.parse(localStorage.getItem('user') || 'null') as User | null;
+                } catch {
+                    cached = null;
+                }
+                if (api.getToken() && cached?.id) {
+                    if (mounted) {
+                        setUser(cached);
+                    }
+                } else {
+                    clearSession();
+                }
+            } finally {
+                if (mounted) {
+                    setLoading(false);
+                }
+            }
+        };
+
+        void bootstrapSession();
+
+        return () => {
+            mounted = false;
+            window.removeEventListener(AUTH_EXPIRED_EVENT, onAuthExpired);
+        };
+    }, []);
+
+    const login = async (email: string, password: string) => {
+        const response = await api.login(email, password);
+        if (response.success && response.user) {
+            setUser(response.user);
+            // Also store in localStorage for persistence
+            localStorage.setItem('user', JSON.stringify(response.user));
+            // Once per login: reconcile UI language with the account.
+            applyServerLanguage(response.user.language);
+            applyRegionalPreferences(response.user.week_start_day);
+        }
+    };
+
+    const register = async (email: string, password: string, name: string, inviteToken?: string, role?: string) => {
+        const response = await api.register(email, password, name, inviteToken, role);
+        if (response.success && response.user) {
+            setUser(response.user);
+            localStorage.setItem('user', JSON.stringify(response.user));
+            applyServerLanguage(response.user.language);
+            applyRegionalPreferences(response.user.week_start_day);
+        }
+    };
+
+    const joinFamily = async (inviteToken: string) => {
+        const response = await api.joinFamily(inviteToken);
+        if (response.success && response.user) {
+            setUser(response.user);
+            localStorage.setItem('user', JSON.stringify(response.user));
+        }
+    };
+
+    const leaveFamily = async () => {
+        const response = await api.leaveFamily();
+        if (response.success && response.user) {
+            setUser(response.user);
+            localStorage.setItem('user', JSON.stringify(response.user));
+        }
+    };
+
+    const refreshToken = async () => {
+        const response = await api.refreshToken();
+        if (response.success && response.user) {
+            setUser(response.user);
+            localStorage.setItem('user', JSON.stringify(response.user));
+        }
+    };
+
+    const completeSsoLogin = (ssoUser: User) => {
+        setUser(ssoUser);
+        localStorage.setItem('user', JSON.stringify(ssoUser));
+        applyServerLanguage(ssoUser.language);
+        applyRegionalPreferences(ssoUser.week_start_day);
+    };
+
+    const logoutEverywhere = async () => {
+        await api.logoutEverywhere();
+        logout();
+    };
+
+    const logout = () => {
+        api.logout();
+        setUser(null);
+        applyRegionalPreferences(null);
+        localStorage.removeItem('user');
+    };
+
+    const updateCurrency = async (currency: string) => {
+        const response = await api.put<{ success: boolean; data: { user: User } }>('/api/auth/currency', { currency });
+        if (response.success && response.data?.user) {
+            setUser(response.data.user);
+            localStorage.setItem('user', JSON.stringify(response.data.user));
+        }
+    };
+
+    const updateRegionalPreferences = async (prefs: { week_start_day: number | null }) => {
+        const response = await api.put<{ success: boolean; data: { user: User } }>(
+            '/api/auth/regional-preferences',
+            prefs
+        );
+        if (response.success && response.data?.user) {
+            const next = { ...user, ...response.data.user } as User;
+            setUser(next);
+            applyRegionalPreferences(next.week_start_day);
+            localStorage.setItem('user', JSON.stringify(next));
+        }
+    };
+
+    const updateProfile = async (data: { name?: string; avatar_url?: string | null }) => {
+        const response = await api.put<{ success: boolean; data: { user: User } }>('/api/auth/profile', data);
+        if (response.success && response.data?.user) {
+            setUser(response.data.user);
+            localStorage.setItem('user', JSON.stringify(response.data.user));
+        }
+    };
+
+    // Dashboard layout belongs to the logged-in member; (re)load it whenever the
+    // session changes. Failure is non-blocking: the dashboard falls back to the
+    // default arrangement.
+    useEffect(() => {
+        if (!user) {
+            setDashboardPrefs(null);
+            return;
+        }
+
+        let active = true;
+        api.get<{ success: boolean; data: DashboardPrefs }>('/api/auth/dashboard-prefs')
+            .then((res) => {
+                if (active && res.success) setDashboardPrefs(normalizeDashboardPrefs(res.data));
+            })
+            .catch(() => {
+                if (active) setDashboardPrefs(DEFAULT_DASHBOARD_PREFS);
+            });
+
+        return () => { active = false; };
+    }, [user?.id]);
+
+    const updateDashboardPrefs = async (prefs: DashboardPrefs) => {
+        // Optimistic: the dashboard reorders instantly, the server confirms.
+        setDashboardPrefs(prefs);
+        const response = await api.put<{ success: boolean; data: DashboardPrefs }>(
+            '/api/auth/dashboard-prefs',
+            prefs
+        );
+        if (response.success) {
+            setDashboardPrefs(normalizeDashboardPrefs(response.data));
+        }
+    };
+
+    const disabledModules = familyHub ? hubModules && hubModules.ownerSession === user?.id ? hubModules.disabled : DEFAULT_DISABLED_MODULES : user?.disabled_modules ?? [];
+
+    const isModuleEnabled = (key: string) => !disabledModules.includes(key);
+    const hiddenModules = hidden && hidden.owner === user?.id ? hidden.modules : [];
+    const isModuleShown = (key: string) => isModuleEnabled(key) && !hiddenModules.includes(key);
+    const updateHiddenModules = async (modules: string[]) => {
+        const response = await api.put<{ success: boolean; data: { hiddenModules: string[] } }>('/api/familyhub/preferences/hidden', { hiddenModules: modules });
+        if (response.success && response.data && user) setHidden({ owner: user.id, modules: response.data.hiddenModules });
+    };
+
+    const updateDisabledModules = async (modules: string[]) => {
+        const response = await api.put<{ success: boolean; data: { disabled_modules: string[] } }>(
+            familyHub ? '/api/familyhub/modules' : '/api/auth/modules',
+            { disabled_modules: modules }
+        );
+        if (response.success && response.data) {
+            if (familyHub && user) { setHubModules({ ownerSession: user.id, disabled: response.data.disabled_modules }); return; }
+            setUser((prev) => {
+                if (!prev) return prev;
+                const next = { ...prev, disabled_modules: response.data.disabled_modules };
+                localStorage.setItem('user', JSON.stringify(next));
+                return next;
+            });
+        }
+    };
+
+    return (
+        <AuthContext.Provider
+            value={{
+                user,
+                loading: loading || (familyHub && Boolean(user?.id) && hubModules?.ownerSession !== user?.id),
+                login,
+                register,
+                joinFamily,
+                leaveFamily,
+                refreshToken,
+                completeSsoLogin,
+                logoutEverywhere,
+                logout,
+                isAuthenticated: !!user,
+                updateCurrency,
+                updateRegionalPreferences,
+                updateProfile,
+                dashboardPrefs,
+                updateDashboardPrefs,
+                disabledModules,
+                isModuleEnabled,
+                updateDisabledModules,
+                hiddenModules,
+                isModuleShown,
+                updateHiddenModules,
+            }}
+        >
+            {children}
+        </AuthContext.Provider>
+    );
+};
+
+export const useAuth = () => {
+    const context = useContext(AuthContext);
+    if (context === undefined) {
+        throw new Error('useAuth must be used within an AuthProvider');
+    }
+    return context;
+};

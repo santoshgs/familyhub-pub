@@ -1,0 +1,73 @@
+{
+  "heading": {
+    "before": "Votre ",
+    "highlight": "journée",
+    "after": ", en un coup d'œil."
+  },
+  "budgetAlert": {
+    "title": "Attention au budget",
+    "message_one": "{{count}} catégorie a dépassé le budget mensuel défini.",
+    "message_other": "{{count}} catégories ont dépassé le budget mensuel défini.",
+    "cta": "Voir le détail"
+  },
+  "stats": {
+    "appointments": "Rendez-vous",
+    "tasks": "Tâches",
+    "shopping": "Courses",
+    "monthExpenses": "Dépenses du mois"
+  },
+  "today": {
+    "title": "Aujourd'hui",
+    "viewWeek": "Semaine",
+    "emptyTitle": "Rien de prévu.",
+    "emptySubtitle": "Ajoutez un rendez-vous pour le voir apparaître ici.",
+    "emptyCta": "Ajouter un rendez-vous",
+    "weekTitle": "Cette semaine",
+    "viewDay": "Jour",
+    "emptyWeekSubtitle": "Aucun rendez-vous cette semaine."
+  },
+  "aside": {
+    "shopping": "Courses",
+    "shoppingCount_one": "article à acheter",
+    "shoppingCount_other": "articles à acheter",
+    "budget": "Budget du mois",
+    "budgetSubtitle": "dépensés ce mois",
+    "tasks": "Tâches en attente",
+    "tasksCount_one": "tâche à terminer",
+    "tasksCount_other": "tâches à terminer"
+  },
+  "planning": {
+    "title": "Plannings de la semaine",
+    "viewAll": "Voir le planning",
+    "empty": "Aucun planning enregistré pour cette semaine."
+  },
+  "customize": {
+    "button": "Personnaliser",
+    "title": "Personnaliser l'accueil",
+    "description": "Choisissez ce qui s'affiche sur votre page d'accueil, et dans quel ordre. Ce réglage est propre à votre compte.",
+    "agendaViewLabel": "Affichage de l'agenda",
+    "widgetsLabel": "Blocs affichés",
+    "moveUp": "Monter",
+    "moveDown": "Descendre",
+    "show": "Afficher",
+    "hide": "Masquer",
+    "reset": "Réinitialiser",
+    "allHidden": "Tous les blocs sont masqués. Personnalisez votre accueil pour en réafficher.",
+    "moduleDisabled": "(module désactivé)",
+    "widgets": {
+      "stats": "Chiffres clés",
+      "agenda": "Agenda (rendez-vous)",
+      "planning": "Plannings de la semaine",
+      "quick": "Accès rapides (courses, budget, tâches)",
+      "notes": "Mots de la famille"
+    }
+  },
+  "latestPost": {
+    "title": "Dernière publication familiale",
+    "viewAll": "Voir les publications",
+    "seenBy": "Vu par : {{names}}",
+    "notSeen": "Pas encore vu",
+    "seen": "Vu",
+    "markSeen": "Marquer comme vu"
+  }
+}
