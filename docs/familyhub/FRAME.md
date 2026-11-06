@@ -11,7 +11,7 @@ the Pi side is in [`deploy/familyhub/lan-display`](../../deploy/familyhub/lan-di
 | --- | --- |
 | Hardware | Frameo-branded 10" frame labelled 105K, Rockchip RK312x board |
 | Android | 6.0.1 (API 23). The build fingerprint says `userdebug`, but `adb root` is refused ("production build"), so ADB runs as the unprivileged shell user |
-| Browser engine | Android System WebView 107 |
+| Browser engine | Android System WebView 107 (since v1.2 the client also builds for Chromium 104, for margin) |
 | Screen | 1280 × 800 landscape, always on (screen-off timeout disabled) |
 | Home screen | HomeHQ kiosk launcher (`com.wesbos.homehq`), set as the **Always** home app |
 | Frameo app | `net.frameo.frame`: unhidden but still **disabled**; it can be enabled from its App info screen (see below) |

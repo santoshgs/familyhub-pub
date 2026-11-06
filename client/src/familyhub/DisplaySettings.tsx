@@ -150,6 +150,7 @@ export default function DisplaySettings() {
                     {pairingCode && <p className="ambient-pairing-code" aria-live="polite">{pairingCode.slice(0, 4)} {pairingCode.slice(4)}</p>}
                     {pairingError && <p role="alert">{pairingError}</p>}
                 </section>}
+                <p className="ambient-settings-help">Forecast length, units, Formula 1 standings, guest Wi-Fi, a countdown, market prices and the photo slideshow are under <a href="/settings#display">Settings → Display</a>.</p>
                 <p className="fh-fine-print">Display sessions are read-only and renew automatically while the frame is in use. They can read only the approved FamilyHub display endpoints, and removing a display here signs out that frame alone.</p>
             </>}
             <footer className="fh-page-footer"><a href="/">Management home</a><span>Same backend, same authoritative family data.</span></footer>

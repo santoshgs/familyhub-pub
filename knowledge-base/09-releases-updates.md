@@ -25,7 +25,15 @@ The service runs with administrator privileges because Docker and private deploy
 - A GitHub Packages classic token with `read:packages` for the private container images.
 - A fine-grained token restricted to the Family Hub repository with Contents read permission for listing and downloading releases. It is stored in the Pi's root-only `/opt/familyhub/github-release.env` as `GH_TOKEN`.
 
-Both tokens are set to **never expire** (November 2, 2026). Replace one from Settings → Advanced → Server credentials or with `.familyhub-local/pi/update-github-tokens.sh`; the Pi tests it before switching. Never paste tokens into chat or commit them. A daily check warns 30 days before anything expires — see [renewals and credentials](17-renewals-and-credentials.md). Update failures are not pushed anywhere yet; inspect the timer/service journal if updates stop.
+Both tokens are set to **never expire** (November 2, 2026). Replace one from Settings → Advanced → Server credentials or with `.familyhub-local/pi/update-github-tokens.sh`; the Pi tests it before switching. Never paste tokens into chat or commit them. A daily check warns 30 days before anything expires — see [renewals and credentials](17-renewals-and-credentials.md). Since v1.0 the updater can push to a phone through ntfy when a release is installed, an update fails (once a day per failure) or a rollback happens, once `setup-ntfy.sh` has been run on the Pi. That has not been done on the household Pi yet, so inspect the timer/service journal if updates stop.
+
+## Software updates from Settings (v1.2)
+
+The server administrator can open **Settings → Advanced → Software updates** to see the release running on the Pi and the newest stable release, then choose **Check now** or **Install now**. The app only leaves a small request file in the exchange folder; a root-only helper on the Pi runs `release.py check` or starts the same `familyhub-update.service` the hourly timer runs. The app cannot pick a version, skip the backup or force a rollback. It needs the updated `release.py`, `familyhub-update.service` and `apply-credentials.sh` installed on the Pi (see [the admin helpers](../deploy/familyhub/admin/README.md)).
+
+## After a release: files outside the containers
+
+The hourly updater replaces the application images. It does not replace host files. When a release changes `release.py`, `familyhub-update.service` (followed by `systemctl daemon-reload`), the admin helpers or the LAN listener, the release notes say so and the owner reinstalls them from the release package. v1.1.0 changed the admin helpers; v1.2.0 changed `release.py`, the update service, `apply-credentials.sh` and the LAN listener (photo route, so re-run `apply-lan-display.sh`).
 
 ```sh
 systemctl is-enabled familyhub-update.timer
@@ -52,7 +60,7 @@ sudo python3 /opt/familyhub/release.py rollback \
 
 The tool takes a fresh backup and switches application images. **It does not rewind the database or undo writes to Google.** The release policy permits automatic rollback only for declared backward-compatible changes; incompatible schema changes need a separate migration and recovery plan. A failed first deployment has no previous application to restore.
 
-Real upgrades across many releases (v0.1.0 → v0.3.5) have run on the Pi, each with its pre-update backup; confirm v0.3.6/v0.3.7 from the footer or the updater journal. A deliberate rollback on the Pi has not yet been exercised; unit tests cover simulated rollback and failure paths. See [the detailed release notes](../docs/familyhub/RELEASES.md).
+Real upgrades across many releases (v0.1.0 → v1.2.0) have run on the Pi, each with its pre-update backup. Before release, the v1.0.0 upgrade (which drops the removed modules' tables) and an app rollback to v0.3.7 were simulated with fictional data, as were v1.1.0 and v1.2.0 with a rollback to v1.0.0. Their `rollbackSafe` entries in `deploy/familyhub/release-policy.json` record this. A deliberate rollback on the Pi has not yet been exercised; unit tests cover simulated rollback and failure paths. See [the detailed release notes](../docs/familyhub/RELEASES.md).
 
 ## Release history
 
@@ -68,4 +76,6 @@ Real upgrades across many releases (v0.1.0 → v0.3.5) have run on the Pi, each 
 | v0.3.5 | Nov 2, 2026 | Server credentials in Settings → Advanced; daily renewal check |
 | v0.3.6 | Nov 4, 2026 | Security patch: glob/minimatch/ejs advisories, Snyk Code hardening |
 | v0.3.7 | Nov 4, 2026 | Version in footers; web-only cleanup (Android, website, installers removed); narrower CORS |
-| v1.0.0 | Nov 2026 | Own fork: unused OpenFamily modules and languages removed (tables dropped), server-enforced module toggles, sign in with Google, ntfy alerts |
+| v1.0.0 | Nov 4, 2026 | Own fork: unused OpenFamily modules and languages removed (tables dropped), server-enforced module toggles, sign in with Google, ntfy alerts |
+| v1.1.0 | Nov 5, 2026 | Security release: fixes the 33 findings of the November 4 scan (crash-proof routes, server-admin credentials, SSRF and secret-destination checks, membership clean-up, hardened Pi helpers) |
+| v1.2.0 | Nov 5, 2026 | Dashboard quick bar (Wi-Fi, countdown, markets, photos), richer weather and Formula 1 panels, Settings → Display, Settings → Advanced → Software updates (check or install now) |

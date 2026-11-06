@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Digest-pinned Family Hub deployment. Requires Docker Compose v2; optional gh for update."""
 import argparse
+import datetime
 import fcntl
 import hashlib
 import json
@@ -21,6 +22,50 @@ VERSION = re.compile(r'familyhub-v\d+\.\d+\.\d+\Z')
 # and, for a protected topic, NTFY_TOKEN=<access token>. See deploy/familyhub/admin/README.md.
 NOTIFY_FILES = ('/etc/familyhub-notify.env', '/etc/familyhub-renewals.env')
 REPEAT_FAILURE_AFTER = 24 * 3600
+# Settings → Advanced → Software updates reads a secret-free status file. The
+# deployment keeps it in its root-only state directory and, with --publish-dir,
+# also copies it into the app's exchange folder (writable by the server
+# container, so it is written without following any path there).
+STATUS_FILE = 'update-status.json'
+UPDATE_UNIT = 'familyhub-update.service'
+UPDATE_TIMER = 'familyhub-update.timer'
+
+
+def now_iso():
+    return datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
+def publish_file(directory, name, data):
+    dfd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        tmp = f'.{name}.{os.getpid()}.{os.urandom(6).hex()}'
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=dfd)
+        try:
+            os.write(fd, data)
+            os.fchmod(fd, 0o644)
+        finally:
+            os.close(fd)
+        # rename() replaces whatever sits at the name (a planted symlink included) without following it.
+        os.replace(tmp, name, src_dir_fd=dfd, dst_dir_fd=dfd)
+    finally:
+        os.close(dfd)
+
+
+def timer_enabled():
+    try:
+        result = subprocess.run(['systemctl', 'is-enabled', UPDATE_TIMER], capture_output=True, text=True, timeout=10)
+        return result.stdout.strip() == 'enabled'
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def list_releases():
+    # gh handles private-repository authentication and asset redirects.
+    try:
+        result = subprocess.run(['gh', 'release', 'list', '--repo', 'santoshgs/FamilyHub', '--limit', '30', '--json', 'tagName,isDraft,isPrerelease'], capture_output=True, check=True, timeout=120)
+        return json.loads(result.stdout)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        raise RuntimeError('GitHub releases could not be listed: check the network and the release token') from None
 
 
 def read_notify_settings(files=NOTIFY_FILES):
@@ -191,6 +236,46 @@ class Deployment:
         print('Running ' + manifest['version'])
         return manifest['version']
 
+    def status(self):
+        try:
+            data = json.loads((self.state / STATUS_FILE).read_text())
+            return data if isinstance(data, dict) else {}
+        except (OSError, ValueError):
+            return {}
+
+    def write_status(self, publish_dir=None, **fields):
+        """Records the update state for Settings; never raises, never holds secrets."""
+        try:
+            data = self.status()
+            data.update(fields)
+            current = self.current() or {}
+            latest = data.get('latest')
+            data.update(current=current.get('current'), previous=current.get('previous'), blocked=self.blocked(),
+                        autoUpdates=timer_enabled(), updatedAt=now_iso())
+            data['updateAvailable'] = bool(latest and VERSION.fullmatch(latest) and (not data['current'] or version_key(latest) > version_key(data['current'])))
+            body = json.dumps(data, indent=1).encode()
+            temp = self.state / (STATUS_FILE + '.tmp')
+            temp.write_bytes(body)
+            os.chmod(temp, 0o600)
+            temp.replace(self.state / STATUS_FILE)
+            if publish_dir:
+                publish_file(publish_dir, STATUS_FILE, body)
+            return data
+        except Exception:
+            return None
+
+    def check(self, publish_dir=None):
+        latest = newest_release(list_releases(), self.blocked())
+        data = self.write_status(publish_dir, latest=latest, checkedAt=now_iso(), state='checked', message='')
+        print('Newest release: ' + (latest or 'none') + ('; an update is available' if data and data.get('updateAvailable') else ''))
+
+    def start_update(self, publish_dir=None):
+        # The update itself runs in the updater's own unit (same backup, health
+        # check and rollback as the hourly timer); this only starts it now.
+        self.write_status(publish_dir, state='installing', requestedAt=now_iso(), message='')
+        subprocess.run(['systemctl', 'start', '--no-block', UPDATE_UNIT], check=True, capture_output=True, timeout=30)
+        print('Update started')
+
     def report_failure(self, message, now=None):
         """Notifies once per distinct failure, then again only after a day."""
         now = time.time() if now is None else now
@@ -231,15 +316,27 @@ class Deployment:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=['apply', 'restart', 'rollback', 'update'])
+    parser.add_argument('action', choices=['apply', 'restart', 'rollback', 'update', 'check', 'start-update'])
     parser.add_argument('package', nargs='?', help='Extracted, trusted release directory for apply')
     parser.add_argument('--state-dir', required=True)
     parser.add_argument('--env-file', required=True)
+    parser.add_argument('--publish-dir', help='Also copy the update status file into this folder (the app exchange)')
     args = parser.parse_args()
     os.umask(0o077)
     deployment = Deployment(args.state_dir, args.env_file)
     with (deployment.state / 'update.lock').open('a') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise ValueError('Another update task is running; try again in a few minutes') from None
+        if args.action == 'check':
+            deployment.check(args.publish_dir)
+            return
+        if args.action == 'start-update':
+            # Release the lock first: the updater unit takes it for the actual update.
+            fcntl.flock(lock, fcntl.LOCK_UN)
+            deployment.start_update(args.publish_dir)
+            return
         if args.action == 'rollback':
             deployment.rollback()
         elif args.action == 'restart':
@@ -249,14 +346,12 @@ def main():
                 raise ValueError('An extracted release directory is required')
             deployment.apply(args.package)
         else:
-            # gh handles private-repository authentication and asset redirects.
-            result = subprocess.run(['gh', 'release', 'list', '--repo', 'santoshgs/FamilyHub', '--limit', '30', '--json', 'tagName,isDraft,isPrerelease'], capture_output=True, check=True)
-            releases = json.loads(result.stdout)
-            release = newest_release(releases, deployment.blocked())
+            release = newest_release(list_releases(), deployment.blocked())
             if not release:
                 raise ValueError('No stable Family Hub release is available')
             if deployment.current() and version_key(deployment.current()['current']) >= version_key(release):
                 print('Already up to date')
+                deployment.write_status(args.publish_dir, latest=release, checkedAt=now_iso(), state='up-to-date', message='')
                 deployment.clear_failure()
                 return
             with tempfile.TemporaryDirectory(prefix='release-', dir=deployment.state) as temp:
@@ -267,6 +362,8 @@ def main():
                 installed = deployment.apply(folder)
             if installed:
                 notify('Family Hub updated', f'Now running {installed}.', 'default', 'white_check_mark')
+            deployment.write_status(args.publish_dir, latest=release, checkedAt=now_iso(), finishedAt=now_iso(),
+                                    state='updated' if installed else 'up-to-date', message=f'Now running {installed}.' if installed else '')
         deployment.clear_failure()
 
 
@@ -280,12 +377,20 @@ if __name__ == '__main__':
     except Exception as error:
         message = describe(error)
         print('Family Hub deployment stopped: ' + message, file=sys.stderr)
+        action = sys.argv[1] if len(sys.argv) > 1 else ''
         try:
-            # Only the hourly updater reports; a person running a command sees the error.
-            if 'update' in sys.argv[1:2]:
-                state = sys.argv[sys.argv.index('--state-dir') + 1]
-                env = sys.argv[sys.argv.index('--env-file') + 1]
-                Deployment(state, env).report_failure(message)
+            state = sys.argv[sys.argv.index('--state-dir') + 1]
+            env = sys.argv[sys.argv.index('--env-file') + 1]
+            publish = sys.argv[sys.argv.index('--publish-dir') + 1] if '--publish-dir' in sys.argv else None
+            deployment = Deployment(state, env)
+            if action in ('update', 'check', 'start-update'):
+                # A busy lock is not a failure of the running task: keep its state.
+                busy = message.startswith('Another update task is running')
+                deployment.write_status(publish, message=message, finishedAt=now_iso(),
+                                        **({} if busy else {'state': 'failed' if action != 'check' else 'check-failed'}))
+            # Only the hourly updater notifies; a person running a command sees the error.
+            if action == 'update':
+                deployment.report_failure(message)
         except Exception:
             pass
         sys.exit(1)

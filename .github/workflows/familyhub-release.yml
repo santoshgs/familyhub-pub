@@ -38,6 +38,8 @@ jobs:
       - run: npm run test:familyhub
       - run: FAMILYHUB_TEST_BUILT_SW=true node --test scripts/service-worker.test.mjs
       - run: python3 -m unittest discover -s deploy/familyhub -p 'test_release.py'
+      # The admin helpers refuse to run without root, so their tests need sudo.
+      - run: sudo python3 -m unittest discover -s deploy/familyhub/admin -p 'test_*.py'
   package:
     needs: validate
     runs-on: ubuntu-latest

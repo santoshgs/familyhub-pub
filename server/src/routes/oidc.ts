@@ -73,7 +73,13 @@ router.post('/start', startRateLimiter, async (req: Request, res: Response) => {
     let linkUserId: string | null = null;
     if (link === true) {
         try {
-            linkUserId = (await verifyAccessToken(bearerToken(req))).userId;
+            const verified = await verifyAccessToken(bearerToken(req));
+            // A read-only display or photo-frame session must never bind a new
+            // sign-in identity to its account (it would become a full login).
+            if (verified.readOnly || verified.ambientOnly) {
+                return res.status(403).json({ success: false, error: 'read_only_session' });
+            }
+            linkUserId = verified.userId;
         } catch (error) {
             const status = error instanceof InvalidTokenError ? 401 : 503;
             return res.status(status).json({ success: false, error: status === 401 ? 'Invalid token' : 'Service unavailable' });
@@ -238,7 +244,11 @@ router.post('/exchange', async (req: Request, res: Response) => {
     if (flow.mode === 'link') {
         let sessionUserId: string;
         try {
-            sessionUserId = (await verifyAccessToken(bearerToken(req))).userId;
+            const verified = await verifyAccessToken(bearerToken(req));
+            if (verified.readOnly || verified.ambientOnly) {
+                return res.status(403).json({ success: false, error: 'read_only_session' });
+            }
+            sessionUserId = verified.userId;
         } catch (error) {
             // A database outage is not a bad session: answering 401 would sign the app out.
             if (!(error instanceof InvalidTokenError)) {

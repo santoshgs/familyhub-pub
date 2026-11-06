@@ -53,7 +53,7 @@ home network, which lets the frame use normal DNS.
 | --- | --- |
 | `GET/HEAD /display`, `/display-pair` | proxied |
 | `GET/HEAD` static assets (`/assets/*`, `/fonts/*`, icons, manifest, `sw.js`, `registerSW.js`) | proxied |
-| `GET /api/auth/me`, `/api/auth/dashboard-prefs`, `/api/familyhub/modules`, `/api/familyhub/ambient`, `/api/familyhub/ambient/article` (news reader view) | proxied |
+| `GET /api/auth/me`, `/api/auth/dashboard-prefs`, `/api/familyhub/modules`, `/api/familyhub/ambient`, `/api/familyhub/ambient/article` (news reader view), `/api/familyhub/ambient/photos/*` (slideshow, v1.2) | proxied |
 | `POST /api/familyhub/display/pair`, `/api/familyhub/display/refresh` | proxied |
 | any other `GET/HEAD` page (`/`, `/login`, `/display-settings`, …) | `302 → /display` |
 | anything else (other API paths, `/ws`, other methods) | `404` |

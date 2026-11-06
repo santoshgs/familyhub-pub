@@ -21,6 +21,7 @@ import Settings from './pages/Settings';
 import Join from './pages/Join';
 import { ProfileName } from './familyhub/ProfileName';
 import { ServerCredentials } from './familyhub/ServerCredentials';
+import { ServerUpdates } from './familyhub/ServerUpdates';
 const Integrations = lazy(() => import('./pages/Integrations'));
 
 const AiHub = lazy(() => import('./familyhub/AiHub'));
@@ -30,6 +31,7 @@ const FamilyHub = lazy(() => import('./familyhub/FamilyHub'));
 const AmbientDisplay = lazy(() => import('./familyhub/AmbientDisplay'));
 const DisplaySettings = lazy(() => import('./familyhub/DisplaySettings'));
 const DisplayPair = lazy(() => import('./familyhub/DisplayPair'));
+const DashboardExtrasSettings = lazy(() => import('./familyhub/DashboardExtrasSettings'));
 
 function App() {
     const { isAuthenticated, loading, isModuleEnabled, user } = useAuth();
@@ -79,7 +81,7 @@ function App() {
         // Pocket money manages its reward chores on the Chores page.
         const reachable = mod && (isModuleEnabled(mod.key) || (mod.key === 'chores' && isModuleEnabled('rewards')));
         if (mod && !reachable) return <Navigate to="/settings" replace />;
-        if (location.pathname === '/settings' && !user?.is_display) return <ModulePage><ProfileName /><p className="mb-4">Choose which modules your family uses below. Switching one off hides it for everyone and keeps its saved data.</p><a href="/family" className="fh-text-button">Manage family members</a><Settings />{user?.is_owner && <details className="fh-card fh-advanced"><summary>Advanced</summary><ServerCredentials /></details>}</ModulePage>;
+        if (location.pathname === '/settings' && !user?.is_display) return <ModulePage><ProfileName /><p className="mb-4">Choose which modules your family uses below. Switching one off hides it for everyone and keeps its saved data.</p><a href="/family" className="fh-text-button">Manage family members</a><Settings />{(user?.is_owner || user?.role === 'parent') && <details className="fh-card fh-advanced" id="display"><summary>Display</summary><Suspense fallback={<p role="status" className="fh-extras-loading">Loading display options…</p>}><DashboardExtrasSettings /></Suspense></details>}{user?.is_owner && <details className="fh-card fh-advanced"><summary>Advanced</summary><ServerUpdates /><ServerCredentials /></details>}</ModulePage>;
         const optionalPages: Record<string, ReactElement> = {
             '/budget': <Budget />, '/rewards': <><p className="mb-4">Pocket money uses local reward chores and parent approvals. Google to-dos do not earn points automatically. <a className="fh-text-button" href="/chores">Manage reward chores</a></p><Rewards /></>,
             '/shopping': <ShoppingList />, '/planning': <Planning />, '/integrations': <Integrations />,

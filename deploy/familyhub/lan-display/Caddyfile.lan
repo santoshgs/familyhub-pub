@@ -37,7 +37,7 @@ https://{$FAMILYHUB_LAN_HOST} {
 	# tokens to these endpoints.
 	@display_reads {
 		method GET
-		path /api/auth/me /api/auth/dashboard-prefs /api/familyhub/modules /api/familyhub/ambient /api/familyhub/ambient/article
+		path /api/auth/me /api/auth/dashboard-prefs /api/familyhub/modules /api/familyhub/ambient /api/familyhub/ambient/article /api/familyhub/ambient/photos/*
 	}
 	handle @display_reads {
 		reverse_proxy 127.0.0.1:8080

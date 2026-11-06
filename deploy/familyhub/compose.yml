@@ -53,6 +53,8 @@ services:
       # Settings → Advanced → Server credentials hands tokens to the host's
       # root-only applier through this folder (deploy/familyhub/admin).
       FAMILYHUB_ADMIN_EXCHANGE: /app/admin-exchange
+      # Server credentials belong to this account (default: the first account created).
+      FAMILYHUB_ADMIN_EMAIL: ${FAMILYHUB_ADMIN_EMAIL:-}
     volumes:
       - uploads:/app/uploads
       - ${FAMILYHUB_ADMIN_EXCHANGE_DIR:-/opt/familyhub/admin-exchange}:/app/admin-exchange

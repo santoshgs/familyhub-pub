@@ -27,6 +27,12 @@
 | `develop` / `familyhub/prototype` | The working branch (previewed at `/develop/` on the Mac) and the release/default branch |
 | Version label | "Family Hub vX.Y.Z" in the display and management footers; the release tag baked into the client image |
 | Snyk policy | `client/.snyk`: accepted dependency findings with a reason and an expiry date |
+| Server administrator | The one account that manages server credentials and software updates: the email in `FAMILYHUB_ADMIN_EMAIL`, otherwise the first account created |
+| Quick bar | The row of pills on the frame (guest Wi-Fi, countdown, markets, photos), set up in Settings → Display (v1.2) |
+| Module guard | The server check that closes a switched-off module with 403 `MODULE_DISABLED` (v1.0) |
+| Software updates | Settings → Advanced panel showing the running and newest release, with Check now and Install now; the Pi still chooses the version |
+| ntfy | The phone-notification service used for expiry, install, failure and rollback alerts; set up with `setup-ntfy.sh` |
+| Claude Security | The Claude Code plugin whose November 4, 2026 scan led to the v1.1.0 security release |
 
 ## Locations
 
@@ -41,6 +47,9 @@
 | `/opt/familyhub/state/` | Pi release state and private pre-update backups |
 | `/opt/familyhub/release.py` | Pi release updater and rollback tool |
 | `/opt/familyhub/check-renewals.sh`, `apply-credentials.sh` | Pi renewal check and credential applier |
+| `/opt/familyhub/notify.sh`, `/etc/familyhub-notify.env` | ntfy sender and its private topic settings |
+| `/opt/familyhub/admin-state/` | Root-only results and status written by the applier (v1.1) |
+| `familyhub-photos/` in the uploads volume | Slideshow photos uploaded in Settings → Display (v1.2) |
 | `/opt/familyhub/admin-exchange/` | Hand-off folder between Settings → Advanced and the root applier (status files only, once applied) |
 | `/etc/family-hub-lan/` | LAN listener config, frame certificate, Cloudflare token (root-only) |
 | [`deploy/familyhub/lan-display/`](../deploy/familyhub/lan-display/README.md), [`admin/`](../deploy/familyhub/admin/README.md), [`frame/`](../deploy/familyhub/frame/frame.sh) | Pi and frame scripts |

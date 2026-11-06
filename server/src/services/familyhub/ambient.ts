@@ -2,6 +2,12 @@ import { query } from '../../db';
 import { readCappedText, safeFetch } from '../../lib/safeFetch';
 import { syncGoogle } from './google/runtime';
 import { getNews } from './news';
+import { readExtras } from './extras/settings';
+import { buildWeatherPanel, getAirQuality } from './extras/weatherPanel';
+import { getStandings } from './extras/formula1';
+import { buildCountdown, buildWifi } from './extras/wifiCountdown';
+import { getMarkets } from './extras/markets';
+import { listPhotos } from './extras/photos';
 
 export const AMBIENT_WIDGETS = ['calendar', 'weather', 'tasks', 'chores', 'news', 'daycare', 'f1'] as const;
 /** Cards shown when a household has not chosen any yet (News is opt-in). */
@@ -30,6 +36,7 @@ const scheduleCache = new Map<string, CacheEntry<FormulaRace | null>>();
 const pendingWeather = new Map<string, Promise<AmbientWeather | null>>();
 const pendingSchedule = new Map<string, Promise<FormulaRace | null>>();
 
+export interface WeatherDay { date: string; weatherCode: number; high: number; low: number; precipitation: number | null }
 export interface AmbientWeather {
     temperature: number;
     weatherCode: number;
@@ -37,7 +44,13 @@ export interface AmbientWeather {
     low: number;
     timezone: string;
     fetchedAt: string;
+    unit: 'celsius' | 'fahrenheit';
     tomorrow?: { weatherCode: number; high: number; low: number };
+    /** Extra fields for the weather detail panel (v1.2). */
+    details?: {
+        apparent: number | null; humidity: number | null; windSpeed: number | null; windDirection: number | null;
+        gusts: number | null; isDay: boolean; sunrise: string | null; sunset: string | null; days: WeatherDay[];
+    };
 }
 
 export interface FormulaSession { name: string; dateTime: string }
@@ -137,9 +150,12 @@ export async function searchWeatherLocations(search: string): Promise<Array<{ id
     });
 }
 
-export async function getAmbientWeather(location: AmbientSettings['location']): Promise<AmbientWeather | null> {
+const numberOrNull = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : null);
+const localStamp = (value: unknown) => (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value) ? value : null);
+
+export async function getAmbientWeather(location: AmbientSettings['location'], unit: 'celsius' | 'fahrenheit' = 'celsius'): Promise<AmbientWeather | null> {
     if (!location) return null;
-    const key = `${location.latitude.toFixed(4)},${location.longitude.toFixed(4)}`;
+    const key = `${location.latitude.toFixed(4)},${location.longitude.toFixed(4)},${unit}`;
     const cached = weatherCache.get(key);
     if (cached && cached.expiresAt > Date.now()) return cached.value;
     const pending = pendingWeather.get(key);
@@ -148,22 +164,38 @@ export async function getAmbientWeather(location: AmbientSettings['location']): 
         try {
             const params = new URLSearchParams({
                 latitude: String(location.latitude), longitude: String(location.longitude),
-                current: 'temperature_2m,weather_code', daily: 'weather_code,temperature_2m_max,temperature_2m_min',
-                forecast_days: '2', timezone: 'auto', temperature_unit: 'celsius',
+                current: 'temperature_2m,apparent_temperature,relative_humidity_2m,wind_speed_10m,wind_direction_10m,wind_gusts_10m,weather_code,is_day',
+                daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset',
+                forecast_days: '16', timezone: 'auto', temperature_unit: unit, wind_speed_unit: unit === 'fahrenheit' ? 'mph' : 'kmh',
             });
-            const response = await safeFetch(`https://api.open-meteo.com/v1/forecast?${params}`, { timeoutMs: 8_000, maxBytes: 128 * 1024 });
+            const response = await safeFetch(`https://api.open-meteo.com/v1/forecast?${params}`, { timeoutMs: 8_000, maxBytes: 256 * 1024 });
             if (!response.ok) throw new Error('Weather service unavailable.');
-            const data = JSON.parse(await readCappedText(response, 128 * 1024)) as {
-                current?: { temperature_2m?: unknown; weather_code?: unknown };
-                daily?: { weather_code?: unknown[]; temperature_2m_max?: unknown[]; temperature_2m_min?: unknown[] };
+            const data = JSON.parse(await readCappedText(response, 256 * 1024)) as {
+                current?: Record<string, unknown>;
+                daily?: Record<string, unknown[] | undefined>;
                 timezone?: unknown;
             };
             const temperature = Number(data.current?.temperature_2m), weatherCode = Number(data.current?.weather_code);
-            const high = Number(data.daily?.temperature_2m_max?.[0]), low = Number(data.daily?.temperature_2m_min?.[0]);
+            const daily = data.daily ?? {};
+            const high = Number(daily.temperature_2m_max?.[0]), low = Number(daily.temperature_2m_min?.[0]);
             if (![temperature, weatherCode, high, low].every(Number.isFinite)) throw new Error('Invalid weather response.');
-            const next = { weatherCode: Number(data.daily?.weather_code?.[1]), high: Number(data.daily?.temperature_2m_max?.[1]), low: Number(data.daily?.temperature_2m_min?.[1]) };
-            const value: AmbientWeather = { temperature, weatherCode, high, low, timezone: asString(data.timezone, 80) || 'UTC', fetchedAt: new Date().toISOString(),
-                ...([next.weatherCode, next.high, next.low].every(Number.isFinite) ? { tomorrow: next } : {}) };
+            const next = { weatherCode: Number(daily.weather_code?.[1]), high: Number(daily.temperature_2m_max?.[1]), low: Number(daily.temperature_2m_min?.[1]) };
+            const dates = Array.isArray(daily.time) ? daily.time : [];
+            const days: WeatherDay[] = dates.slice(0, 16).flatMap((date, index) => {
+                const day = { date: asString(date, 10), weatherCode: Number(daily.weather_code?.[index]),
+                    high: Number(daily.temperature_2m_max?.[index]), low: Number(daily.temperature_2m_min?.[index]),
+                    precipitation: numberOrNull(daily.precipitation_probability_max?.[index]) };
+                return /^\d{4}-\d{2}-\d{2}$/.test(day.date) && [day.weatherCode, day.high, day.low].every(Number.isFinite) ? [day] : [];
+            });
+            const current = data.current ?? {};
+            const value: AmbientWeather = { temperature, weatherCode, high, low, timezone: asString(data.timezone, 80) || 'UTC', fetchedAt: new Date().toISOString(), unit,
+                ...([next.weatherCode, next.high, next.low].every(Number.isFinite) ? { tomorrow: next } : {}),
+                details: {
+                    apparent: numberOrNull(current.apparent_temperature), humidity: numberOrNull(current.relative_humidity_2m),
+                    windSpeed: numberOrNull(current.wind_speed_10m), windDirection: numberOrNull(current.wind_direction_10m),
+                    gusts: numberOrNull(current.wind_gusts_10m), isDay: current.is_day !== 0,
+                    sunrise: localStamp(daily.sunrise?.[0]), sunset: localStamp(daily.sunset?.[0]), days,
+                } };
             weatherCache.set(key, { value, expiresAt: Date.now() + 20 * 60_000 });
             return value;
         } catch {
@@ -253,8 +285,19 @@ export async function loadAmbientSnapshot(familyId: string) {
               AND m.id::text IN (SELECT jsonb_array_elements_text(COALESCE(t.assigned_to,'[]'::jsonb)))), '[]'::json) AS members
         FROM tasks t WHERE t.user_id=$1 AND t.due_date::date=$2::date
         ORDER BY t.is_completed ASC, t.due_date ASC, t.created_at DESC LIMIT 10`, [familyId, today]);
-    const [weather, race, news] = await Promise.all([getAmbientWeather(settings.location), getNextFormulaRace(),
-        settings.widgets.includes('news') ? getNews() : Promise.resolve(null)]);
+    const extras = await readExtras(familyId);
+    const extraSettings = extras.settings;
+    const [weather, race, news, aqi, standings, markets, photoRows] = await Promise.all([
+        getAmbientWeather(settings.location, extraSettings.weather.unit), getNextFormulaRace(),
+        settings.widgets.includes('news') ? getNews() : Promise.resolve(null),
+        settings.widgets.includes('weather') && extraSettings.weather.showAqi ? getAirQuality(settings.location) : Promise.resolve(null),
+        settings.widgets.includes('f1') && (extraSettings.formula1.showDrivers || extraSettings.formula1.showConstructors)
+            ? getStandings(extraSettings.formula1.season, extraSettings.formula1.pollMinutes,
+                { team: extraSettings.formula1.favoriteTeam, driver: extraSettings.formula1.favoriteDriver })
+            : Promise.resolve(null),
+        getMarkets(familyId, extraSettings.markets, extras.secrets),
+        extraSettings.photos.enabled ? listPhotos(familyId) : Promise.resolve([]),
+    ]);
     // The display receives only the fields it renders: the next 7 days of
     // events (the Google loader's window) and open tasks, for its detail panels.
     const events = (Array.isArray(google.events) ? google.events : []).slice(0, 80).map((item) => {
@@ -289,6 +332,19 @@ export async function loadAmbientSnapshot(familyId: string) {
         weather: { data: weather, state: weather ? 'fresh' : settings.location ? 'unavailable' : 'unconfigured', place: settings.location ? `${settings.location.city}, ${settings.location.country}` : null },
         formula1: { data: race, state: race ? 'fresh' : 'unavailable' },
         news: news ?? { items: [], state: 'disabled' },
+        // v1.2: detail panels and the quick bar. Everything here is computed on
+        // the Pi; the display only lays it out (and ticks the countdown seconds).
+        extras: {
+            weather: buildWeatherPanel(weather, aqi, extraSettings.weather),
+            formula1: standings ? { ...standings, showDrivers: extraSettings.formula1.showDrivers, showConstructors: extraSettings.formula1.showConstructors } : null,
+            wifi: buildWifi(extraSettings.wifi, extras.secrets),
+            countdown: buildCountdown(extraSettings.countdown, timeZone),
+            markets: markets ? { ...markets, enabled: true } : null,
+            photos: extraSettings.photos.enabled && photoRows.length
+                ? { intervalSeconds: extraSettings.photos.intervalSeconds, ids: photoRows.map((row) => row.id) }
+                : null,
+            serverTime: new Date().toISOString(),
+        },
         sources: google.sources,
         lastSuccessfulRefresh: sourceTimes.sort().at(-1) ?? null,
     };

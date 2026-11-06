@@ -1,3 +1,4 @@
+import { stripTrailingSlashes } from '../lib/asyncRoutes';
 import { loadEnv } from './loadEnv';
 import { isMailEnabled } from '../lib/mailer';
 import logger from '../lib/logger';
@@ -67,7 +68,7 @@ const readOidcSettings = (): OidcSettings | null => {
     // the app, so both public addresses must be known. They are never guessed
     // from the request's Host header, nor from each other: the API may be
     // served from another host than the app (VITE_API_URL).
-    const publicUrl = trimmed(process.env.APP_PUBLIC_URL).replace(/\/+$/, '');
+    const publicUrl = stripTrailingSlashes(trimmed(process.env.APP_PUBLIC_URL));
     if (!publicUrl) {
         logger.error('auth.oidc_disabled', { reason: 'set APP_PUBLIC_URL' });
         return null;

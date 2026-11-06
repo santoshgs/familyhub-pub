@@ -1,4 +1,4 @@
-import { Router, type Response } from 'express';
+import express, { Router, type Response } from 'express';
 import { createHash, randomInt, randomUUID } from 'crypto';
 import rateLimit from 'express-rate-limit';
 import { query, withTransaction } from '../db';
@@ -10,7 +10,11 @@ import { googleApi, selection, configureSources, syncGoogle, invalidate } from '
 import { GoogleApiError } from '../services/familyhub/google/adapters';
 import { loadAmbientSnapshot, readAmbientSettings, saveAmbientSettings, searchWeatherLocations } from '../services/familyhub/ambient';
 import { getNewsArticle } from '../services/familyhub/news';
+import { ExtrasValidationError, publicView, readExtras, saveExtras } from '../services/familyhub/extras/settings';
+import { clearMarketCache } from '../services/familyhub/extras/markets';
+import { addPhoto, deletePhoto, listPhotos, MAX_PHOTOS, MAX_UPLOAD_BYTES, PhotoError, readPhoto } from '../services/familyhub/extras/photos';
 import { credentialStatus, requestCheck, submitCredential } from '../services/familyhub/adminCredentials';
+import { requestUpdate, updateStatus, type UpdateRequest } from '../services/familyhub/adminUpdates';
 import { cleanModuleList, getDisabledModules, isModuleKey, requireModule, saveDisabledModules } from '../lib/modules';
 const router = Router();
 const CARDS = ['calendar', 'tasks', 'notes', 'daycare', 'classroom'];
@@ -86,7 +90,22 @@ router.post('/display/pairing-code', requireParent, async (req: AuthRequest, res
 });
 // Server credentials (Settings → Advanced). Owner only; tokens are handed to the
 // host's root-only applier and are never stored, logged or returned.
-const requireOwner = (req: AuthRequest, res: Response, next: () => void) => req.isOwner ? next() : res.status(403).json({ success: false, error: 'Only the household owner can manage server credentials.' });
+// Server credentials are host-wide, so they belong to the server's administrator,
+// not to whoever owns *a* family (any member can become a standalone owner by
+// leaving). The administrator is FAMILYHUB_ADMIN_EMAIL when set, otherwise the
+// first account created on this server; both are checked in the database.
+export const isHostAdmin = async (actualUserId: string | undefined): Promise<boolean> => {
+    if (!actualUserId) return false;
+    const email = process.env.FAMILYHUB_ADMIN_EMAIL?.trim().toLowerCase();
+    const result = email
+        ? await query('SELECT id FROM users WHERE lower(email) = $1 AND family_owner_id IS NULL LIMIT 1', [email])
+        : await query('SELECT id FROM users WHERE family_owner_id IS NULL ORDER BY created_at ASC, id ASC LIMIT 1');
+    return result.rows[0]?.id === actualUserId;
+};
+const requireOwner = async (req: AuthRequest, res: Response, next: () => void) => {
+    if (req.isOwner && await isHostAdmin(req.actualUserId)) return next();
+    return res.status(403).json({ success: false, error: 'Only the server administrator can manage server credentials.' });
+};
 const credentialLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false });
 router.get('/admin/credentials', requireParent, requireOwner, async (_req: AuthRequest, res) => {
     try { res.set('Cache-Control', 'no-store').json({ success: true, data: await credentialStatus() }); }
@@ -104,6 +123,21 @@ router.put('/admin/credentials/:kind', credentialLimiter, requireParent, require
 router.post('/admin/credentials/check', credentialLimiter, requireParent, requireOwner, async (_req: AuthRequest, res) => {
     try { res.status((await requestCheck()) ? 202 : 409).json({ success: true }); }
     catch { res.status(503).json({ success: false, error: 'The check could not be requested.' }); }
+});
+// Software updates (Settings → Advanced), server administrator only. The app can
+// ask the Pi to check GitHub or to start its updater now; it cannot choose a
+// version, and the updater keeps its backup, health check and rollback.
+router.get('/admin/updates', requireParent, requireOwner, async (_req: AuthRequest, res) => {
+    try { res.set('Cache-Control', 'no-store').json({ success: true, data: await updateStatus() }); }
+    catch { res.status(503).json({ success: false, error: 'Update status is unavailable.' }); }
+});
+router.post('/admin/updates/:kind(check|install)', credentialLimiter, requireParent, requireOwner, async (req: AuthRequest, res) => {
+    try {
+        const outcome = await requestUpdate(req.params.kind as UpdateRequest);
+        if (outcome === 'unavailable') return res.status(409).json({ success: false, error: 'The server helper is not installed on this host.' });
+        if (outcome === 'nothing-to-install') return res.status(409).json({ success: false, error: 'No newer release is known yet. Check for updates first.' });
+        res.status(202).json({ success: true });
+    } catch { res.status(503).json({ success: false, error: 'The request could not be handed to the server.' }); }
 });
 router.get('/display/sessions', requireParent, async (req: AuthRequest, res) => {
     try {
@@ -159,6 +193,58 @@ router.get('/ambient/locations', requireParent, async (req: AuthRequest, res) =>
     try { res.json({ success: true, data: await searchWeatherLocations(search) }); }
     catch { res.status(502).json({ success: false, error: 'Weather location search is unavailable. Try again later.' }); }
 });
+// ── v1.2 dashboard: quick bar, detail panels, slideshow photos ────────────
+router.get('/dashboard/settings', requireParent, async (req: AuthRequest, res) => {
+    try {
+        const { settings, secrets } = await readExtras(req.userId!);
+        res.json({ success: true, data: publicView(settings, secrets) });
+    } catch { res.status(503).json({ success: false, error: 'Dashboard settings are unavailable.' }); }
+});
+router.put('/dashboard/settings', requireParent, async (req: AuthRequest, res) => {
+    try {
+        const { settings, secrets } = await saveExtras(req.userId!, req.body);
+        clearMarketCache(req.userId!);
+        res.json({ success: true, data: publicView(settings, secrets) });
+    } catch (error) {
+        if (error instanceof ExtrasValidationError) return res.status(400).json({ success: false, error: error.message });
+        res.status(503).json({ success: false, error: 'Dashboard settings could not be saved.' });
+    }
+});
+const photoFailure = (res: Response, error: unknown) => error instanceof PhotoError
+    ? res.status(error.status).json({ success: false, error: error.message })
+    : res.status(503).json({ success: false, error: 'The photo could not be processed.' });
+const photoUploadLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 120, standardHeaders: true, legacyHeaders: false });
+router.get('/photos', requireParent, async (req: AuthRequest, res) => {
+    try { res.json({ success: true, data: { photos: await listPhotos(req.userId!), max: MAX_PHOTOS } }); }
+    catch (error) { photoFailure(res, error); }
+});
+// One photo per request, sent as the raw file body (Content-Type image/*).
+router.post('/photos', requireParent, photoUploadLimiter,
+    express.raw({ type: ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif', 'application/octet-stream'], limit: MAX_UPLOAD_BYTES }),
+    async (req: AuthRequest, res) => {
+        try {
+            if (!Buffer.isBuffer(req.body)) throw new PhotoError('Send the photo as an image file.', 415);
+            res.status(201).json({ success: true, data: await addPhoto(req.userId!, req.actualUserId, req.body) });
+        } catch (error) { photoFailure(res, error); }
+    });
+router.delete('/photos/:id', requireParent, async (req: AuthRequest, res) => {
+    try {
+        if (!(await deletePhoto(req.userId!, req.params.id))) return res.status(404).json({ success: false, error: 'That photo was not found.' });
+        res.json({ success: true });
+    } catch (error) { photoFailure(res, error); }
+});
+const sendPhoto = (variant: 'full' | 'thumb') => async (req: AuthRequest, res: Response) => {
+    try {
+        const bytes = await readPhoto(req.userId!, req.params.id, variant);
+        if (!bytes) return res.status(404).json({ success: false, error: 'That photo was not found.' });
+        // Photos never change under an id: let the browser keep them (privately).
+        res.set({ 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff' }).send(bytes);
+    } catch (error) { photoFailure(res, error); }
+};
+router.get('/photos/:id/thumb', requireParent, sendPhoto('thumb'));
+// The frame's slideshow (ambient tokens may read this path; see middleware/auth.ts).
+router.get('/ambient/photos/:id', sendPhoto('full'));
+
 router.put('/preferences/order', async (req: AuthRequest, res) => {
     const order = req.body?.cardOrder;
     if (!Array.isArray(order) || order.length !== CARDS.length || new Set(order).size !== CARDS.length || order.some((card) => !CARDS.includes(card))) {

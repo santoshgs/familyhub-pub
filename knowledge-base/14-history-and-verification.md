@@ -40,12 +40,23 @@ A `develop` branch and a Mac preview at `/develop/` were added so patches are tr
 
 The repository was then reduced from 697 files (17.9 MB) to about 506 (10 MB): one-off scripts, the phase QA screenshots and harness, the OpenFamily website, installers and packaging, upstream-only workflows and the Android app were removed, and CORS was narrowed. The app version now appears in the display and management footers. Published as **v0.3.7** (run 41785055085). Evidence: all release validation steps passed in a clean checkout (163 server, 16 client, 4 service-worker and the release-tool tests); the v0.3.7 commit was run with fictional data and its display rendered at 1280 × 800 without overflow or page errors, footer "Family Hub v0.3.7". Installation of v0.3.6/v0.3.7 on the Pi and the frame was not observed from the development session.
 
+### Own fork, security release and dashboard extras (November 4–5, 2026)
+
+**v1.0.0 (November 4)** removed the OpenFamily modules and languages Family Hub does not use, made module switches server-enforced, and added sign in with Google and ntfy alerts. Its migration `familyhub/0009` drops the removed modules' tables; the upgrade from a v0.3.7 database and an app rollback to v0.3.7 were run locally with fictional data. 172 server tests passed, and the rendered navigation, overview and Settings → Modules were checked at 1280 px and 390 px.
+
+A Claude Security scan that day verified 33 findings in `server/` and `deploy/` (1 high, 17 medium, 15 low). On November 5 all 33 were re-checked against `develop` and fixed in six themed commits, then shipped as **v1.1.0**; the upgrade from v1.0.0, a restart and an app rollback to v1.0.0 were simulated locally with fictional data. The owner confirmed on the Pi that the image digests matched the release manifest, set `FAMILYHUB_ADMIN_EMAIL` and reinstalled the admin helpers. See [security](13-security-privacy.md).
+
+**v1.2.0 (November 5)** added the frame's quick bar and detail panels, Settings → Display and Settings → Advanced → Software updates. The release run passed, including 218 server tests on PostgreSQL 16, and the updates panel was rendered at 390 px and 1280 px with fictional data without overflow or page errors. Two Pi tools were added along the way: a hardened `update-github-tokens.sh` (v1.1.0 had missed it) and `remove-account.sh`, tested against a local database for a dry run, a refusal, a confirmed removal and a re-run. The owner then reinstalled the helpers, `release.py`, the update service and `notify.sh`, re-applied the LAN listener, removed a leftover review login and confirmed that v1.2.0 is running and Software updates reports up to date. v1.2 has not yet been tested on the physical frame.
+
 ## Remaining acceptance and operational work
 
 - Verify representative live daycare messages after appropriate Gmail consent; no child content should be shared for the test.
 - Exercise safe disposable Calendar/Tasks writes and native-app round trips, all-day/DST behavior, stale-cache recovery and OAuth expiry/reconnection.
 - Upgrades across several releases have run on the Pi; a deliberate rollback has not. Database and Google writes are not automatically undone.
-- Confirm the frame and Settings footers read "Family Hub v0.3.7", and recheck sign-in, invitations and the calendar after the v0.3.7 cleanup.
+- Check v1.2 on the physical frame (quick bar, panels, photos, footer version) over ADB with owner approval, and recheck sign-in, invitations and the calendar after the v1.0 module removal.
+- Run a diff-mode security scan from `252e83c` covering what the first scan did not (`client/`, `scripts/`, `shared/`, sign in with Google, the ntfy scripts, the module guard and the v1.2 code).
+- Diagnose and set up sign in with Google and ntfy on the Pi; neither is verified working.
+- Deferred hardening from the scan: non-root server container, Express 5, per-member hashed calendar feed tokens, ICS parsing in a worker thread, re-authentication before linking a new identity.
 - Overnight burn-in of the frame (night dimming, Wi-Fi drops, Pi restarts, a week without re-pairing) and the news reader against live BBC pages.
 - Keep encrypted off-device backups and exercise a complete recovery, including uploads, keys, application version and network setup.
 - Resolve Gemini/provider issues when prioritized; no successful inference is recorded.

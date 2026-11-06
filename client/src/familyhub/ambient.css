@@ -271,3 +271,161 @@
 .ambient-reader .ambient-reader-meta { margin-bottom:16px; color:#8e9bb2; font-size:12px; }
 .ambient-reader .ambient-reader-li { padding-left:10px; }
 .ambient-reader-note { color:#9aa7bc; font-size:13px; }
+
+/* ── v1.2: footer status, quick bar and detail panels ─────────────────────────
+   Plain flexbox/grid only: the photo frame runs Android System WebView 104
+   (no :has, color-mix, nesting or backdrop-filter). */
+.ambient-footer { min-height:24px; align-items:center; padding-top:7px; }
+.ambient-footer-status { display:flex; align-items:center; gap:8px; color:#97a4ba; letter-spacing:.035em; min-width:0; overflow:hidden; white-space:nowrap; }
+.ambient-footer-motto { color:#7d8aa2; letter-spacing:.14em; font-weight:600; white-space:nowrap; }
+.ambient-footer-meta { white-space:nowrap; }
+.ambient-quickbar { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-top:clamp(8px,.9vw,12px); padding:5px 8px 5px 16px; border:1px solid rgba(125,170,235,.2); border-radius:16px; background:linear-gradient(100deg,rgba(17,27,43,.96),rgba(14,22,36,.96)); }
+.ambient-quickbar-label { display:flex; align-items:center; gap:8px; flex:0 0 auto; color:#7fb2ef; font-size:10px; font-weight:750; letter-spacing:.16em; }
+.ambient-quickbar-label i { width:7px; height:7px; border-radius:50%; background:#5fb0f0; }
+.ambient-quickbar-pills { display:flex; align-items:center; justify-content:flex-end; gap:9px; min-width:0; overflow:hidden; }
+.ambient-pill { min-height:34px; display:inline-flex; align-items:center; gap:8px; padding:0 15px; flex:0 1 auto; min-width:0; color:#eef2f8; font:inherit; font-size:12.5px; border:1px solid rgba(200,215,255,.12); border-radius:999px; background:#152236; white-space:nowrap; touch-action:manipulation; }
+.ambient-pill:active { background:#1f3150; border-color:rgba(125,170,235,.5); }
+.ambient-pill > svg { flex:0 0 auto; color:#9cc4f5; }
+.ambient-pill > span { overflow:hidden; text-overflow:ellipsis; font-weight:550; }
+.ambient-pill small { color:#8fb7e8; font-size:11px; font-weight:600; }
+.ambient-pill b { font-weight:700; }
+.ambient-pill-badge { padding:3px 9px; border-radius:999px; color:#bfe0ff; background:rgba(80,150,230,.2); font-size:11px; }
+.is-up { color:#6fd59c; }
+.is-down { color:#f08a8a; }
+
+@keyframes ambient-sheet-in { from { opacity:0; transform:translateY(10px) scale(.985); } to { opacity:1; transform:none; } }
+@keyframes ambient-fade-in { from { opacity:0; } to { opacity:1; } }
+.ambient-detail-backdrop { animation:ambient-fade-in .16s ease-out; }
+.ambient-detail { animation:ambient-sheet-in .2s ease-out; }
+.ambient-detail.is-wide { width:min(820px,100%); max-height:min(88vh,720px); }
+.ambient-detail > header > div { min-width:0; }
+.ambient-detail-kicker { display:block; margin-bottom:4px; color:#7fb2ef; font-size:10px; font-weight:750; letter-spacing:.15em; }
+
+.ambient-panel { display:flex; flex-direction:column; gap:14px; color:#dfe5ef; }
+.ambient-panel-heading { margin:4px 0 0; color:#a9bddf; font-size:11px; font-weight:750; letter-spacing:.13em; text-transform:uppercase; }
+.ambient-f1-schedule { display:flex; flex-direction:column; gap:8px; }
+.ambient-panel-sub { margin:-4px 0 0; color:#94a2b8; font-size:12px; }
+.ambient-panel-note { margin:0; color:#7f8ca3; font-size:11px; line-height:1.5; }
+.ambient-panel-note.is-warning { color:#f0c080; }
+.ambient-stat-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.ambient-stat { display:flex; flex-direction:column; gap:5px; min-width:0; padding:12px 13px; border:1px solid var(--ambient-line); border-radius:14px; background:rgba(255,255,255,.03); }
+.ambient-stat small { color:#8f9bb1; font-size:10px; font-weight:700; letter-spacing:.13em; }
+.ambient-stat strong { display:flex; align-items:center; flex-wrap:wrap; gap:6px; color:#fff; font-size:24px; font-weight:550; letter-spacing:-.03em; }
+.ambient-stat strong em { font-style:normal; color:#b8c4d8; font-size:13px; font-weight:500; letter-spacing:0; }
+.ambient-stat > span { display:flex; align-items:center; gap:4px; color:#9eabc0; font-size:11.5px; }
+.ambient-aqi { padding:2px 8px; border-radius:6px; font-size:10px; font-weight:750; letter-spacing:.04em; text-transform:uppercase; }
+.ambient-aqi.is-good { color:#7fe0a6; background:rgba(60,170,110,.18); }
+.ambient-aqi.is-moderate { color:#f1d27a; background:rgba(210,170,60,.18); }
+.ambient-aqi.is-sensitive { color:#f5b073; background:rgba(230,130,50,.2); }
+.ambient-aqi.is-unhealthy { color:#f59090; background:rgba(220,70,70,.2); }
+.ambient-aqi.is-very, .ambient-aqi.is-hazardous { color:#e4a6f2; background:rgba(150,70,180,.24); }
+.ambient-sun-times { font-size:14px !important; gap:12px !important; }
+.ambient-sun-times span { display:inline-flex; align-items:center; gap:4px; }
+.ambient-sun-track { position:relative; height:6px; margin:4px 0 2px; border-radius:3px; background:#1e293b; }
+.ambient-sun-track i { position:absolute; left:0; top:0; bottom:0; border-radius:3px; background:linear-gradient(90deg,#f4b860,#f6d77d); }
+.ambient-sun-track b { position:absolute; top:50%; width:11px; height:11px; margin:-5.5px 0 0 -5.5px; border-radius:50%; background:#5b6880; }
+.ambient-sun-track b.is-up { background:#ffd56b; box-shadow:0 0 8px rgba(255,210,100,.7); }
+.ambient-moon { display:flex; align-items:center; gap:14px; padding:12px 14px; border:1px solid var(--ambient-line); border-radius:14px; background:rgba(255,255,255,.03); }
+.ambient-moon > div { display:flex; flex-direction:column; gap:3px; }
+.ambient-moon small { color:#e7cf86; font-size:10px; font-weight:750; letter-spacing:.14em; }
+.ambient-moon strong { color:#fff; font-size:15px; font-weight:600; }
+.ambient-moon span { color:#9eabc0; font-size:12px; }
+.ambient-forecast { display:flex; flex-direction:column; padding:2px 14px; border:1px solid rgba(200,215,255,.06); border-radius:14px; background:rgba(9,14,24,.5); }
+.ambient-forecast-row { display:grid; grid-template-columns:96px minmax(0,1fr) 54px 34px 120px 34px; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid rgba(200,215,255,.06); font-size:12.5px; }
+.ambient-forecast-row:last-child { border-bottom:0; }
+.ambient-forecast-day { color:#e3e8f1; font-weight:600; }
+.ambient-forecast-cond { display:flex; align-items:center; gap:7px; min-width:0; overflow:hidden; color:#b9c4d6; white-space:nowrap; text-overflow:ellipsis; }
+.ambient-forecast-cond svg { flex:0 0 auto; color:#f4c978; }
+.ambient-forecast-rain { display:flex; align-items:center; gap:3px; color:#7fb8f0; font-size:11.5px; }
+.ambient-forecast-low { color:#8f9bb1; text-align:right; }
+.ambient-forecast-high { color:#fff; font-weight:650; }
+.ambient-range { position:relative; height:6px; border-radius:3px; background:#1e293b; overflow:hidden; }
+.ambient-range i { position:absolute; top:0; bottom:0; border-radius:3px; background:linear-gradient(90deg,#5ab8f2,#f6c35b); }
+
+.ambient-f1-sessions { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:8px; }
+.ambient-f1-sessions > div { display:flex; justify-content:space-between; gap:8px; padding:9px 11px; border:1px solid rgba(255,170,160,.16); border-radius:11px; background:rgba(220,59,62,.08); font-size:12.5px; }
+.ambient-f1-sessions > div.is-past { opacity:.45; }
+.ambient-f1-sessions time { color:#f2c5bf; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.ambient-f1-tables { display:grid; grid-template-columns:minmax(0,1fr); gap:16px; }
+.ambient-f1-tables.is-split { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.ambient-f1-tables section { display:flex; flex-direction:column; gap:8px; min-width:0; }
+.ambient-table { display:flex; flex-direction:column; padding:0 12px; border:1px solid rgba(200,215,255,.07); border-radius:14px; background:rgba(9,14,24,.5); }
+.ambient-table-row { display:flex; align-items:center; gap:9px; min-height:40px; padding:6px 0; border-bottom:1px solid rgba(200,215,255,.06); font-size:12.5px; }
+.ambient-table-row:last-child { border-bottom:0; }
+.ambient-table-row.is-favorite { margin:0 -12px; padding:6px 12px; background:rgba(232,0,45,.12); }
+.ambient-pos { width:18px; color:#8f9bb1; font-weight:650; text-align:right; font-variant-numeric:tabular-nums; }
+.ambient-team-stripe { width:4px; height:22px; flex:0 0 auto; border-radius:2px; }
+.ambient-table-name { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; overflow:hidden; color:#f2f5fa; font-weight:600; white-space:nowrap; text-overflow:ellipsis; }
+.ambient-table-name > span { overflow:hidden; text-overflow:ellipsis; }
+.ambient-table-name em { margin-right:3px; color:#9fb0cc; font-family:'Fraunces',Georgia,serif; font-weight:500; }
+.ambient-table-name small { color:#8492a8; font-size:10.5px; font-weight:500; }
+.ambient-wins { color:#d9b56a; font-size:11px; white-space:nowrap; }
+.ambient-table-row > b { min-width:44px; color:#fff; font-weight:700; text-align:right; font-variant-numeric:tabular-nums; }
+.ambient-quote-price { color:#fff; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.ambient-quote-change { min-width:96px !important; display:flex; flex-direction:column; align-items:flex-end; font-size:11.5px; white-space:nowrap; }
+.ambient-quote-change small { font-size:10.5px; font-weight:600; }
+.ambient-quote-change.is-up { color:#6fd59c !important; }
+.ambient-quote-change.is-down { color:#f08a8a !important; }
+
+.ambient-wifi { flex-direction:row; align-items:center; gap:28px; }
+.ambient-qr { flex:0 0 auto; width:230px; height:230px; padding:12px; border-radius:18px; background:#fff; }
+.ambient-qr svg { display:block; width:100%; height:100%; }
+.ambient-wifi-copy { display:flex; flex-direction:column; gap:12px; min-width:0; }
+.ambient-wifi-copy div { display:flex; flex-direction:column; gap:3px; }
+.ambient-wifi-copy small { color:#8f9bb1; font-size:10px; font-weight:700; letter-spacing:.14em; }
+.ambient-wifi-copy strong { color:#fff; font-family:ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace; font-size:26px; font-weight:700; word-break:break-all; }
+.ambient-wifi-password { color:#8fd0ff !important; }
+.ambient-wifi-copy > span { color:#9eabc0; font-size:12px; }
+.ambient-wifi-copy p { margin:0; padding:10px 12px; color:#c9d3e2; font-size:12.5px; line-height:1.5; border:1px solid var(--ambient-line); border-radius:12px; background:rgba(255,255,255,.03); }
+
+.ambient-countdown { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; text-align:center; }
+.ambient-countdown > div { display:flex; flex-direction:column; gap:4px; padding:14px 8px; border:1px solid var(--ambient-line); border-radius:16px; background:rgba(255,255,255,.035); }
+.ambient-countdown > div.is-days { border-color:rgba(90,170,240,.35); background:rgba(70,140,230,.1); }
+.ambient-countdown strong { color:#fff; font-size:44px; font-weight:650; letter-spacing:-.03em; font-variant-numeric:tabular-nums; }
+.ambient-countdown .is-days strong { color:#7cc4ff; }
+.ambient-countdown .is-seconds strong { color:#f6cf79; }
+.ambient-countdown small { color:#8f9bb1; font-size:10px; font-weight:700; letter-spacing:.14em; }
+.ambient-countdown-target { margin:0; padding:10px 14px; color:#dfe7f3; font-size:13px; border:1px solid var(--ambient-line); border-radius:12px; background:rgba(255,255,255,.03); }
+.ambient-checklist { display:flex; flex-direction:column; padding:2px 14px; border:1px solid rgba(200,215,255,.07); border-radius:14px; background:rgba(9,14,24,.5); }
+.ambient-checklist > div { display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid rgba(200,215,255,.06); color:#e8edf5; font-size:13px; }
+.ambient-checklist > div:last-child { border-bottom:0; }
+.ambient-checklist > div.is-done { color:#8fd6a9; }
+.ambient-checklist .ambient-checkbox { font-size:12px; font-weight:800; }
+
+.ambient-slideshow { gap:12px; }
+.ambient-photo { position:relative; height:min(56vh,430px); display:flex; align-items:center; justify-content:center; overflow:hidden; border:1px solid var(--ambient-line); border-radius:16px; background:#05080f; }
+.ambient-photo img { width:100%; height:100%; object-fit:contain; animation:ambient-fade-in .5s ease-out; }
+.ambient-photo p { color:#9aa7bc; font-size:13px; }
+.ambient-photo-count { position:absolute; right:12px; bottom:10px; padding:3px 9px; color:#e5ebf5; font-size:11px; font-variant-numeric:tabular-nums; border-radius:999px; background:rgba(0,0,0,.55); }
+.ambient-photo-controls { display:flex; justify-content:center; gap:10px; }
+.ambient-photo-controls .ambient-manage:disabled { opacity:.4; }
+
+@media (max-width:1040px) {
+    .ambient-quickbar { flex-direction:column; align-items:stretch; }
+    .ambient-quickbar-pills { flex-wrap:wrap; justify-content:flex-start; }
+    .ambient-footer-motto { display:none; }
+    .ambient-stat-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:640px) {
+    .ambient-footer-status, .ambient-footer-meta { white-space:normal; }
+    .ambient-f1-tables.is-split { grid-template-columns:minmax(0,1fr); }
+    .ambient-wifi { flex-direction:column; align-items:stretch; }
+    .ambient-qr { align-self:center; }
+    .ambient-forecast-row { grid-template-columns:78px minmax(0,1fr) 30px 70px 30px; }
+    .ambient-forecast-rain { display:none; }
+    .ambient-countdown strong { font-size:30px; }
+}
+@media (orientation:landscape) and (max-height:700px) {
+    .ambient-pill { min-height:30px; }
+}
+/* With the quick bar, a 1280 × 800 frame has a little less height per card. */
+@media (min-width:1041px) and (orientation:landscape) {
+    .ambient-header { min-height:86px; padding-bottom:14px; }
+    .ambient-grid { margin-top:14px; }
+    .ambient-card-heading { margin-bottom:12px; }
+    .ambient-race .ambient-card-heading { margin-bottom:4px; }
+    .ambient-race-place { margin-bottom:6px; }
+    .ambient-weather .ambient-weather-bottom { padding-top:8px; }
+    .ambient-weather .ambient-attribution { margin-top:4px; }
+}
+

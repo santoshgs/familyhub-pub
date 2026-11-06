@@ -18,6 +18,9 @@ was set up and how to keep it running. Command-level details are in the
   lists ten headlines and opens a reader view; Daycare shows each note in full.
   **All headlines** goes back; tapping outside closes the panel.
 * **More indicators:** "+2 more events today", "+7 more headlines" and so on.
+* **Quick bar (v1.2):** pills above the footer for guest Wi-Fi (with a QR code), a countdown with a checklist, markets and a photo slideshow. A pill appears once that feature is set up in **Settings → Display**; the frame stays read-only, so nothing can be ticked on it.
+* **Richer panels (v1.2):** weather adds feels-like, wind, humidity, air quality, sunrise and sunset, the moon phase and a 7- or 14-day forecast; Formula 1 adds driver and constructor standings next to the schedule. The status line now sits in the footer. Everything is fetched and calculated on the Pi.
+* **Not yet checked on the real frame:** v1.2 has not been tested on the physical device. Photos need the LAN listener's photo route, so re-run `apply-lan-display.sh` after installing v1.2.
 * **Night mode:** the screen dims on the schedule set in Display setup; a tap
   wakes it for two minutes.
 * **Hold to exit:** the only control that leaves the display. Holding it for two
@@ -35,7 +38,7 @@ was set up and how to keep it running. Command-level details are in the
 | --- | --- |
 | Board | Rockchip RK312x, a low-power quad-core chip |
 | Android | 6.0.1 (API 23); `userdebug` fingerprint but `adb root` refused |
-| Browser engine | Android System WebView 107 |
+| Browser engine | Android System WebView 107 (the client also builds for Chromium 104, for margin) |
 | Screen | 1280 × 800 landscape, always on |
 | Network | 2.4 GHz Wi-Fi on the guest network, address reserved in the router |
 | Home app | HomeHQ kiosk (`com.wesbos.homehq`), set as **Always** |

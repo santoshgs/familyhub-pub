@@ -36,7 +36,7 @@ Notes are stored in Family Hub's database. Parents can create and update notes, 
 
 **Chores** (in the navigation) are OpenFamily's household tasks: add a chore, assign family members, set a due date and, optionally, points. Chores due today appear on the family display. Budget and Pocket money reuse the original OpenFamily pages. Budget includes its classic, analytics/limits and Kakeibo views. Pocket money supports points, approvals, balances and goals; completing a Google To-Do does not automatically award points.
 
-Parents can use **Settings → Modules** to show or hide available modules, including shopping, family posts, meal planning, recipes, weekly routines, integrations and the original kiosk. These choices are household-wide; card order is per member. Hiding a module does not delete its records and is not an API permission boundary. Existing portable upstream JSON exports do not include all Family Hub-specific preferences; database backups do.
+Parents can use **Settings → Modules** to switch modules on or off for the household: To-dos, Chores, Pocket money, Daycare, School, Notes, Budget, AI assistant, and (off for new households) Shopping, Weekly routines and Integrations. A module that is switched off is hidden and also closed on the server (its API answers 403 `MODULE_DISABLED`). Its records are kept and return when it is switched back on. Each person can also untick **Show** to leave a module out of their own menu and overview without affecting anyone else. Card order is per member. Family Hub is available in English and French. Existing portable upstream JSON exports do not include all Family Hub-specific preferences; database backups do. See [MODULES](../docs/familyhub/MODULES.md).
 
 Daycare and AI have their own guides: [daycare](05-daycare-gmail.md) and [AI](06-ai-assistant.md). A read-only display has restricted controls; see [accounts and access](03-accounts-and-access.md).
 
@@ -55,3 +55,19 @@ Daycare and AI have their own guides: [daycare](05-daycare-gmail.md) and [AI](06
 | <img src="../docs/familyhub/images/setup-cards.png" alt="Display cards checklist" width="380"> | <img src="../docs/familyhub/images/setup-night.png" alt="Night dimming schedule" width="380"> |
 
 The bottom row shares its width between To-dos, Chores, News and Daycare, so three of them fit best. See [the photo frame](16-photo-frame.md) for the device itself.
+
+### Settings → Display (v1.2)
+
+Parents set up the display's extras in **Settings → Display**, one collapsible section each:
+
+* **Weather and Formula 1:** the weather panel adds feels-like, wind, humidity, air quality, sunrise and sunset, the moon phase and a 7- or 14-day forecast; Formula 1 adds driver and constructor standings with a favourite highlight beside the weekend schedule.
+* **Guest Wi-Fi:** a QR code and the network name and password, generated on the Pi.
+* **Countdown:** a title, a date and time, and a checklist.
+* **Markets:** stocks (needs a Finnhub API key that you add; it is write-only afterwards) and crypto (CoinGecko).
+* **Photos:** upload pictures from your phone for a slideshow (up to 200 per household, 25 MB each); the Pi scales them to 1280 × 800 and removes location and camera details.
+
+The **quick bar** above the footer shows one pill each for Wi-Fi, the countdown, markets and photos, and a pill appears only once that feature is set up. Tapping a pill or a card opens its detail panel. The display stays read-only, so the countdown checklist cannot be ticked on the frame. Details and endpoints are in [AMBIENT_DISPLAY](../docs/familyhub/AMBIENT_DISPLAY.md).
+
+## Software updates
+
+**Settings → Advanced → Software updates** (server administrator only) shows the release running on the Pi and the newest stable release, and can ask the Pi to **check now** or **install now** without waiting for the hourly check. The Pi still picks the version, takes the backup, checks health and rolls back on failure by itself; the app cannot choose a version. See [releases and updates](09-releases-updates.md).

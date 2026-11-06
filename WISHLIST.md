@@ -10,22 +10,25 @@ that shipped it.
 ## Ideas
 
 ### Display (photo frame)
-- [ ] Google Photos slideshow card — needs Google Photos Ambient API partner access; see `docs/familyhub/AMBIENT_DISPLAY.md`.
-- [ ] Travel countdown card — days until the next trip on the family calendar.
+- [ ] Google Photos as a slideshow source — needs Google Photos Ambient API partner access; see `docs/familyhub/AMBIENT_DISPLAY.md`. (Uploaded photos shipped in v1.2.)
 - [ ] Shopping list summary card.
-- [ ] Bitcoin / market ticker card.
 - [ ] Hardware brightness on the night-mode schedule (today only the dashboard dims; the backlight stays at its set level).
 - [ ] Rotate between two card layouts (e.g. weekday morning vs. evening).
+- [ ] Ability to choose what cards are displayed on the Home page; currently only Calendar, ToDos, Daycare, Notes, and School are displayed. Disabling one of those modules leaves a blank space on the Home page.
 
 ### Management
-- [ ] Notify a phone when the Pi's updater fails or a credential nears expiry (ntfy is supported by the renewal check; pick a topic).
+- [ ] Notify a phone when the Pi's updater fails or a credential nears expiry (built in since v1.0; run `setup-ntfy.sh` on the Pi to switch it on).
 - [ ] Edit and delete events from the FamilyHub calendar view (today: create only).
 - [ ] Classroom integration (currently a placeholder page).
 
 ### Pi and operations
+- [ ] Run the server container as a non-root user (root cause behind the v1.1 admin-helper findings; needs bind-mount ownership changes and a Pi drill).
 - [ ] Disable Tailscale key expiry for the Pi (one click in the admin console; currently expires 2027-04-27).
 - [ ] Encrypted off-device backups on a schedule.
 - [ ] A real upgrade-then-rollback drill across two releases.
+- [ ] Commit `install-admin.sh` so the Pi helper install is one tested step (today it is a local script that misses `daemon-reload`, enabling the units and `notify.sh`).
+- [ ] Make the release workflow's version check print why it failed.
+- [ ] A security scan of the code the first scan skipped (`client/`, `scripts/`, `shared/`, sign in with Google, ntfy, v1.2), in diff mode from `252e83c`.
 
 ## In progress
 
@@ -33,6 +36,11 @@ _Nothing yet._
 
 ## Done
 
+- [x] Quick bar with guest Wi-Fi QR, countdown, stocks and crypto, photo slideshow; richer weather and F1 panels — v1.2.0
+- [x] Check for and install updates from Settings → Advanced → Software updates — v1.2.0
+- [x] Owner-run `remove-account.sh` for leftover logins — v1.2.0
+- [x] Security release: November 2026 scan findings fixed — v1.1.0
+- [x] Own fork: unused modules and languages removed, server-enforced module switches, sign in with Google and ntfy alerts built in (setup on the Pi pending) — v1.0.0
 - [x] Frame pairing with one-time codes; revocable displays — v0.3.1
 - [x] Detail panels for calendar (7 days), to-dos and daycare; night dimming — v0.3.1
 - [x] Hold to exit display mode — v0.3.2

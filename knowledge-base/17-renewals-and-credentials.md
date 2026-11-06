@@ -3,7 +3,7 @@
 [Knowledge base index](README.md) · [Releases and updates](09-releases-updates.md) · [Security and privacy](13-security-privacy.md)
 
 The Pi depends on a few tokens and certificates. This page lists them, how each
-renews, and how to replace one. Current state (November 2, 2026): **nothing
+renews, and how to replace one. Current state (November 5, 2026): **nothing
 needs manual renewal except the Tailscale node key**, which can be switched to
 never expire.
 
@@ -23,9 +23,11 @@ Apps cannot pull from it). On a personal account both token types may be set to
 never expire; GitHub deletes tokens unused for a year, which the hourly updater
 prevents. Both tokens are read-only and narrowly scoped.
 
+Not a Pi credential: the Finnhub API key for stocks and the guest Wi-Fi password are household settings in **Settings → Display** (v1.2). They are write-only (the page shows only whether one is set) and stored encrypted with a key derived from `JWT_SECRET`, like the AI credentials, so keep that secret backed up with the database; replace them in Settings, not here.
+
 ## Where to see it
 
-**Settings → Advanced → Server credentials** (household owner only, collapsed by
+**Settings → Advanced → Server credentials** (server administrator only, collapsed by
 default) shows the same list with days left. The Pi refreshes it daily, or
 choose **Check now**.
 
@@ -62,19 +64,23 @@ Settings ◀──GET── server container ◀── status.json + results.jso
 
 * FamilyHub never stores, logs or returns a token. The server container can
   write submissions and read status, but cannot read installed credentials.
-* Only the household owner can use it; parents, children and displays get 403,
+* Only the server administrator can use it (`FAMILYHUB_ADMIN_EMAIL`, otherwise the first account created; owning a family is not enough since v1.1); other parents, children and displays get 403,
   and the frame's LAN listener does not expose it.
 * The Pi side is in [`deploy/familyhub/admin/`](../deploy/familyhub/admin/README.md);
-  install or update it from the Mac with `.familyhub-local/pi/install-admin.sh`.
+  install or update it from the Mac with `.familyhub-local/pi/install-admin.sh`
+  (a local script that is not committed; the admin README lists every file and
+  unit to install).
 
 ## Daily check and notifications
 
 `familyhub-renewals.timer` runs `check-renewals.sh` every morning. It warns 30
 days before anything expires (exit status 1, visible with
-`systemctl status familyhub-renewals.service`). For a phone notification, install
-the [ntfy](https://ntfy.sh) app, subscribe to a private topic name, and on the Pi:
-
-```sh
-echo 'NTFY_URL=https://ntfy.sh/<your-private-topic>' | sudo tee /etc/familyhub-renewals.env
-sudo chmod 600 /etc/familyhub-renewals.env
-```
+`systemctl status familyhub-renewals.service`). For phone notifications, install
+the [ntfy](https://ntfy.sh) app and run `sudo bash setup-ntfy.sh` on the Pi. It
+creates `/etc/familyhub-notify.env` (0600) with a long random topic, installs
+`notify.sh` and sends a test push; subscribe to the printed topic in the app.
+You then hear about credentials expiring within 30 days (urgent within 7),
+installed releases, failed updates (at most once a day per failure) and manual
+rollbacks. Messages carry names, versions, dates and states, never a secret.
+Notifications are not set up yet on the household Pi. An older
+`/etc/familyhub-renewals.env` with `NTFY_URL` is still honoured.

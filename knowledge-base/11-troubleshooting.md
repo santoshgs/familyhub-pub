@@ -26,6 +26,32 @@ If the Pi itself can open the HTTPS endpoint but the phone cannot, that does not
 
 More in [the photo frame](16-photo-frame.md) and the [frame runbook](../docs/familyhub/FRAME.md).
 
+## Frame extras (v1.2): a pill or panel is missing
+
+| Symptom | Fix |
+| --- | --- |
+| No Wi-Fi, countdown, markets or photos pill on the quick bar | A pill appears only once that feature is switched on and filled in under **Settings → Display** (parents) |
+| Markets pill empty | Stocks need a Finnhub API key in Settings → Display; the key is write-only, so re-enter it to replace it |
+| Photos do not load on the frame | The LAN listener must allow the photo route added in v1.2: re-run `apply-lan-display.sh` from the Mac. Any other API path on that listener answers 404 by design |
+| Wi-Fi password or API key "disappeared" | Secrets are write-only: the page shows only whether one is set; leave the field blank to keep it |
+| Photos rejected | One image per upload, up to 25 MB, up to 200 per household |
+
+## A module opens Settings or answers 403
+
+Since v1.0 a module that a parent has switched off is closed on the server (403 `MODULE_DISABLED`) and its page redirects to Settings. A parent turns it back on with **Enabled** in **Settings → Modules**; the records were kept. If it is on but missing from your own menu, tick **Show**.
+
+## Signed out after the v1.1.0 update
+
+Joining a family by invitation or request now ends the account's older sessions, and members who joined that way before v1.1.0 are asked to sign in again once. This is expected. If a member still cannot sign in, use the recovery tool in [accounts and access](03-accounts-and-access.md).
+
+## Settings → Software updates does nothing
+
+Only the server administrator sees and can use it (`FAMILYHUB_ADMIN_EMAIL`, otherwise the first account created). It also needs the updated `release.py`, `familyhub-update.service` (then `systemctl daemon-reload`) and `apply-credentials.sh` on the Pi, which a normal release does not install by itself; see [releases](09-releases-updates.md). The Pi still decides the version; if an install fails the previous release is restored and the failure is not retried automatically.
+
+## Google sign-in or ntfy does not work
+
+Both are built into v1.0 but off until set up on the Pi: `google-signin.sh enable` (after adding the redirect address in Google Cloud; see [GOOGLE_SIGNIN](../docs/familyhub/GOOGLE_SIGNIN.md)) and `sudo bash setup-ntfy.sh`. As of November 5, 2026 neither has been verified working on the household Pi, and password sign-in is unaffected. Run `google-signin.sh status` to see where Google sign-in stands.
+
 ## A browser is stuck on the display
 
 A browser that was put into display mode always returns to `/display`. Hold **Hold to exit** for two seconds (v0.3.2 and later), or use a private window to sign in.
@@ -64,4 +90,4 @@ The normal authenticated local frontend uses port 5174; PostgreSQL uses 55432. `
 
 ## Updates or service health
 
-Compare the version in the display or Settings footer ("Family Hub vX.Y.Z") with the latest release to see whether an update was installed. Check container health and the update service/timer using the commands in [releases](09-releases-updates.md). A revoked or deleted GitHub token stops private pulls/checks; Settings → Advanced → Server credentials shows whether each token still works. Automatic update-failure notifications are not configured. If a release fails or a rollback is needed, pause the timer, preserve data and consult [backup and recovery](10-backup-recovery.md) before making changes. A rollback does not undo database migrations or Google writes.
+Compare the version in the display or Settings footer ("Family Hub vX.Y.Z") with the latest release to see whether an update was installed. Check container health and the update service/timer using the commands in [releases](09-releases-updates.md). A revoked or deleted GitHub token stops private pulls/checks; Settings → Advanced → Server credentials shows whether each token still works. Phone alerts for update failures need ntfy, which is not set up yet (`setup-ntfy.sh`). If a release fails or a rollback is needed, pause the timer, preserve data and consult [backup and recovery](10-backup-recovery.md) before making changes. A rollback does not undo database migrations or Google writes.

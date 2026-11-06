@@ -2,6 +2,8 @@
 
 This is the Family Hub customization roadmap. The root `ROADMAP.md` belongs to upstream OpenFamily and is preserved.
 
+**Reading order:** the sections below are dated checkpoints and describe each state at the time. For where things stand now, read the [knowledge base](../../knowledge-base/README.md); the latest milestones (v0.3.5 to v1.2.0, November 2–5, 2026) are the last section of this file.
+
 ## Latest checkpoint — October 29, 2026
 
 Predeployment scope correction: Budget/Pocket money pages are restored to Family
@@ -257,3 +259,30 @@ To-dos, Chores, News and Daycare are enabled; a **Your name** field at the top
 of Settings (the display greeting uses it); cropped household-supplied F1 and
 team logos. The LAN listener gains `GET /api/familyhub/ambient/article`, so
 rerun the Pi apply script after this release.
+
+## Credentials, own fork, security and dashboard extras — v0.3.5 to v1.2.0, November 2–5, 2026
+
+Delivered (details in [RELEASES.md](RELEASES.md), evidence in
+[knowledge base 14](../../knowledge-base/14-history-and-verification.md)):
+
+- **v0.3.5 (Nov 2):** server credentials in Settings → Advanced and a daily renewal check.
+- **v0.3.6 and v0.3.7 (Nov 4):** dependency and Snyk fixes, a `develop` branch with a
+  `/develop/` preview, version labels in the footers, Android and other unused parts removed.
+- **v1.0.0 (Nov 4):** its own product. Unused OpenFamily modules and languages removed,
+  server-enforced module switches (household **Enabled**, per-person **Show**), optional
+  sign in with Google, ntfy alerts and project agents.
+- **v1.1.0 (Nov 5):** all 33 verified findings of a Claude Security scan fixed in six
+  themed groups; migration `familyhub/0011`.
+- **v1.2.0 (Nov 5):** quick bar (guest Wi-Fi QR, countdown, markets, uploaded photos),
+  richer weather and Formula 1 panels, Settings → Display, Settings → Advanced →
+  Software updates, `remove-account.sh`; migration `familyhub/0012`.
+
+Next:
+
+- Set up and diagnose sign in with Google and ntfy on the Pi.
+- Check v1.2 on the physical frame (owner approves the ADB session).
+- Run a diff-mode security scan from `252e83c` over what the first scan did not cover.
+- Deferred hardening: non-root server container, Express 5, per-member hashed calendar
+  feed tokens, ICS parsing in a worker thread, re-authentication before linking an identity.
+- Wishlist: shopping-list card on the frame, edit and delete calendar events, committing
+  `install-admin.sh`.

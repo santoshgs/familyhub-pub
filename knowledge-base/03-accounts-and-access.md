@@ -6,7 +6,17 @@
 
 Your **Family Hub account** signs you into the application and controls household membership. The **dedicated Google account** authorizes Calendar, Tasks and optional Gmail access. Changing the Family Hub login email does not change the Google account. Check the connected Google identity in Family Hub settings rather than assuming the current browser's Google session is correct.
 
-Parents manage household settings, Google connections and protected changes. The household **owner** additionally manages server credentials (Settings → Advanced; see [renewals](17-renewals-and-credentials.md)). Hidden modules do not replace server permissions.
+Parents manage household settings, Google connections and protected changes. The **server administrator** additionally manages server credentials and software updates (Settings → Advanced; see [renewals](17-renewals-and-credentials.md)). Since v1.1 that is the account whose email is set as `FAMILYHUB_ADMIN_EMAIL` in the Pi's private environment, otherwise the first account ever created; a household's owner no longer gets this power just by owning a family. Switching a module off closes it on the server; unticking **Show** only hides it for you.
+
+## Sign in with Google (optional)
+
+Since v1.0 the Pi can offer sign in with Google beside passwords. It is off until `google-signin.sh enable` is run on the Pi after the redirect address is added in Google Cloud (see [GOOGLE_SIGNIN](../docs/familyhub/GOOGLE_SIGNIN.md)). Passwords keep working until `google-only` is chosen, and new accounts still need an invitation. It has not been verified working on the household Pi yet. Photo-frame sessions cannot link a Google identity (v1.1).
+
+## Joining, leaving and removal
+
+Since v1.1, access ends with membership. When someone leaves a family or is removed, the shared calendar feed link is replaced and that account's push subscriptions are deleted. Joining a family by invitation or request ends the account's older sessions, so members who joined before v1.1.0 sign in again once. Members no longer see the owner's join-request notifications.
+
+The app can remove a member from a family but cannot delete an account. To clear a leftover login (a review or test account, say), the server operator runs `remove-account.sh` on the Pi: a dry run reports what would go, an account that other accounts joined as their family is refused, the database is backed up first, and the address must be retyped to confirm. See [the admin helpers](../deploy/familyhub/admin/README.md).
 
 ## Displays and photo frames
 

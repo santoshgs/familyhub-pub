@@ -1,3 +1,4 @@
+import { stripTrailingSlashes } from '../lib/asyncRoutes';
 import { Request, Response, NextFunction } from 'express';
 import { query } from '../db';
 import { InvalidTokenError, verifyAccessToken } from '../lib/authTokens';
@@ -20,6 +21,8 @@ export const bearerToken = (req: Request): string => {
     return header?.startsWith('Bearer ') ? header.slice(7).trim() : '';
 };
 
+const AMBIENT_PHOTO_PATH = /^\/api\/familyhub\/ambient\/photos\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const authMiddleware = async (req: AuthRequest, res: Response, next: NextFunction) => {
     const token = bearerToken(req);
 
@@ -33,14 +36,16 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
         req.ambientOnly = verified.ambientOnly;
         req.displaySessionId = verified.displaySessionId;
         if (verified.readOnly) {
-            const path = req.originalUrl.split('?')[0].replace(/\/+$/, '');
+            const path = stripTrailingSlashes(req.originalUrl.split('?')[0]);
             // Ambient tokens are narrower than the older protected overview
             // scope: they cannot read notes, the general snapshot or Google API.
             const allowed = verified.ambientOnly
                 ? ['/api/familyhub/ambient', '/api/familyhub/ambient/article', '/api/familyhub/modules', '/api/auth/me', '/api/auth/dashboard-prefs']
                 : ['/api/familyhub', '/api/familyhub/modules', '/api/familyhub/preferences', '/api/familyhub/ambient', '/api/familyhub/google/calendar', '/api/notes', '/api/auth/me', '/api/auth/modules', '/api/auth/dashboard-prefs'];
             const canRefreshDisplay = verified.ambientOnly && req.method === 'POST' && path === '/api/familyhub/display/refresh';
-            if ((req.method !== 'GET' || !allowed.includes(path)) && !canRefreshDisplay) {
+            // Slideshow photos: one pre-scaled JPEG per request, by id.
+            const isSlideshowPhoto = req.method === 'GET' && AMBIENT_PHOTO_PATH.test(path);
+            if ((req.method !== 'GET' || !(allowed.includes(path) || isSlideshowPhoto)) && !canRefreshDisplay) {
                 return res.status(403).json({ success: false, error: 'This display session is read-only.' });
             }
         }

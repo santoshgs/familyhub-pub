@@ -10,6 +10,7 @@ import { normalizeEmail } from '../lib/normalize';
 import { isMailEnabled, sendFamilyInviteEmail } from '../lib/mailer';
 import { resolveAppBaseUrl } from '../lib/appUrl';
 import logger from '../lib/logger';
+import { hasControlChars, isUuid } from '../lib/asyncRoutes';
 
 const router = Router();
 
@@ -48,6 +49,21 @@ const lockFamilyOwner = async (db: QueryFn, ownerId: string): Promise<boolean> =
 
 class FamilyChangedError extends Error {}
 
+/**
+ * Access that outlives a session ends with the membership: the family's
+ * calendar feed URL is rotated (a former member may have copied it) and the
+ * departing accounts' push subscriptions are deleted, along with the family's
+ * pre-v1.1 subscriptions whose registering account is unknown.
+ */
+const endFamilyAccess = async (db: QueryFn, familyId: string, accountIds: string[]): Promise<void> => {
+    await db('UPDATE users SET calendar_token = NULL WHERE id = $1', [familyId]);
+    await db('DELETE FROM push_subscriptions WHERE account_id = ANY($1::uuid[]) OR (account_id IS NULL AND user_id = $2)', [accountIds, familyId]);
+};
+
+/** A joining account's devices were registered for its previous family. */
+const clearAccountPush = (db: QueryFn, accountId: string) =>
+    db('DELETE FROM push_subscriptions WHERE account_id = $1 OR (account_id IS NULL AND user_id = $1)', [accountId]);
+
 // Express 4 does not catch a rejected async handler, and an unhandled rejection
 // ends the process: the membership routes answer 503 on a database error instead.
 const guarded = (event: string, handler: (req: AuthRequest, res: Response) => Promise<unknown>) =>
@@ -62,7 +78,20 @@ const guarded = (event: string, handler: (req: AuthRequest, res: Response) => Pr
 
 // Loose shape check: enough to catch typos before an email is stored/sent,
 // without rejecting valid but unusual addresses.
-const looksLikeEmail = (value: string): boolean => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value);
+// Length-capped and built from non-overlapping parts, so matching stays linear.
+const looksLikeEmail = (value: string): boolean =>
+    value.length <= 254
+    && !hasControlChars(value)
+    && /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(value)
+    && value.slice(value.lastIndexOf('.') + 1).length >= 2;
+
+// Malformed ids are answered here instead of reaching PostgreSQL.
+router.param('userId', (_req, res, next, value) => (isUuid(value) ? next() : res.status(400).json({ success: false, error: 'Invalid id' })));
+router.param('id', (_req, res, next, value) => (isUuid(value) ? next() : res.status(400).json({ success: false, error: 'Invalid id' })));
+router.param('token', (_req, res, next, value) => (
+    typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)
+        ? next()
+        : res.status(404).json({ success: false, error: 'Invitation invalide ou expirée' })));
 
 // ── Public endpoint (no auth) ─────────────────────────────────────────────────
 
@@ -139,13 +168,15 @@ router.post('/', inviteRateLimiter, async (req: AuthRequest, res) => {
 
     // Canonical share link, built server-side so the native app never leaks its
     // local shell origin (http://localhost) into a link meant for someone else.
-    const inviteUrl = `${resolveAppBaseUrl(req)}/join?invite=${token}`;
+    const baseUrl = resolveAppBaseUrl(req);
+    // Without a trusted origin the link stays relative and is not emailed.
+    const inviteUrl = `${baseUrl}/join?invite=${token}`;
 
     // Email delivery is best-effort: the invite (and its link) exists either way.
     // email_sent: true = handed to SMTP, false = send failed, null = not requested.
     let emailSent: boolean | null = null;
     if (cleanedInviteeEmail) {
-        if (!isMailEnabled()) {
+        if (!isMailEnabled() || !baseUrl) {
             emailSent = false;
         } else {
             const ownerResult = await query('SELECT name, language FROM users WHERE id = $1', [req.userId]);
@@ -230,6 +261,9 @@ router.post('/join', guarded('family.join_failed', async (req, res) => {
                 'UPDATE users SET family_owner_id = $1, role = $2 WHERE id = $3',
                 [invite.owner_id, cleanAccountRole(invite.role), req.actualUserId]
             );
+            // Tokens issued for the former family must not keep working with the new role.
+            await revokeUserSessions(tx, [req.actualUserId!], 'joined_family');
+            await clearAccountPush(tx.query, req.actualUserId!);
             return tokenFor(tx.query, req.actualUserId!);
         });
     } catch (error) {
@@ -272,6 +306,7 @@ router.delete('/leave', guarded('family.leave_failed', async (req, res) => {
             );
             if (left.rows.length === 0) throw new FamilyChangedError();
             await revokeUserSessions(tx, [req.actualUserId!], 'left_family');
+            await endFamilyAccess(tx.query, req.userId!, [req.actualUserId!]);
             return tokenFor(tx.query, req.actualUserId!);
         });
     } catch (error) {
@@ -310,6 +345,7 @@ router.delete('/members/:userId', guarded('family.remove_member_failed', async (
         );
         if (detached.rows.length === 0) return false;
         await revokeUserSessions(tx, [req.params.userId], 'removed_from_family');
+        await endFamilyAccess(tx.query, req.userId!, [req.params.userId]);
         return true;
     });
 
@@ -427,6 +463,7 @@ router.post('/transfer-ownership', guarded('family.transfer_failed', async (req,
             // former owner, who made this request, continues with a fresh token.
             const everyone = [oldOwnerId, ...members.rows.map((row: { id: string }) => row.id)];
             await revokeUserSessions(tx, everyone, 'ownership_transferred');
+            await tx.query('UPDATE users SET calendar_token = NULL WHERE id = ANY($1::uuid[])', [[oldOwnerId, newOwnerId]]);
             return tokenFor(tx.query, oldOwnerId);
         });
     } catch (err) {
@@ -476,7 +513,7 @@ router.post('/requests', async (req: AuthRequest, res) => {
     }
 
     const ownerEmail = typeof req.body?.ownerEmail === 'string' ? normalizeEmail(req.body.ownerEmail) : '';
-    if (!ownerEmail) {
+    if (!ownerEmail || ownerEmail.length > 254 || hasControlChars(ownerEmail)) {
         return res.status(400).json({ success: false, error: 'Adresse e-mail requise' });
     }
 
@@ -614,6 +651,9 @@ router.post('/requests/:id/approve', guarded('family.approve_failed', async (req
             [req.userId, memberRole, request.requester_id]
         );
         if (joined.rows.length === 0) return false;
+        // The requester's standalone tokens end here; they sign in to the new family.
+        await revokeUserSessions(tx, [request.requester_id], 'joined_family');
+        await clearAccountPush(tx.query, request.requester_id);
         await tx.query("UPDATE family_join_requests SET status = 'approved', responded_at = NOW() WHERE id = $1", [request.id]);
         return true;
     });

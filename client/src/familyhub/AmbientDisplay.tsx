@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-    ArrowLeft, ArrowUpRight, Baby, CalendarDays, Check, CheckCheck, Newspaper, Cloud, CloudDrizzle, CloudFog, CloudLightning,
-    CloudRain, CloudSnow, CloudSun, LogOut, MapPin, Moon, RefreshCw, Settings2, Sun, X,
+    ArrowLeft, ArrowUpRight, Baby, CalendarDays, Check, CheckCheck, Newspaper, CloudSun, LogOut, MapPin, RefreshCw, Settings2, X,
 } from 'lucide-react';
+import { weatherGlyph, weatherLabel } from './ambientFormat';
+import { CountdownDetails, Formula1Details, MarketsDetails, PhotoSlideshow, QuickBar, WeatherDetails, WifiDetails, type Extras, type QuickPanel } from './AmbientExtras';
 import { api } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
 import './ambient.css';
@@ -21,11 +22,13 @@ type AmbientData = {
     generatedAt: string; timeZone: string; today: string;
     settings: { location: { city: string; country: string } | null; widgets: string[]; night?: NightDimming };
     events: EventItem[]; tasks: GoogleTask[]; chores: Chore[]; notifications: Notification[];
-    weather: { data: null | { temperature: number; weatherCode: number; high: number; low: number; fetchedAt: string; tomorrow?: { weatherCode: number; high: number; low: number } }; state: string; place: string | null };
+    weather: { data: null | { temperature: number; weatherCode: number; high: number; low: number; fetchedAt: string; unit?: 'celsius' | 'fahrenheit'; tomorrow?: { weatherCode: number; high: number; low: number } }; state: string; place: string | null };
     news?: { items: NewsItem[]; state: string };
     formula1: { data: null | { name: string; circuit: string; location: string; country: string; raceDateTime: string; sessions: { name: string; dateTime: string }[] }; state: string };
     sources: Record<string, { state?: string; message?: string; lastSuccess?: string }>;
     lastSuccessfulRefresh: string | null;
+    /** v1.2 quick bar and detail panels; absent from older servers. */
+    extras?: Extras;
 };
 
 const formatTime = (value: string, zone: string) => {
@@ -94,20 +97,8 @@ const ROW_TWO = ['tasks', 'chores', 'news', 'daycare'];
 const RENEW_EVERY_MS = 6 * 60 * 60_000;
 const WAKE_FOR_MS = 2 * 60_000;
 const greeting = (hour: number) => hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-const weatherLabel = (code: number) => code === 0 ? 'Clear sky' : code <= 3 ? 'Partly cloudy' : code === 45 || code === 48 ? 'Foggy' : code <= 57 ? 'Drizzle' : code <= 67 || (code >= 80 && code <= 82) ? 'Rain' : code <= 77 || code === 85 || code === 86 ? 'Snow' : code >= 95 ? 'Thunderstorms' : 'Current conditions';
-const weatherGlyph = (code: number, isDay: boolean) => {
-    if (code === 0) return isDay ? Sun : Moon;
-    if (code <= 3) return CloudSun;
-    if (code === 45 || code === 48) return CloudFog;
-    if (code <= 57) return CloudDrizzle;
-    if (code <= 67 || (code >= 80 && code <= 82)) return CloudRain;
-    if (code <= 77 || code === 85 || code === 86) return CloudSnow;
-    if (code >= 95) return CloudLightning;
-    return Cloud;
-};
-
-function DetailSheet({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-    return <div className="ambient-detail-backdrop" role="presentation" onClick={onClose}><section role="dialog" aria-modal="true" aria-label={title} className="ambient-detail" onClick={(event) => event.stopPropagation()}><header><h2>{title}</h2><button className="ambient-icon-button" onClick={onClose} aria-label="Close details"><X /></button></header><div>{children}</div></section></div>;
+function DetailSheet({ title, kicker, wide, onClose, children }: { title: string; kicker?: string; wide?: boolean; onClose: () => void; children: React.ReactNode }) {
+    return <div className="ambient-detail-backdrop" role="presentation" onClick={onClose}><section role="dialog" aria-modal="true" aria-label={title} className={`ambient-detail${wide ? ' is-wide' : ''}`} onClick={(event) => event.stopPropagation()}><header><div>{kicker && <small className="ambient-detail-kicker">{kicker}</small>}<h2>{title}</h2></div><button className="ambient-icon-button" onClick={onClose} aria-label="Close details"><X /></button></header><div>{children}</div></section></div>;
 }
 
 const HOLD_TO_EXIT_MS = 2_000;
@@ -138,7 +129,7 @@ export default function AmbientDisplay() {
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState('');
-    const [detail, setDetail] = useState<'calendar' | 'tasks' | 'daycare' | 'news' | 'chores' | 'weather' | 'formula1' | null>(null);
+    const [detail, setDetail] = useState<'calendar' | 'tasks' | 'daycare' | 'news' | 'chores' | 'weather' | 'formula1' | QuickPanel | null>(null);
     const [article, setArticle] = useState<{ id: string; data: NewsArticle | null; error: string } | null>(null);
     const openArticle = async (id: string) => {
         setArticle({ id, data: null, error: '' });
@@ -232,12 +223,11 @@ export default function AmbientDisplay() {
             </div>
         </header>
 
-        <div className="ambient-status-row"><span className="ambient-live-dot" />{user?.is_display ? 'Protected display · read only' : 'Family overview'}<span className="ambient-status-divider" />{data?.lastSuccessfulRefresh ? `Updated ${formatTime(data.lastSuccessfulRefresh, zone)}` : loading ? 'Connecting…' : 'Waiting for first update'}{error && <span className="ambient-offline"> · {error}</span>}</div>
 
         {loading && !data ? <div className="ambient-loading"><span className="ambient-loader" />Connecting to home…</div> : <section className="ambient-grid" aria-label="Family dashboard">
             {visible.includes('calendar') && <button className="ambient-card ambient-calendar" onClick={() => setDetail('calendar')}><div className="ambient-card-heading"><span className="ambient-card-icon"><CalendarDays /></span><div><small>UP NEXT</small><h2>Family calendar</h2></div><ArrowUpRight /></div><div className="ambient-event-list">{data?.events.length ? data.events.slice(0, UP_NEXT_COUNT).map((event, index) => <div className="ambient-event" key={event.id ?? index}><time>{eventDay(event, zone) !== today && <small>{dayHeading(eventDay(event, zone), today) === 'Tomorrow' ? 'Tomorrow' : formatDay(`${eventDay(event, zone)}T12:00:00Z`, 'UTC').split(',')[0]}</small>}{event.start?.dateTime ? formatTime(event.start.dateTime, zone) : 'All day'}</time><div><strong>{event.title || 'Family event'}</strong>{event.location && <span><MapPin size={13} />{event.location}</span>}</div></div>) : <p className="ambient-empty">No upcoming events on the selected calendar.</p>}</div>{data?.events.length ? <MoreLine text={calendarMore} /> : null}</button>}
 
-            {visible.includes('weather') && <button className="ambient-card ambient-weather" onClick={() => setDetail('weather')}><div className="ambient-weather-art" aria-hidden="true"><span className="ambient-weather-halo" /><WeatherIcon /></div><div className="ambient-card-heading"><span className="ambient-card-icon ambient-weather-icon"><WeatherIcon /></span><div><small>RIGHT NOW</small><h2>Weather</h2></div><ArrowUpRight /></div>{weather ? <><div className="ambient-temperature">{Math.round(weather.temperature)}<span>°C</span></div><p className="ambient-weather-condition">{weatherLabel(weather.weatherCode)}</p>{weather.tomorrow && <p className="ambient-weather-tomorrow">Tomorrow · {weatherLabel(weather.tomorrow.weatherCode)} · {Math.round(weather.tomorrow.high)}° / {Math.round(weather.tomorrow.low)}°</p>}<div className="ambient-weather-bottom"><span>{data?.weather.place}</span><span className="ambient-weather-range"><b>H {Math.round(weather.high)}°</b><i /><b>L {Math.round(weather.low)}°</b></span></div><small className="ambient-attribution">Weather data · Open-Meteo</small></> : <div className="ambient-empty">{data?.weather.state === 'unconfigured' ? 'Choose a location in Display setup.' : 'Weather data will return when the source is available.'}</div>}</button>}
+            {visible.includes('weather') && <button className="ambient-card ambient-weather" onClick={() => setDetail('weather')}><div className="ambient-weather-art" aria-hidden="true"><span className="ambient-weather-halo" /><WeatherIcon /></div><div className="ambient-card-heading"><span className="ambient-card-icon ambient-weather-icon"><WeatherIcon /></span><div><small>RIGHT NOW</small><h2>Weather</h2></div><ArrowUpRight /></div>{weather ? <><div className="ambient-temperature">{Math.round(weather.temperature)}<span>{weather.unit === 'fahrenheit' ? '°F' : '°C'}</span></div><p className="ambient-weather-condition">{weatherLabel(weather.weatherCode)}</p>{weather.tomorrow && <p className="ambient-weather-tomorrow">Tomorrow · {weatherLabel(weather.tomorrow.weatherCode)} · {Math.round(weather.tomorrow.high)}° / {Math.round(weather.tomorrow.low)}°</p>}<div className="ambient-weather-bottom"><span>{data?.weather.place}</span><span className="ambient-weather-range"><b>H {Math.round(weather.high)}°</b><i /><b>L {Math.round(weather.low)}°</b></span></div><small className="ambient-attribution">Weather data · Open-Meteo</small></> : <div className="ambient-empty">{data?.weather.state === 'unconfigured' ? 'Choose a location in Display setup.' : 'Weather data will return when the source is available.'}</div>}</button>}
 
             {visible.includes('tasks') && <button className="ambient-card ambient-tasks" style={rowTwoSpan} onClick={() => setDetail('tasks')}><div className="ambient-card-heading"><span className="ambient-card-icon ambient-task-icon"><CheckCheck /></span><div><small>GOOGLE TASKS</small><h2>To-dos</h2></div><ArrowUpRight /></div>{data?.tasks.length ? <div className="ambient-list">{data.tasks.slice(0, TASKS_ON_CARD).map((task, index) => <div className="ambient-list-row" key={task.id ?? index}><span className="ambient-checkbox" /><span>{task.title}</span>{task.dueDate && <time>{task.dueDate.slice(0, 10) === data.today ? 'Today' : formatDay(task.dueDate, 'UTC')}</time>}</div>)}</div> : <p className="ambient-empty">You're all caught up.</p>}{(data?.tasks.length ?? 0) > TASKS_ON_CARD && <MoreLine text={`+${plural((data?.tasks.length ?? 0) - TASKS_ON_CARD, 'more to-do')}`} />}</button>}
 
@@ -250,7 +240,13 @@ export default function AmbientDisplay() {
             {visible.includes('f1') && <button className="ambient-card ambient-race" onClick={() => setDetail('formula1')}><div className="ambient-race-art" aria-hidden="true"><span className="ambient-race-glow" /><svg viewBox="0 0 470 180" role="presentation"><path d="M28 133c45-4 74-20 105-31l34-11 40-34 43 3 25 26 47 2 31 18 58 6 28 14-20 9H62z" fill="url(#carBody)"/><path d="m199 89 25-28 42 2 19 28zm-24 3 23-10-4 12zm99 1 27 2-8 10h-17z" fill="#f9e8db"/><path d="M35 138h400M100 150h304" stroke="#ff6c63" strokeWidth="3" strokeLinecap="round" opacity=".68"/><path d="M33 124h82m240 15h90" stroke="#fff" strokeWidth="2" strokeDasharray="12 12" opacity=".3"/><defs><linearGradient id="carBody" x1="0" x2="1" y1="0" y2="1"><stop stopColor="#ff766f"/><stop offset=".52" stopColor="#d92c3b"/><stop offset="1" stopColor="#6d1228"/></linearGradient></defs></svg></div><div className="ambient-card-heading"><span className="ambient-card-icon ambient-f1-mark"><BrandImage sources={[`${BRAND}/f1-logo.svg`, `${BRAND}/f1-logo.png`, `${BRAND}/f1-logo.jpg`]} alt="Formula 1" className="ambient-f1-logo" fallback="F1" /></span><div><small>FORMULA 1 · NEXT GRAND PRIX</small><h2>{race?.name ?? 'Race weekend'}</h2></div><ArrowUpRight /></div>{race ? <><p className="ambient-race-place">{race.circuit}{race.location ? ` · ${race.location}` : ''}{race.country ? `, ${race.country}` : ''}</p>{nextSession ? <div className="ambient-next-session"><div><small>NEXT SESSION</small><strong>{nextSession.name}</strong><span>{formatDay(nextSession.dateTime, zone)}</span></div><time>{formatTime(nextSession.dateTime, zone)}</time></div> : <p className="ambient-empty">Session times are not available yet.</p>}<div className="ambient-session-strip" aria-label="Other upcoming sessions">{upcomingSessions.slice(1, 6).map((session) => <span className="ambient-session-pill" key={`${session.name}-${session.dateTime}`}><b>{shortSessionName(session.name)}</b><time>{formatTime(session.dateTime, zone)}</time></span>)}</div><div className="ambient-race-brand"><BrandImage sources={[`${BRAND}/team-shield.png`, `${BRAND}/team-shield.jpg`, WIKIMEDIA_SHIELD]} alt="Scuderia Ferrari shield" fallback={null} onShown={setShieldSource} /><span>SCUDERIA<br /><b>FERRARI</b></span><small>RACE · {formatTime(race.raceDateTime, zone)}</small></div><small className="ambient-attribution">Schedule · Jolpica F1{shieldSource === WIKIMEDIA_SHIELD ? ' · Ferrari shield photo by Damian Morys, CC BY 2.0' : ''}</small></> : <p className="ambient-empty">The next race schedule is temporarily unavailable.</p>}</button>}
         </section>}
 
-        <footer className="ambient-footer"><span>ONE FAMILY · ONE SOURCE OF TRUTH · <span className="ambient-version">{familyHubVersionLabel}</span></span><span>Automatic refresh every minute <i /> {data?.timeZone ?? 'America/New_York'}</span></footer>
+        <QuickBar extras={data?.extras} onOpen={setDetail} />
+
+        <footer className="ambient-footer">
+            <span className="ambient-footer-status"><span className="ambient-live-dot" />{user?.is_display ? 'Protected display · read only' : 'Family overview'}<span className="ambient-status-divider" />{data?.lastSuccessfulRefresh ? `Updated ${formatTime(data.lastSuccessfulRefresh, zone)}` : loading ? 'Connecting…' : 'Waiting for first update'}{error && <span className="ambient-offline"> · {error}</span>}</span>
+            <span className="ambient-footer-motto">ONE FAMILY · ONE SOURCE OF TRUTH</span>
+            <span className="ambient-footer-meta">Automatic refresh every minute <i /> {data?.timeZone ?? 'America/New_York'} <i /> <span className="ambient-version">{familyHubVersionLabel}</span></span>
+        </footer>
 
         {detail === 'calendar' && <DetailSheet title="Next 7 days" onClose={closeDetail}>{eventsByDay.length ? <div className="ambient-detail-days">{eventsByDay.map(([day, events]) => <section key={day}><h3>{dayHeading(day, today)}</h3><div className="ambient-detail-list">{events.map((event, index) => <article key={event.id || `${day}-${index}`}><time>{eventTimeRange(event, zone)}</time><div><strong>{event.title || 'Family event'}</strong>{event.location && <span><MapPin size={13} /> {event.location}</span>}</div></article>)}</div></section>)}</div> : <p>No events on the family calendar in the next 7 days.</p>}</DetailSheet>}
         {detail === 'tasks' && <DetailSheet title="Open to-dos" onClose={closeDetail}>{data?.tasks.length ? <div className="ambient-detail-list">{data.tasks.map((task, index) => <article key={task.id || index}><span className="ambient-checkbox" /><div><strong>{task.title || 'Untitled to-do'}</strong>{task.dueDate && <span>Due {task.dueDate.slice(0, 10) === today ? 'today' : formatDay(task.dueDate, 'UTC')}</span>}</div></article>)}</div> : <p>You're all caught up.</p>}</DetailSheet>}
@@ -263,8 +259,14 @@ export default function AmbientDisplay() {
                 : article.error ? <p className="ambient-reader-note">{article.error}</p> : <p className="ambient-reader-note">Loading the story…</p>}</div>
             : headlines.length ? <div className="ambient-detail-list ambient-news-list">{headlines.map((item) => <article key={item.id} role="button" tabIndex={0} onClick={() => void openArticle(item.id)} onKeyDown={(event) => { if (event.key === 'Enter') void openArticle(item.id); }}><div><strong>{item.title}</strong><span className="ambient-news-snippet">{item.snippet}</span><span>{[item.source, relativeTime(item.publishedAt, now)].filter(Boolean).join(' · ')}</span></div></article>)}</div> : <p>Headlines are temporarily unavailable.</p>}</DetailSheet>}
         {detail === 'chores' && <DetailSheet title="Today's chores" onClose={closeDetail}>{data?.chores.length ? <div className="ambient-detail-list">{data.chores.map((chore) => <article key={chore.id}><span className={`ambient-checkbox${chore.completed ? ' is-done' : ''}`}>{chore.completed && <Check size={13} />}</span><div><strong>{chore.title}</strong><span>{chore.members.map((member) => member.name).join(', ') || 'Everyone'}{chore.points > 0 ? ` · ${chore.points} points` : ''}</span></div></article>)}</div> : <p>Nothing is due today.</p>}{!user?.is_display && <p className="ambient-detail-manage"><a href="/chores">Manage chores</a> — the display shows chores that are due today.</p>}</DetailSheet>}
-        {detail === 'weather' && <DetailSheet title="Weather details" onClose={closeDetail}>{weather ? <div className="ambient-detail-copy"><p>{data?.weather.place}</p><p>{weatherLabel(weather.weatherCode)} · {Math.round(weather.temperature)}°C</p><p>Today’s high {Math.round(weather.high)}° · low {Math.round(weather.low)}°</p><p>Forecast updated {formatTime(weather.fetchedAt, zone)}. Data supplied by Open-Meteo.</p></div> : <p>Choose a location in Display setup to add live weather.</p>}</DetailSheet>}
-        {detail === 'formula1' && <DetailSheet title={race?.name ?? 'Formula 1 schedule'} onClose={closeDetail}>{race ? <div className="ambient-detail-copy"><p>{race.circuit} · {race.location}, {race.country}</p><p>Race · {formatDay(race.raceDateTime, zone)} at {formatTime(race.raceDateTime, zone)}</p><div className="ambient-detail-list">{race.sessions.map((session) => <article key={session.name}><div><strong>{session.name}</strong><span>{formatDay(session.dateTime, zone)} · {formatTime(session.dateTime, zone)}</span></div></article>)}</div><p>Schedule data supplied by Jolpica F1. Times shown in {zone}.</p></div> : <p>Race schedule is temporarily unavailable.</p>}</DetailSheet>}
+        {detail === 'weather' && (data?.extras?.weather
+            ? <DetailSheet wide kicker={`${data.weather.place ?? 'WEATHER'} · OPEN-METEO`.toUpperCase()} title="Weather & sky" onClose={closeDetail}><WeatherDetails weather={data.extras.weather} place={data.weather.place} /></DetailSheet>
+            : <DetailSheet title="Weather details" onClose={closeDetail}>{weather ? <div className="ambient-detail-copy"><p>{data?.weather.place}</p><p>{weatherLabel(weather.weatherCode)} · {Math.round(weather.temperature)}°</p><p>Today’s high {Math.round(weather.high)}° · low {Math.round(weather.low)}°</p><p>Forecast updated {formatTime(weather.fetchedAt, zone)}. Data supplied by Open-Meteo.</p></div> : <p>Choose a location in Display setup to add live weather.</p>}</DetailSheet>)}
+        {detail === 'formula1' && <DetailSheet wide kicker="FORMULA 1 · STANDINGS & SCHEDULE" title={race?.name ?? 'Formula 1'} onClose={closeDetail}><Formula1Details standings={data?.extras?.formula1 ?? null} race={race} zone={zone} /></DetailSheet>}
+        {detail === 'wifi' && data?.extras?.wifi && <DetailSheet kicker="HOME NETWORK" title="Guest Wi-Fi" wide onClose={closeDetail}><WifiDetails wifi={data.extras.wifi} /></DetailSheet>}
+        {detail === 'countdown' && data?.extras?.countdown && <DetailSheet kicker="COUNTDOWN" title={data.extras.countdown.title} wide onClose={closeDetail}><CountdownDetails countdown={data.extras.countdown} serverTime={data.extras.serverTime} zone={zone} /></DetailSheet>}
+        {detail === 'markets' && data?.extras?.markets && <DetailSheet kicker="MARKETS" title="Stocks & crypto" wide onClose={closeDetail}><MarketsDetails markets={data.extras.markets} zone={zone} /></DetailSheet>}
+        {detail === 'photos' && data?.extras?.photos && <DetailSheet kicker="FAMILY PHOTOS" title="Slideshow" wide onClose={closeDetail}><PhotoSlideshow photos={data.extras.photos} /></DetailSheet>}
         {dimmed && <div className="ambient-night" style={{ opacity: nightOpacity }} role="button" tabIndex={0} aria-label="Display dimmed for the night. Tap to wake for two minutes."
             onPointerDown={(event) => { event.preventDefault(); setAwakeUntil(Date.now() + WAKE_FOR_MS); setNow(new Date()); }}
             onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { setAwakeUntil(Date.now() + WAKE_FOR_MS); setNow(new Date()); } }} />}

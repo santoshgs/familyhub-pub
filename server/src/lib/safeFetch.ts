@@ -10,17 +10,32 @@
 // Manual redirects and capped reads — kept as a shared helper so the AI providers and
 // the Immich/integration fetches all share one audited code path.
 //
-// NOTE: DNS-rebinding remains a residual risk. We re-validate the hostname on every
-// hop, but the OS resolver may return a different address between the assertSafe
-// lookup and the actual socket connect. Pinning the connection to the vetted IP
-// would require a custom undici lookup/dispatcher and is intentionally out of scope
-// here (see task spec) — the redirect re-validation + timeout + size cap are the
-// priority mitigations.
+// DNS rebinding: the socket connects through guardedLookup, which resolves the
+// name once and refuses blocked addresses, so the address that was checked is the
+// address that is used.
 
-import { assertSafeIntegrationUrl } from '../utils/urlGuard';
+import { Agent, fetch as undiciFetch } from 'undici';
+import { assertSafeIntegrationUrl, blockPrivateFor, guardedLookup } from '../utils/urlGuard';
 import { AI_TIMEOUT_MS } from '../services/ai';
 
 const MAX_REDIRECTS = 5;
+
+// undici's own fetch is always used with its own Agent (mixing an npm undici
+// Agent with Node's bundled fetch depends on the two versions matching). Tests
+// that replace globalThis.fetch with a vitest stub (it has a .mock property) are
+// honoured through this seam.
+const fetchFor = (): ((url: string, init: Record<string, unknown>) => Promise<Response>) =>
+    ('mock' in globalThis.fetch ? globalThis.fetch : undiciFetch) as never;
+
+const agents = new Map<boolean, Agent>();
+const agentFor = (blockPrivate: boolean): Agent => {
+    let agent = agents.get(blockPrivate);
+    if (!agent) {
+        agent = new Agent({ connect: { lookup: guardedLookup(blockPrivate) as never } });
+        agents.set(blockPrivate, agent);
+    }
+    return agent;
+};
 
 export interface SafeFetchOptions extends RequestInit {
     /** Force-block loopback/RFC1918/link-local targets (passed through to the guard). */
@@ -54,10 +69,12 @@ export async function safeFetch(url: string, options: SafeFetchOptions = {}): Pr
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), effectiveTimeout);
         try {
-            const response = await fetch(current, {
-                ...init,
+            const response = await fetchFor()(current, {
+                ...(init as Record<string, unknown>),
                 redirect: 'manual',
                 signal: controller.signal,
+                // Node's fetch accepts an undici dispatcher; it pins the vetted address.
+                dispatcher: agentFor(blockPrivateFor({ blockPrivate })),
             });
 
             if (response.status >= 300 && response.status < 400) {

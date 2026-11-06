@@ -638,4 +638,7 @@
 .fh-credential-help a { color:var(--fh-ink); text-decoration:underline; }
 .fh-credentials form { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
 .fh-credentials form input { flex:1 1 260px; min-height:40px; padding:0 11px; border:1px solid var(--fh-line); border-radius:9px; background:var(--fh-paper); color:var(--fh-ink); font:inherit; font-family:ui-monospace,monospace; }
-@media (max-width:640px) { .fh-credential-row { grid-template-columns:1fr auto; } .fh-credential-row > button { grid-column:1/-1; justify-self:start; } }
+.fh-updates { border-bottom:1px solid var(--fh-line); }
+.fh-update-confirm { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+.fh-credential-note .fh-text-button { display:inline-flex; align-items:center; gap:4px; }
+@media (max-width:640px) { .fh-credential-row { grid-template-columns:1fr auto; } .fh-credential-row > button, .fh-credential-row > .fh-update-confirm { grid-column:1/-1; justify-self:start; } }

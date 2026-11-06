@@ -37,9 +37,11 @@ export default defineConfig(() => {
         },
         // VITE_FAMILYHUB_BASE serves the local develop build under a sub-path (for example /develop/).
         base: isDemo ? (process.env.VITE_DEMO_BASE || '/OpenFamily/demo/') : (process.env.VITE_FAMILYHUB_BASE || '/'),
-        // Prototype target only. Real iPhone/iPad verification remains required.
+        // iPhone/iPad Safari and the photo frame's Android System WebView 104
+        // (Chromium 104): syntax and CSS are lowered for both. Real iPhone/iPad
+        // verification remains required.
         ...(isFamilyHub ? {
-            build: { target: 'safari15.4' },
+            build: { target: ['safari15.4', 'chrome104'], cssTarget: ['safari15.4', 'chrome104'] },
         } : {}),
         plugins: [
             ...(isFamilyHub ? [{

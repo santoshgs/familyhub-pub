@@ -1,4 +1,6 @@
 import express, { Router } from 'express';
+import { parseDashboardPrefs } from './userSettings';
+import { pickOverrideFields } from '../lib/appointmentRecurrence';
 import { PoolClient } from 'pg';
 import { getClient, query } from '../db';
 import { authMiddleware, requireParent, AuthRequest } from '../middleware/auth';
@@ -336,6 +338,8 @@ router.get('/export', requireParent, async (req: AuthRequest, res) => {
 
 router.post('/import', requireParent, importBodyParser, async (req: AuthRequest, res) => {
     const userId = req.userId!;
+    const importerId = req.actualUserId!;
+    const importerIsOwner = Boolean(req.isOwner);
     const importData = asRecord(req.body);
 
     if (!importData) {
@@ -458,6 +462,9 @@ router.post('/import', requireParent, importBodyParser, async (req: AuthRequest,
 
             const targetId = accountMap.get(originalId);
             if (!targetId) continue;
+            // Only the owner may restore other accounts' preferences; a parent's
+            // import changes their own account only.
+            if (!importerIsOwner && targetId !== importerId) continue;
 
             const assignments: string[] = [];
             const values: unknown[] = [];
@@ -466,7 +473,8 @@ router.post('/import', requireParent, importBodyParser, async (req: AuthRequest,
                 values.push(ref.language);
                 assignments.push(`language = $${values.length}`);
             }
-            if (ref.avatar_url === null || typeof ref.avatar_url === 'string') {
+            if (ref.avatar_url === null || (typeof ref.avatar_url === 'string'
+                && /^data:image\/(png|jpeg|jpg|webp|gif);base64,/.test(ref.avatar_url) && ref.avatar_url.length <= 1_500_000)) {
                 values.push(ref.avatar_url);
                 assignments.push(`avatar_url = $${values.length}`);
             }
@@ -476,7 +484,7 @@ router.post('/import', requireParent, importBodyParser, async (req: AuthRequest,
                 assignments.push(`week_start_day = $${values.length}`);
             }
             if (ref.dashboard_prefs === null || typeof ref.dashboard_prefs === 'string') {
-                values.push(ref.dashboard_prefs);
+                values.push(ref.dashboard_prefs === null ? null : JSON.stringify(parseDashboardPrefs(ref.dashboard_prefs)));
                 assignments.push(`dashboard_prefs = $${values.length}`);
             }
 
@@ -519,7 +527,7 @@ router.post('/import', requireParent, importBodyParser, async (req: AuthRequest,
                     row.appointment_id,
                     row.occurrence_date,
                     row.exception_type ?? 'skip',
-                    row.override_data == null ? null : JSON.stringify(row.override_data),
+                    row.override_data == null ? null : JSON.stringify(pickOverrideFields(row.override_data)),
                     row.created_at ?? null,
                     userId,
                 ]
@@ -602,7 +610,9 @@ router.post('/import', requireParent, importBodyParser, async (req: AuthRequest,
         await importAccountPreferences(accountMap);
 
         await importRows('family_members', importData.family_members, (row) => {
-            if ('linked_user_id' in row) {
+            // Linking a profile to an account is owner-only (family.ts).
+            if ('linked_user_id' in row && !importerIsOwner) row.linked_user_id = null;
+            if ('linked_user_id' in row && importerIsOwner) {
                 const originalLinkedId = sourceId(row.linked_user_id);
                 row.linked_user_id = originalLinkedId
                     ? accountMap.get(originalLinkedId) ?? null

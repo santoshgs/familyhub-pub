@@ -12,6 +12,15 @@ import { getAuthConfig } from './config/authConfig';
 
 export { broadcast };
 
+// Backstop: a stray rejection is logged instead of ending the process (Node's
+// default), which would take the API, WebSockets and schedulers down for everyone.
+process.on('unhandledRejection', (reason) => {
+    logger.error('process.unhandled_rejection', {
+        error: reason instanceof Error ? reason.message : String(reason),
+        stack: reason instanceof Error && process.env.NODE_ENV !== 'production' ? reason.stack : undefined,
+    });
+});
+
 const PORT = process.env.SERVER_PORT || 3001;
 
 // Create HTTP server

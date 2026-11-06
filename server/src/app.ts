@@ -1,4 +1,6 @@
 import express from 'express';
+// Before any router is created: async handlers forward rejections to next(err).
+import { isClientInputDbError, stripTrailingSlashes } from './lib/asyncRoutes';
 import cors from 'cors';
 import helmet from 'helmet';
 import path from 'path';
@@ -31,6 +33,9 @@ import pool from './db';
 import { readinessHandler } from './lib/readiness';
 
 loadEnv();
+
+// The public calendar feed carries its credential in the path; never log it.
+const redactPath = (path: string): string => path.replace(/^\/api\/calendar\/[^/]+\/openfamily\.ics$/i, '/api/calendar/[token]/openfamily.ics');
 
 const app = express();
 app.set('trust proxy', 1);
@@ -113,7 +118,7 @@ app.use('/api', (_req, res, next) => {
 // the server buffer and parse a body of that size.
 const defaultJsonParser = express.json({ limit: '1mb' });
 app.use((req, res, next) => (
-    req.path.replace(/\/+$/, '').toLowerCase() === '/api/data/import'
+    stripTrailingSlashes(req.path).toLowerCase() === '/api/data/import'
         ? next()
         : defaultJsonParser(req, res, next)
 ));
@@ -126,7 +131,7 @@ app.use((req, res, next) => {
     res.on('finish', () => {
         logger.info('http.request', {
             method: req.method,
-            path: req.path,
+            path: redactPath(req.path),
             statusCode: res.statusCode,
             durationMs: Date.now() - startedAt,
             ip: req.ip,
@@ -195,14 +200,20 @@ app.use((req, res) => {
 });
 
 // Error handler
-app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (isClientInputDbError(err)) {
+        logger.warn('http.invalid_input', { method: req.method, path: redactPath(req.path), code: err.code });
+        if (res.headersSent) return next(err);
+        return res.status(400).json({ success: false, error: 'Invalid request' });
+    }
     logger.error('http.unhandled_error', {
         method: req.method,
-        path: req.path,
+        path: redactPath(req.path),
         error: err instanceof Error ? err.message : String(err),
         stack: err instanceof Error && process.env.NODE_ENV !== 'production' ? err.stack : undefined,
     });
 
+    if (res.headersSent) return next(err);
     // body-parser rejections (oversized or malformed body) carry their own
     // 4xx status; everything else is a genuine server failure.
     const status = typeof err?.status === 'number' && err.status >= 400 && err.status < 500

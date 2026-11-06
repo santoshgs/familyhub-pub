@@ -22,9 +22,11 @@ STATE=${FAMILYHUB_STATE:-/opt/familyhub/state}
 
 get() { sed -n "s/^$1=//p" "$ENV" | tail -1; }
 set_key() { # key value: replace or append, atomically, keeping 0600
-	python3 - "$ENV" "$1" "$2" <<'PY'
+	# The value travels in the environment (root-only), never in argv.
+	FH_VALUE=$2 python3 - "$ENV" "$1" <<'PY'
 import os, sys, tempfile
-path, key, value = sys.argv[1:]
+path, key = sys.argv[1:]
+value = os.environ['FH_VALUE']
 lines = open(path).read().splitlines()
 out, done = [], False
 for line in lines:
@@ -36,9 +38,9 @@ for line in lines:
 if not done:
     out.append(f'{key}={value}')
 fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path))
+os.fchmod(fd, 0o600)
 with os.fdopen(fd, 'w') as f:
     f.write('\n'.join(out) + '\n')
-os.chmod(tmp, 0o600)
 os.replace(tmp, path)
 PY
 }

@@ -129,6 +129,24 @@ and hides it if it cannot load;
 the card also names the team directly. The ambient background and weather/race
 artwork use CSS and SVG rather than stock-image URLs.
 
+### Quick bar and detail panels (v1.2)
+
+Below the cards, a quick bar shows pills for guest Wi-Fi, a countdown, markets
+and the photo slideshow; each appears only when set up in **Settings → Display**
+and opens a panel in place. All data is prepared on the Pi and included in the
+`extras` field of `GET /api/familyhub/ambient`: the weather panel (Open-Meteo
+forecast and air quality, sun progress, moon phase and its SVG path, forecast
+bar positions), Formula 1 standings (Jolpica, cached for the chosen interval),
+the Wi-Fi QR code as an SVG path, the countdown target instant, market prices
+and the slideshow's photo ids. The display draws these as given; it ticks only
+the countdown's seconds, from the server's clock. Market prices are fetched at
+9:35, 12:30 and 16:05 New York time on weekdays (and when the settings change),
+so the frame never polls a market API. Photos are uploaded from a phone or
+computer, decoded once on the Pi, turned upright, scaled to fit 1280 × 800 and
+re-encoded without EXIF data; the frame downloads one at a time with its token
+and releases the previous one. The guest Wi-Fi password is shown on the frame by
+design; the market API keys never leave the server.
+
 ### Google Photos widget feasibility
 
 Google's Ambient API is the appropriate route for a photo-frame slideshow. A
@@ -140,7 +158,7 @@ has access to the intended family album can be used for the frame authorization;
 individual family members' personal accounts do not need to be shown on the
 display.
 
-This is **not implemented**. Google currently requires acceptance into its
+The v1.2 slideshow uses photos uploaded to the Pi instead. Google Photos is **not implemented**. Google currently requires acceptance into its
 Photos Partner Program before granting Ambient API access. Standard Library API
 shared-album listing is no longer available, and Picker is intended for a
 user's explicit media selection rather than a continuously synchronized album.
@@ -169,6 +187,9 @@ release policy records it as rollback-safe.
 | --- | --- | --- |
 | `GET /api/familyhub/ambient` | Authenticated management or display session | Household timezone, today's date, selected display widgets, and minimized card data. |
 | `GET /api/familyhub/ambient/article?id=` | Management or display session; News card enabled | Reader view of a headline currently in the feed. |
+| `GET /api/familyhub/ambient/photos/:id` | Management or display session | One slideshow photo (JPEG, pre-scaled to 1280 × 800). The only path-parameter route ambient tokens may read. |
+| `GET/PUT /api/familyhub/dashboard/settings` | Parent/owner | v1.2 options: `weather`, `formula1`, `wifi`, `countdown`, `markets`, `photos`, plus write-only `secrets` (`wifiPassword`, `finnhubKey`, `coingeckoKey`: omit to keep, `null` to clear). Responses report only whether each secret is set. |
+| `GET/POST /api/familyhub/photos`, `DELETE /api/familyhub/photos/:id`, `GET /api/familyhub/photos/:id/thumb` | Parent/owner | List, upload (raw image body, one per request, 25 MB, 200 per family), delete, thumbnail. |
 | `GET /api/familyhub/ambient/settings` | Authenticated management session | Read widget and weather-location settings. |
 | `PUT /api/familyhub/ambient/settings` | Parent/owner | Save `{ location: null \| { city, country, latitude, longitude }, widgets: string[], night?: { enabled, start: "HH:MM", end: "HH:MM", brightness: 0–80 } }`. Omitting `night` keeps the saved schedule. |
 | `GET /api/familyhub/ambient/locations?q=Springfield` | Parent/owner | Search Open-Meteo geocoding; `q` must contain 2–80 characters. |

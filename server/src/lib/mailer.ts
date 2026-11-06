@@ -43,6 +43,10 @@ const getTransporter = (): Transporter => {
         host,
         port,
         secure,
+        // On a plain port, insist on STARTTLS: a server (or an attacker on the
+        // path) that does not offer it gets no password and no reset token.
+        // SMTP_REQUIRE_TLS=false only for a trusted local relay without TLS.
+        requireTLS: !secure && process.env.SMTP_REQUIRE_TLS?.trim() !== 'false',
         auth: user && pass ? { user, pass } : undefined,
     });
 
