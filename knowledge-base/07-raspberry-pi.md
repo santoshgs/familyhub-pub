@@ -4,9 +4,7 @@
 
 ## Installed host
 
-The household Pi is a Raspberry Pi 4 with 4 GB RAM and a roughly 128 GB microSD card. The previous Raspberry Pi OS Bullseye installation used an older multi-partition layout. After the owner explicitly declined a complete disk image and approved erasure, the original card was reimaged with Raspberry Pi OS Lite 64-bit based on Debian 13. Wi-Fi, the Pi account, locale and the already-authorized deployment public key were configured during imaging. The new SSH host fingerprint was checked at the Pi console before remote access resumed.
-
-The earlier card contents were erased. A partial, private historical Pi configuration/home/boot archive exists on the development Mac, but it is not a complete disk image. Do not describe it as full recovery of the previous installation.
+The household Pi is a Raspberry Pi 4 with 4 GB RAM and a roughly 128 GB microSD card. However, this endpoint can be anything - Raspberry Pi, a server, desktop, or hosted on the cloud. Your choice.
 
 ## Running services and storage
 
