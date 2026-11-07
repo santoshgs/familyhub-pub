@@ -4,13 +4,15 @@
 
 **A self-hosted family dashboard on a Raspberry Pi, shown on an inexpensive photo frame.**
 
-Google Calendar and Tasks, daycare updates, chores, weather, news and the next
-Formula 1 weekend — managed from your phone over a private network, displayed
-read-only in the kitchen.
+Google Calendar and Tasks, daycare updates, chores, shared budgets, weather,
+news and the next Formula 1 weekend: managed from your phone over a private
+network, displayed read-only in the kitchen.
 
-<img src="docs/familyhub/images/display.jpg" alt="The FamilyHub display at 1280 × 800, showing calendar, weather, Formula 1, to-dos, news and daycare cards (fictional data)" width="860">
+<img src="docs/familyhub/images/display-dark.jpg" alt="The FamilyHub display at 1280 × 800 in its dark theme: family calendar, weather, Formula 1, to-dos, news and a countdown, with a quick-cards bar for chores, guest Wi-Fi, markets and daycare (fictional data)" width="860">
 
-<sub>All screenshots use fictional data.</sub>
+<img src="docs/familyhub/images/display-light.jpg" alt="The same display in the light theme" width="860">
+
+<sub>The display in its dark and light themes. All screenshots use fictional data.</sub>
 
 </div>
 
@@ -20,11 +22,15 @@ and adds a Google-backed household dashboard, a read-only ambient display for a
 photo frame, and a Raspberry Pi deployment with versioned, self-updating
 releases. Since v1.0 it is its own product: OpenFamily modules it doesn't use
 (recipes, meal planning, family posts, the kiosk) are gone, every remaining
-module can be switched off per household (enforced by the server), it speaks
-English and French, and the Pi sends ntfy alerts
-for renewals and updates.
+module can be switched off per household (enforced by the server), and it speaks
+English and French. The current release is **v1.5.5**.
 
-**Contents:** [What it does](#what-it-does) · [The photo frame hack](#the-photo-frame-hack) ·
+It is built for one household that wants to run its own server: your data stays
+on your Pi, Google Calendar and Tasks stay the source of truth, and nothing is
+hosted by anyone else. Phones and computers manage it over Tailscale; the frame
+only ever sees a separate, display-only listener.
+
+**Contents:** [What it does](#what-it-does) · [Install it](#install-it) · [The photo frame hack](#the-photo-frame-hack) ·
 [How it fits together](#how-it-fits-together) · [Running it](#running-it) ·
 [Documentation](#documentation) · [Wishlist](#wishlist) · [Credits and licence](#credits-and-licence)
 
@@ -32,40 +38,118 @@ for renewals and updates.
 
 | Feature | What it does |
 | --- | --- |
-| **Family calendar** | One shared Google Calendar is the source of truth. Month/week/day views, event colours and a household colour legend. |
+| **Family calendar** | One shared Google Calendar is the source of truth. Month/week/day views, event colours with a household colour legend, and creating, editing and deleting events from FamilyHub. |
 | **To-dos** | A shared Google Tasks list, editable from FamilyHub or Google's own apps. |
 | **Daycare updates** | Lillio/HiMama emails from the family Gmail account, summarised. |
 | **Chores and pocket money** | OpenFamily chores (with optional points), approvals and balances. |
-| **Modules you choose** | To-dos, Chores, Pocket money, Daycare, School, Notes, Budget, Shopping, Weekly routines, Integrations (Home Assistant, Nextcloud, Immich) and an AI assistant, each on or off for the household. |
+| **Shared budgets** | Record who paid and how an expense is split, keep expense groups, settle up, and import a Splitwise CSV export. Fixed, icon-tiled categories; monthly totals and limits. |
+| **Modules you choose** | To-dos, Chores, Pocket money, Daycare, School, Notes, Budget, Shopping, Weekly routines, Integrations (Home Assistant, Nextcloud, Immich) and an AI assistant, each on or off for the household. Members can hide modules from their own menu. |
+| **Two looks** | Classic, or the calmer **Board Book** look for the management app, switchable per person, with a light and dark theme. |
+| **Ambient display** | A read-only, glanceable dashboard for a wall or counter screen: detail panels, a quick-cards bar, a light/dark toggle, night dimming (or off) and a screensaver. |
 | **Alerts on your phone** | ntfy pushes for expiring credentials, installed releases and failed updates. |
-| **Ambient display** | A read-only, glanceable dashboard for a wall or counter screen, with detail panels, night dimming and a news reader. |
 | **Private by default** | Management works only over the household's Tailscale network. The photo frame reaches a separate, display-only listener on the home network. |
-| **Self-updating** | Tagging a release builds ARM64 images in GitHub Actions; the Pi installs it within the hour with a backup first. |
+| **Self-updating** | Tagging a release builds ARM64 images in GitHub Actions; the Pi installs it within the hour with a backup first. Administrators can also check and install updates, or restart, from Settings. |
 
 ### The display
 
-Every card opens a detail panel in place — the frame never navigates away.
+Every card opens a detail panel in place: the frame never navigates away.
 
 | Next 7 days | Headlines | Reader view |
 | --- | --- | --- |
 | <img src="docs/familyhub/images/panel-calendar.jpg" alt="Calendar detail panel grouped by day" width="280"> | <img src="docs/familyhub/images/panel-news.jpg" alt="Ten headlines with one-line summaries" width="280"> | <img src="docs/familyhub/images/news-reader.jpg" alt="A story in plain-text reader view" width="280"> |
 
-* **Up next** shows the next three events with day labels and "+2 more events today"; To-dos and News show "+N more".
-* **Weather** (Open-Meteo) includes tomorrow's forecast; **Formula 1** (Jolpica) shows the next session in your time zone.
-* **News** (opt-in) lists ten BBC World and Technology headlines. Tapping one opens a reader view built on the Pi with Mozilla Readability, so the frame downloads a few kilobytes of text instead of a news page.
-* **Night mode** dims the screen on a schedule; a tap wakes it for two minutes.
+The same display works on a phone, so you can check it from the couch:
+
+| Home | Weather & sky | Formula 1 |
+| --- | --- | --- |
+| <img src="docs/familyhub/images/phone-home.jpg" alt="The phone layout: to-dos, news and the family photos card" width="200"> | <img src="docs/familyhub/images/phone-weather.jpg" alt="Weather and sky panel: temperature, wind, air quality, sun, moon and a seven-day forecast" width="200"> | <img src="docs/familyhub/images/phone-f1.jpg" alt="Formula 1 panel: weekend schedule and driver standings" width="200"> |
+
+| Stocks and crypto | Photo slideshow |
+| --- | --- |
+| <img src="docs/familyhub/images/phone-markets.jpg" alt="Stocks and crypto prices with daily changes" width="200"> | <img src="docs/familyhub/images/phone-slideshow.jpg" alt="Family photo slideshow with previous, pause, next and full-screen controls" width="200"> |
+
+* **Choose your cards.** Settings → Display → Layout puts up to six cards on the main grid and the rest in a **quick-cards** bar, in the order you pick.
+* **Up next** shows the next events with their Google Calendar colour and day labels; To-dos and News show "+N more".
+* **Weather** (Open-Meteo) adds a detail panel with a seven-day forecast, sunrise and sunset, air quality and the moon phase. **Formula 1** (Jolpica) shows the next session in your time zone, with driver and constructor standings and a favourite team.
+* **Quick cards:** a guest Wi-Fi QR code, a countdown with a checklist, stocks and crypto, and a family photo slideshow from photos you upload.
+* **News** (opt-in) lists headlines from RSS or Atom feeds you choose (BBC World and Technology by default). Tapping one opens a reader view built on the Pi with Mozilla Readability, so the frame downloads a few kilobytes of text instead of a news page.
+* **Night mode** dims the screen on a schedule, or turns it fully black; a tap wakes it. The **screensaver** shows the family photos full screen after a chosen idle time.
 * The display is read-only. A 2-second **Hold to exit** is the only way out.
 
 ### Management
 
-| Display setup | Pairing a frame | Server credentials |
-| --- | --- | --- |
-| <img src="docs/familyhub/images/setup-night.png" alt="Night dimming schedule settings" width="280"> | <img src="docs/familyhub/images/setup-pairing.png" alt="Paired displays with Remove, and Create pairing code" width="280"> | *Expiry date, days left and a **Replace** button for each credential (screenshot omitted).* |
+| Display setup | Pairing a frame |
+| --- | --- |
+| <img src="docs/familyhub/images/setup-night.png" alt="Night dimming schedule settings" width="280"> | <img src="docs/familyhub/images/setup-pairing.png" alt="Paired displays with Remove, and Create pairing code" width="280"> |
 
 The navigation shows as many tabs as fit and moves the rest into **More**.
-Settings has **Your name** (used in the display greeting) and, for the household
-owner, **Advanced → Server credentials**: expiry dates for everything the Pi
-depends on, and a tested way to replace a token from the browser.
+Settings has **Your name** (used in the display greeting), collapsible sections
+and, for the server administrator, **Advanced**: expiry dates for everything the
+Pi depends on with a tested way to replace a token from the browser, **Software
+updates**, and a restart button.
+
+## Install it
+
+You need a Raspberry Pi 4 (or any Linux host with Docker), a Google account for
+the household, and a [Tailscale](https://tailscale.com/) network so your phones
+can reach it privately. The photo frame is optional.
+
+**1. Get the code**
+
+```sh
+git clone https://github.com/santoshgs/familyhub-pub.git
+cd familyhub-pub
+git checkout main
+```
+
+Use `main` for the latest stable code and `develop` for work in progress. The
+project is AGPL-3.0: keep the licence and notices if you publish changes.
+
+**2. Try it on your computer (no accounts needed)**
+
+You need Node.js 22.12 or newer.
+
+```sh
+npm ci
+npm run dev:familyhub      # fictional prototype at the URL Vite prints
+```
+
+This opens a browser-only demo with made-up data. For the signed-in app against
+a local database, see
+[local development](docs/familyhub/LOCAL_DEVELOPMENT.md).
+
+**3. Set up Google**
+
+Create a Google Cloud OAuth client for the household's Google account and enable
+the Calendar, Tasks and Gmail APIs. Step by step:
+[Google setup](docs/familyhub/GOOGLE_SETUP.md). Keep the client secret on the
+server only.
+
+**4. Run it on a server**
+
+Copy `deploy/familyhub/env.example` to `.familyhub-local/deployment.env` (owner
+read/write only) and fill in the hostname, a strong database password, a
+`JWT_SECRET` (`openssl rand -hex 32`), the Google client values and your time
+zone (`TZ`). Then, from the repository root:
+
+```sh
+docker compose --env-file .familyhub-local/deployment.env -f deploy/familyhub/compose.yml build
+docker compose --env-file .familyhub-local/deployment.env -f deploy/familyhub/compose.yml up -d
+node scripts/familyhub-smoke.mjs https://<your-hostname>
+```
+
+Set `REGISTRATION_ENABLED=true` just long enough to create the first account (it
+becomes the server administrator unless you set `FAMILYHUB_ADMIN_EMAIL`), then
+turn it off again. HTTPS and DNS must work before you use real data; the
+[Raspberry Pi guide](knowledge-base/07-raspberry-pi.md) and
+[Tailscale guide](knowledge-base/08-tailscale-networking.md) cover this setup.
+
+**5. Add the photo frame and self-updates (optional)**
+
+Pair a frame with the one-time code flow in the
+[photo frame guide](knowledge-base/16-photo-frame.md), and turn on hourly
+self-updates from your own tagged releases with
+[releases and updates](knowledge-base/09-releases-updates.md).
 
 ## The photo frame hack
 
