@@ -163,7 +163,7 @@ const Calendar: React.FC = () => {
     const currency = user?.currency || 'EUR';
     const [addToBudget, setAddToBudget] = useState(false);
     const [budgetAmount, setBudgetAmount] = useState('');
-    const [budgetCategory, setBudgetCategory] = useState('Maison');
+    const [budgetCategory, setBudgetCategory] = useState('general');
     const [budgetIsExpense, setBudgetIsExpense] = useState(true);
     const [currentDate, setCurrentDate] = useState(new Date());
     const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -570,7 +570,7 @@ const Calendar: React.FC = () => {
         setEndManuallySet(false);
         setAddToBudget(false);
         setBudgetAmount('');
-        setBudgetCategory('Maison');
+        setBudgetCategory('general');
         setBudgetIsExpense(true);
         setFormData({
             title: '',

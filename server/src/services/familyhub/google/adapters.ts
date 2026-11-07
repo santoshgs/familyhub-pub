@@ -19,14 +19,18 @@ export interface CalendarEvent {
     start: NonNullable<GoogleEvent['start']>; end: NonNullable<GoogleEvent['end']>;
     allDay: boolean; recurringEventId?: string; originalStartTime?: GoogleEvent['originalStartTime'];
 }
-export interface GoogleTask { id: string; title: string; status: 'needsAction' | 'completed'; due?: string; deleted?: boolean; etag?: string }
-export interface Task { source: 'google-tasks'; listId: string; id: string; title: string; completed: boolean; dueDate: string | null; etag?: string }
+export interface GoogleTask { id: string; title: string; status: 'needsAction' | 'completed'; due?: string; completed?: string; deleted?: boolean; etag?: string }
+export interface Task { source: 'google-tasks'; listId: string; id: string; title: string; completed: boolean; dueDate: string | null; completedAt: string | null; etag?: string }
 export interface CalendarList { id: string; summary: string; accessRole: string }
 export interface TaskList { id: string; title: string }
 export interface CreateEventInput {
-    title: string; location?: string; id?: string; description?: string;
+    title: string; location?: string; id?: string; description?: string; colorId?: string | null;
     start: NonNullable<GoogleEvent['start']>; end: NonNullable<GoogleEvent['end']>;
 }
+/** Google event colours are "1" to "11"; empty means the calendar's own colour. */
+const EVENT_COLOR = /^(?:[1-9]|1[01])$/;
+/** Google event ids, including a recurring instance's "<id>_<start>" form. */
+export const EVENT_ID = /^[A-Za-z0-9_-]{1,1024}$/;
 type Service = 'calendar' | 'tasks' | 'gmail';
 
 function validDate(date: string): boolean {
@@ -98,13 +102,12 @@ export class GoogleAdapters {
         });
     }
 
-    async createEvent(calendarId: string, input: CreateEventInput): Promise<CalendarEvent> {
-        if (!calendarId || !input || typeof input.title !== 'string' || !input.title.trim() || input.title.length > 1024 || !input.start || !input.end) throw new Error('An event title, calendar, start and end are required.');
-        if (input.location !== undefined && (typeof input.location !== 'string' || input.location.length > 1024)) throw new Error('Event location must be at most 1024 characters.');
+    /** Validates an event and returns Google's body for it (shared by create and edit). */
+    private eventBody(input: CreateEventInput) {
+        if (!input || typeof input.title !== 'string' || !input.title.trim() || input.title.length > 1024 || !input.start || !input.end) throw new Error('An event title, calendar, start and end are required.');
+        if (input.location !== undefined && input.location !== null && (typeof input.location !== 'string' || input.location.length > 1024)) throw new Error('Event location must be at most 1024 characters.');
         if (input.description !== undefined && (typeof input.description !== 'string' || input.description.length > 8192)) throw new Error('Event description is too long.');
-        // Google custom IDs use base32hex (a-v, 0-9), 5–1024 chars. A UUID
-        // stripped of dashes fits and lets callers reconcile ambiguous failures.
-        if (input.id !== undefined && !/^[a-v0-9]{5,1024}$/.test(input.id)) throw new Error('Invalid Google event identifier.');
+        if (input.colorId !== undefined && input.colorId !== null && input.colorId !== '' && (typeof input.colorId !== 'string' || !EVENT_COLOR.test(input.colorId))) throw new Error('Choose one of Google Calendar\'s event colours.');
         let start: CreateEventInput['start'], end: CreateEventInput['end'];
         if (input.start.date !== undefined || input.end.date !== undefined) {
             if (typeof input.start.date !== 'string' || typeof input.end.date !== 'string' || !validDate(input.start.date) || !validDate(input.end.date)
@@ -115,13 +118,56 @@ export class GoogleAdapters {
             if (!(from.instant < to.instant)) throw new Error('The event must end after it starts.');
             start = from.value; end = to.value;
         }
-        const value = await this.request<GoogleEvent>('calendar', `calendars/${encodeURIComponent(calendarId)}/events`, undefined, 'POST', {
-            summary: input.title.trim(), start, end, ...(input.location ? { location: input.location.trim() } : {}), ...(input.id ? { id: input.id } : {}),
-            ...(input.description ? { description: input.description } : {}),
-        });
+        return { summary: input.title.trim(), start, end, location: typeof input.location === 'string' ? input.location.trim() : '', colorId: input.colorId || null };
+    }
+
+    private event(calendarId: string, value: GoogleEvent, fallbackTitle: string): CalendarEvent {
         if (!value.id || !value.start || !value.end) throw new Error('Invalid Google event response.');
-        return { source: 'google-calendar', calendarId, id: value.id, title: value.summary || input.title.trim(), location: value.location,
+        return { source: 'google-calendar', calendarId, id: value.id, title: value.summary || fallbackTitle, location: value.location, colorId: value.colorId,
             start: value.start, end: value.end, allDay: Boolean(value.start.date) };
+    }
+
+    async createEvent(calendarId: string, input: CreateEventInput): Promise<CalendarEvent> {
+        if (!calendarId) throw new Error('An event title, calendar, start and end are required.');
+        const body = this.eventBody(input);
+        // Google custom IDs use base32hex (a-v, 0-9), 5–1024 chars. A UUID
+        // stripped of dashes fits and lets callers reconcile ambiguous failures.
+        if (input.id !== undefined && !/^[a-v0-9]{5,1024}$/.test(input.id)) throw new Error('Invalid Google event identifier.');
+        const value = await this.request<GoogleEvent>('calendar', `calendars/${encodeURIComponent(calendarId)}/events`, undefined, 'POST', {
+            summary: body.summary, start: body.start, end: body.end, ...(body.location ? { location: body.location } : {}), ...(input.id ? { id: input.id } : {}),
+            ...(input.description ? { description: input.description } : {}), ...(body.colorId ? { colorId: body.colorId } : {}),
+        });
+        return this.event(calendarId, value, body.summary);
+    }
+
+    /**
+     * Edits one event (for a recurring event, the instance whose id is given:
+     * Google keeps the rest of the series). Title, time, location and colour.
+     */
+    async updateEvent(calendarId: string, id: string, input: CreateEventInput): Promise<CalendarEvent> {
+        if (!calendarId || typeof id !== 'string' || !EVENT_ID.test(id)) throw new Error('Invalid Google event identifier.');
+        const body = this.eventBody(input);
+        // No automatic write retries: ambiguous failures require reconciliation.
+        const value = await this.request<GoogleEvent>('calendar', `calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(id)}`, undefined, 'PATCH', {
+            summary: body.summary, start: body.start, end: body.end, location: body.location, colorId: body.colorId,
+        });
+        return this.event(calendarId, value, body.summary);
+    }
+
+    async deleteEvent(calendarId: string, id: string): Promise<void> {
+        if (!calendarId || typeof id !== 'string' || !EVENT_ID.test(id)) throw new Error('Invalid Google event identifier.');
+        await this.request('calendar', `calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(id)}`, undefined, 'DELETE');
+    }
+
+    /** Google's event colours for this account, plus the calendar's own colour. */
+    async eventColors(calendarId: string): Promise<{ calendar: string | null; colors: Array<{ id: string; color: string }> }> {
+        const hex = (value: unknown) => typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : null;
+        const [entry, colors] = await Promise.all([
+            this.request<{ backgroundColor?: string }>('calendar', `users/me/calendarList/${encodeURIComponent(calendarId)}`).catch(() => ({ backgroundColor: undefined })),
+            this.request<{ event?: Record<string, { background?: string }> }>('calendar', 'colors'),
+        ]);
+        return { calendar: hex(entry.backgroundColor), colors: Object.entries(colors.event ?? {}).flatMap(([id, value]) => EVENT_COLOR.test(id) && hex(value.background) ? [{ id, color: hex(value.background)! }] : [])
+            .sort((a, b) => Number(a.id) - Number(b.id)) };
     }
 
     async daycare(now = new Date()): Promise<DaycareUpdate[]> {
@@ -211,7 +257,8 @@ export class GoogleAdapters {
     private task(listId: string, value: GoogleTask): Task {
         if (!value.id || typeof value.title !== 'string' || !['needsAction', 'completed'].includes(value.status)) throw new Error('Invalid Google task response.');
         return { source: 'google-tasks', listId, id: value.id, title: value.title,
-            completed: value.status === 'completed', dueDate: value.due?.slice(0, 10) ?? null, etag: value.etag };
+            completed: value.status === 'completed', dueDate: value.due?.slice(0, 10) ?? null,
+            completedAt: value.status === 'completed' && typeof value.completed === 'string' ? value.completed : null, etag: value.etag };
     }
     private path(listId: string, id?: string): string {
         if (!listId || id === '') throw new Error('A Google task list and task identifier are required.');

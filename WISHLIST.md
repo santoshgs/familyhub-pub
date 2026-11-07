@@ -14,15 +14,16 @@ that shipped it.
 - [ ] Shopping list summary card.
 - [ ] Hardware brightness on the night-mode schedule (today only the dashboard dims; the backlight stays at its set level).
 - [ ] Rotate between two card layouts (e.g. weekday morning vs. evening).
-- [ ] Ability to choose what cards are displayed on the Home page; currently only Calendar, ToDos, Daycare, Notes, and School are displayed. Disabling one of those modules leaves a blank space on the Home page.
 
 ### Management
 - [ ] Notify a phone when the Pi's updater fails or a credential nears expiry (built in since v1.0; run `setup-ntfy.sh` on the Pi to switch it on).
-- [ ] Edit and delete events from the FamilyHub calendar view (today: create only).
 - [ ] Classroom integration (currently a placeholder page).
+- [ ] Include budget groups, settlements and sharing fields in the portable data export — a known gap since v1.5.0 (database backups already keep them).
+- [ ] Publish the Google OAuth app out of Testing — grants in Testing expire after seven days (owner action in Google Cloud).
 
 ### Pi and operations
 - [ ] Run the server container as a non-root user (root cause behind the v1.1 admin-helper findings; needs bind-mount ownership changes and a Pi drill).
+- [ ] Least-privilege hardening for containers and host: `nginx-unprivileged` for the client, `cap_drop: ALL` with `no-new-privileges`, a read-only root filesystem, PostgreSQL on an internal-only network, resource limits, and an updater split so only the final compose step runs as root (proposed; pairs with the non-root item above; needs a Pi drill and a rollback path; rootless Docker and userns-remap not recommended for now; see `knowledge-base/13-security-privacy.md`).
 - [ ] Disable Tailscale key expiry for the Pi (one click in the admin console; currently expires 2027-04-27).
 - [ ] Encrypted off-device backups on a schedule.
 - [ ] A real upgrade-then-rollback drill across two releases.
@@ -32,9 +33,19 @@ that shipped it.
 
 ## In progress
 
-_Nothing yet._
+None right now. Owner follow-ups are listed in `docs/familyhub/STATE.md`.
 
 ## Done
+
+- [x] Choose which cards show on the photo frame: a display layout (cards, quick pills or off) in Settings → Display — v1.5.2
+- [x] Frame detail panels open faster; menu order per account (Settings → You); Classic look and theme on the phone More menu; Display setup merged into Settings; compact budget balance card — v1.5.2
+- [x] Restart Family Hub from Settings → Advanced (server administrator); uniform Classic Settings sections; F1 card keeps its last good race calendar — v1.5.3
+- [x] Board Book look for the management app, behind a per-browser Classic/Board Book switch (Classic default) — v1.4.0
+
+- [x] Edit and delete Google Calendar events from the calendar and event details, with the Google colour picker — v1.5.0
+- [x] Frame: Google Calendar colour swatches beside events, and faster detail sheets — v1.5.0
+- [x] Budget: shared expenses (who paid, split between members), who owes whom, Settle up, expense groups, owes/paid analytics; fixed categories in 5 groups — v1.5.0
+- [x] Budget: import Splitwise history (Budget → Groups → Import from Splitwise) — v1.5.1
 
 - [x] Quick bar with guest Wi-Fi QR, countdown, stocks and crypto, photo slideshow; richer weather and F1 panels — v1.2.0
 - [x] Check for and install updates from Settings → Advanced → Software updates — v1.2.0

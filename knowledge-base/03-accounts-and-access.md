@@ -8,9 +8,9 @@ Your **Family Hub account** signs you into the application and controls househol
 
 Parents manage household settings, Google connections and protected changes. The **server administrator** additionally manages server credentials and software updates (Settings → Advanced; see [renewals](17-renewals-and-credentials.md)). Since v1.1 that is the account whose email is set as `FAMILYHUB_ADMIN_EMAIL` in the Pi's private environment, otherwise the first account ever created; a household's owner no longer gets this power just by owning a family. Switching a module off closes it on the server; unticking **Show** only hides it for you.
 
-## Sign in with Google (optional)
+## Signing in
 
-Since v1.0 the Pi can offer sign in with Google beside passwords. It is off until `google-signin.sh enable` is run on the Pi after the redirect address is added in Google Cloud (see [GOOGLE_SIGNIN](../docs/familyhub/GOOGLE_SIGNIN.md)). Passwords keep working until `google-only` is chosen, and new accounts still need an invitation. It has not been verified working on the household Pi yet. Photo-frame sessions cannot link a Google identity (v1.1).
+Family Hub signs in with email and password. Sign in with Google (single sign-on, added in v1.0) was removed in v1.4.2 at the owner's request: the household uses one shared Google account on every device, so it added nothing, and existing links were cleared. The Google connection that feeds the calendar, to-dos and daycare email is separate and unaffected. An account without a password gets one with `authAdmin set-password` on the server (see [troubleshooting](11-troubleshooting.md)).
 
 ## Joining, leaving and removal
 
@@ -22,7 +22,7 @@ The app can remove a member from a family but cannot delete an account. To clear
 
 A display never uses a person's password. Two ways to start one:
 
-* **Pair a frame** — Display setup → Paired displays → **Create pairing code**, then enter the 8-digit code on the frame. Codes are single-use and last five minutes; failed attempts are rate limited.
+* **Pair a frame** — Settings → Display → Paired displays → **Create pairing code**, then enter the 8-digit code on the frame. Codes are single-use and last five minutes; failed attempts are rate limited.
 * **Start protected display on this device** — turns the current browser into a display.
 
 Each display gets a read-only token tied to its own session. The server allows it only the display's data, renews it whenever the display loads, and refuses it everywhere else. **Remove** in Paired displays signs out that display alone. On a display, a 2-second **Hold to exit** leaves display mode: a browser returns to sign-in, a frame returns to its pairing screen.

@@ -2,7 +2,7 @@ import request from 'supertest';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
-import { afterAll, beforeAll, beforeEach, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { app, registerWithPassword, query } from '../helpers';
 import pool, { runMigrations } from '../../src/db';
 
@@ -81,4 +81,21 @@ it('refuses other parents, children and displays', async () => {
     expect((await call('get', '/api/familyhub/admin/updates', display)).status).toBe(403);
     expect((await call('post', '/api/familyhub/admin/updates/install', display)).status).toBe(403);
     expect(readdirSync(path.join(exchange, 'inbox'))).toEqual([]);
+});
+
+it('restarts the server only for the server administrator', async () => {
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    try {
+        const invite = await call('post', '/api/invites');
+        const parent = await request(app).post('/api/auth/register').send({ email: 'restart-parent@example.test', name: 'Fictional Parent', password: PASSWORD, inviteToken: invite.body.data.token });
+        expect((await call('post', '/api/familyhub/admin/restart', parent.body.data.token)).status).toBe(403);
+        const display = (await call('post', '/api/familyhub/ambient/display-session')).body.data.token as string;
+        expect((await call('post', '/api/familyhub/admin/restart', display)).status).toBe(403);
+        vi.advanceTimersByTime(2000);
+        expect(kill).not.toHaveBeenCalled();
+        expect((await call('post', '/api/familyhub/admin/restart')).status).toBe(200);
+        vi.advanceTimersByTime(2000);
+        expect(kill).toHaveBeenCalledWith(process.pid, 'SIGTERM');
+    } finally { vi.useRealTimers(); kill.mockRestore(); }
 });

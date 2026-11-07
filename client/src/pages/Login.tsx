@@ -2,12 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../contexts/AuthContext';
 import { api, AuthServerConfig } from '../lib/api';
-import { onPageRestored, ssoSupported, startSso } from '../lib/sso';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { LanguageSwitcher } from '../components/ui/LanguageSwitcher';
-import { Users, Sun, Moon, ArrowLeft, KeyRound } from 'lucide-react';
+import { Users, Sun, Moon, ArrowLeft } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 
 
@@ -22,11 +21,8 @@ const Login: React.FC = () => {
         passwordLogin: true,
         passwordSignup: import.meta.env.VITE_REGISTRATION_ENABLED !== 'false',
         passwordReset: true,
-        oidc: { enabled: false, name: null, signup: false },
     });
     const registrationEnabled = authConfig.passwordSignup;
-    const ssoAvailable = authConfig.oidc.enabled && ssoSupported();
-    const [ssoLoading, setSsoLoading] = useState(false);
     const [isLogin, setIsLogin] = useState(true);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -38,8 +34,6 @@ const Login: React.FC = () => {
     // "Forgot password" sub-form, shown in place of the credentials form.
     const [forgotMode, setForgotMode] = useState(false);
     const [forgotSent, setForgotSent] = useState(false);
-
-    useEffect(() => onPageRestored(() => setSsoLoading(false)), []);
 
     // Detect invite token in URL (both the plain ?invite= form and the hash route
     // used by the native shell); auto-switch to registration mode.
@@ -100,33 +94,6 @@ const Login: React.FC = () => {
         setError('');
     };
 
-    const handleSso = async () => {
-        setError('');
-        setSsoLoading(true);
-        try {
-            await startSso('login', inviteToken);
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : '';
-            setError(message === 'provider_unavailable'
-                ? t('auth:sso.errors.provider_unavailable')
-                : message || t('common:states.error'));
-            setSsoLoading(false);
-        }
-    };
-
-    const ssoButton = ssoAvailable && (
-        <Button
-            type="button"
-            variant="secondary"
-            disabled={ssoLoading}
-            onClick={handleSso}
-            className="w-full h-12 text-body-sm font-semibold"
-            size="lg"
-        >
-            <KeyRound className="w-4 h-4 mr-2" />
-            {ssoLoading ? t('common:states.loading') : t('auth:sso.continueWith', { name: authConfig.oidc.name })}
-        </Button>
-    );
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -228,29 +195,8 @@ const Login: React.FC = () => {
                                 </form>
                             )}
                         </div>
-                    ) : !authConfig.passwordLogin ? (
-                    <div className="space-y-5">
-                        {ssoButton || (
-                            <p className="text-body-sm text-muted-foreground text-center">{t('auth:sso.noSignInMethod')}</p>
-                        )}
-                        {error && (
-                            <div className="p-3 rounded-nexus bg-destructive/10 border border-destructive/20">
-                                <p className="text-label-sm text-destructive font-medium text-center">{error}</p>
-                            </div>
-                        )}
-                    </div>
                     ) : (
                     <>
-                    {ssoButton && (
-                        <div className="space-y-5">
-                            {ssoButton}
-                            <div className="flex items-center gap-3 text-label-sm text-muted-foreground">
-                                <span className="h-px flex-1 bg-border" />
-                                {t('auth:sso.or')}
-                                <span className="h-px flex-1 bg-border" />
-                            </div>
-                        </div>
-                    )}
                     <form onSubmit={handleSubmit} className="space-y-5">
                         {!isLogin && (
                             <div className="space-y-1.5">

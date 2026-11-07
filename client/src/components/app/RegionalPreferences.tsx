@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CalendarDays } from 'lucide-react';
-import { Card, CardContent, Select, useToast } from '../ui';
+import { Select, useToast } from '../ui';
 import { useAuth } from '../../contexts/AuthContext';
 import { applyRegionalPreferences, weekStartsOn } from '../../i18n/format';
+import { SettingsSection } from './SettingsSection';
 
 // ISO numbering, as stored on the account: Monday = 1 ... Sunday = 7.
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;
@@ -42,15 +43,7 @@ const RegionalPreferences: React.FC = () => {
     };
 
     return (
-        <Card>
-            <CardContent className="p-6">
-                <div className="flex items-start gap-4">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-card bg-primary-soft text-primary">
-                        <CalendarDays className="h-5 w-5" />
-                    </div>
-                    <div className="flex-1">
-                        <h3 className="text-caption font-semibold text-foreground">{t('regional.title')}</h3>
-                        <p className="mt-1 text-micro text-muted-foreground">{t('regional.subtitle')}</p>
+        <SettingsSection id="regional" icon={<CalendarDays className="h-5 w-5" />} title={t('regional.title')} subtitle={t('regional.subtitle')}>
                         <div className="mt-4 max-w-xs">
                             <label className="mb-1.5 block text-label font-medium text-foreground">
                                 {t('regional.weekStart')}
@@ -63,10 +56,7 @@ const RegionalPreferences: React.FC = () => {
                             />
                             <p className="mt-1.5 text-micro text-muted-foreground">{t('regional.weekStartHelp')}</p>
                         </div>
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
+                    </SettingsSection>
     );
 };
 

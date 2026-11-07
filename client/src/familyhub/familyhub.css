@@ -642,3 +642,75 @@
 .fh-update-confirm { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
 .fh-credential-note .fh-text-button { display:inline-flex; align-items:center; gap:4px; }
 @media (max-width:640px) { .fh-credential-row { grid-template-columns:1fr auto; } .fh-credential-row > button, .fh-credential-row > .fh-update-confirm { grid-column:1/-1; justify-self:start; } }
+
+/* v1.3: collapsible Settings sections and the nav sign-out button. */
+.fh-settings-section > details > summary::-webkit-details-marker { display:none; }
+.fh-settings-section > details > summary { list-style:none; }
+.fh-settings-chevron { transition:transform .15s ease; }
+.fh-settings-section > details[open] .fh-settings-chevron { transform:rotate(180deg); }
+.fh-settings-body > :first-child { margin-top:0; }
+@media (min-width:640px) { .fh-settings-body { padding-left:5rem; } }
+.fh-profile-name-details { margin:0 0 20px; }
+.fh-profile-name-details > summary small { margin-left:8px; color:var(--fh-muted); font-size:12px; font-weight:500; }
+.fh-profile-name-details .fh-profile-name { margin-bottom:0; }
+.fh-nav-signout { flex:0 0 auto; display:inline-flex; align-items:center; gap:6px; width:auto; padding:0 10px; }
+.fh-nav-signout span { font-size:13px; }
+@media (max-width:700px) { .fh-nav-signout span { display:none; } }
+/* The older Display / Advanced / Your name panels match the section chevrons. */
+.fh-advanced > summary { display:flex; align-items:center; gap:6px; list-style:none; }
+.fh-advanced > summary::-webkit-details-marker { display:none; }
+.fh-advanced > summary::after { content:''; width:8px; height:8px; margin:-4px 4px 0 auto; border-right:1.6px solid var(--fh-muted); border-bottom:1.6px solid var(--fh-muted); transform:rotate(45deg); transition:transform .15s ease; }
+.fh-advanced[open] > summary::after { margin-top:4px; transform:rotate(225deg); }
+
+/* v1.5: Google event colour picker */
+.fh-event-colours { border: 0; padding: 0; margin: 0; min-width: 0; }
+.fh-event-colours legend { font-size: 13px; font-weight: 600; margin-bottom: 8px; padding: 0; }
+.fh-event-colours [role="radiogroup"] { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px 6px; }
+.fh-event-colours button { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; padding: 2px 0; background: none; border: 0; cursor: pointer; color: inherit; }
+.fh-event-colours i { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #fff; box-shadow: inset 0 0 0 1px rgba(0,0,0,.12); }
+.fh-event-colours button.is-on i { box-shadow: 0 0 0 2px var(--fh-paper, #fff), 0 0 0 4px currentColor; }
+.fh-event-colours small { font-size: 10.5px; line-height: 1.2; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: .8; }
+.fh-event-colours button:focus-visible { outline: 2px solid #547b4d; outline-offset: 2px; border-radius: 8px; }
+.fh-event-times input { min-width: 0; width: 100%; }
+@media (max-width: 520px) { .fh-event-times { grid-template-columns: 1fr; } }
+
+/* v1.6: Display layout editor */
+.fh-layout h3 { display:flex; flex-wrap:wrap; align-items:baseline; gap:8px; margin:14px 0 8px; color:var(--fh-ink); font-size:13px; font-weight:650; }
+.fh-layout h3 small { color:var(--fh-muted); font-size:11px; font-weight:500; }
+.fh-layout ul { display:flex; flex-direction:column; gap:6px; margin:0; padding:0; list-style:none; }
+.fh-layout-row { display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:10px; padding:8px 10px; border:1px solid var(--fh-line); border-radius:11px; background:var(--fh-bg); }
+.fh-layout-order { display:flex; flex-direction:column; gap:2px; min-width:28px; }
+.fh-layout-order button { display:flex; align-items:center; justify-content:center; width:28px; height:22px; color:var(--fh-ink); border:1px solid var(--fh-line); border-radius:6px; background:transparent; cursor:pointer; }
+.fh-layout-order button:disabled { opacity:.3; cursor:default; }
+.fh-layout-name { min-width:0; display:flex; flex-direction:column; gap:2px; }
+.fh-layout-name strong { color:var(--fh-ink); font-size:13px; }
+.fh-layout-name small { overflow:hidden; color:var(--fh-muted); font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
+.fh-layout-place { display:inline-flex; padding:2px; border:1px solid var(--fh-line); border-radius:9px; }
+.fh-layout-place button { min-width:44px; min-height:32px; padding:0 9px; color:var(--fh-muted); font:inherit; font-size:12px; font-weight:600; border:0; border-radius:7px; background:transparent; cursor:pointer; }
+.fh-layout-place button.is-on { color:#fff; background:#4c755d; }
+@media (max-width:520px) { .fh-layout-name small { display:none; } .fh-layout-place button { min-width:38px; padding:0 6px; } }
+/* v1.5.2: Look and Theme in the More menu on narrow screens (portrait phones). */
+.fh-more-theme { display:none; }
+@media (max-width:720px) {
+  .fh-more-menu.is-empty { visibility:visible; }
+  .fh-more-theme { display:flex; flex-direction:column; gap:8px; margin-bottom:6px; padding:6px 11px 10px; border-bottom:1px solid var(--fh-line); }
+  .fh-more-theme label { display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:13px; color:var(--fh-ink); }
+}
+.fh-nav-order > summary { white-space:nowrap; }
+.fh-nav-order > summary small { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; }
+.fh-nav-order-body { padding:0 18px 16px; }
+.fh-nav-order-help { margin:0 0 10px; color:var(--fh-muted); font-size:13px; }
+.fh-nav-order .fh-layout-row { padding:6px 10px; }
+.fh-nav-order ol { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:6px; }
+/* v1.5.3: Display setup cards inside Settings read left to right, icon first. */
+.ambient-settings-card > .fh-card-heading { justify-content:flex-start; align-items:center; gap:12px; }
+/* v1.5.4: night mode choice and screensaver delay */
+.ambient-night-mode { grid-column:1/-1; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.ambient-night-mode label { display:flex; flex-direction:row; align-items:flex-start; gap:9px; padding:10px 12px; border:1px solid var(--fh-line); border-radius:10px; background:var(--fh-bg); font-weight:400; cursor:pointer; }
+.ambient-night-mode input { margin-top:3px; accent-color:#4c755d; }
+.ambient-night-mode span { display:flex; flex-direction:column; gap:3px; }
+.ambient-night-mode strong { font-size:13px; } .ambient-night-mode small { color:var(--fh-muted); font-size:11px; line-height:1.4; }
+.ambient-night-fields select { min-height:40px; padding:0 10px; border:1px solid var(--fh-line); border-radius:9px; background:var(--fh-bg); color:var(--fh-ink); font:inherit; }
+@media (max-width:640px) { .ambient-night-mode { grid-template-columns:1fr; } }
+.ambient-selected-location button { flex:0 0 auto; white-space:nowrap; }
+body.bb-on .fh-scope .ambient-night-mode label { flex-direction:row; align-items:flex-start; }

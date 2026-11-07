@@ -10,10 +10,8 @@
 export const TASK_PRIORITIES = ['Haute', 'Moyenne', 'Basse'] as const;
 export const TASK_FREQUENCIES = ['Une fois', 'Quotidien', 'Hebdomadaire', 'Mensuel', 'Trimestriel', 'Quadrimestriel', 'Annuel'] as const;
 export const SHOPPING_CATEGORIES = ['Alimentation', 'Bebe', 'Menage', 'Sante', 'Autre'] as const;
-export const BUDGET_CATEGORIES = [
-    'Logement', 'Alimentation', 'Transport', 'Santé', 'Loisirs',
-    'Abonnements', 'Assurance', 'Enfants', 'Maison', 'Autre',
-] as const;
+import { BUDGET_CATEGORIES } from '../../lib/budgetCategories';
+export { BUDGET_CATEGORIES };
 
 export interface FamilyMemberRef {
     id: string;
@@ -283,7 +281,7 @@ export function validateParsedItems(
                     type: 'budget_entry',
                     category: budgetCategories.includes(category)
                         ? category
-                        : (budgetCategories.includes('Autre') ? 'Autre' : budgetCategories[0]),
+                        : (budgetCategories.includes('general') ? 'general' : budgetCategories[0]),
                     amount,
                     description: description ?? title,
                     date: cleanDate(item.date) ?? localToday().iso,

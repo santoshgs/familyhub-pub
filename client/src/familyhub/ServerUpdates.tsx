@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Download, RefreshCw, RotateCw } from 'lucide-react';
+import { Download, Power, RefreshCw, RotateCw } from 'lucide-react';
 import { api } from '../lib/api';
+import { apiBase } from '../lib/serverConfig';
 import { FAMILYHUB_VERSION } from './version';
 
 type State = 'checked' | 'up-to-date' | 'installing' | 'updated' | 'failed' | 'check-failed';
@@ -71,5 +72,45 @@ export function ServerUpdates() {
         </ul>
         {note && <p role="status" className={`fh-credential-note ${status.state === 'failed' || status.state === 'check-failed' ? 'is-error' : installing ? '' : 'is-ok'}`}>{note}</p>}
         {pageIsOld && <p className="fh-credential-note">This page is {FAMILYHUB_VERSION}. <button className="fh-text-button" onClick={() => window.location.reload()}><RotateCw size={13} /> Reload to use {short(status.current)}</button></p>}
+    </section>;
+}
+
+/**
+ * Settings → Advanced → Restart (server administrator, v1.5.3). The server
+ * exits cleanly and Docker starts it again; this page waits for it to answer
+ * and then reloads. The database and the frame's pairing are unaffected.
+ */
+export function ServerRestart() {
+    const [phase, setPhase] = useState<'idle' | 'confirm' | 'restarting' | 'back' | 'slow'>('idle');
+    const [error, setError] = useState('');
+    const restart = async () => {
+        setError(''); setPhase('restarting');
+        try { await api.post('/api/familyhub/admin/restart', {}); }
+        catch (cause) { setPhase('idle'); setError(cause instanceof Error ? cause.message : 'The restart could not be requested.'); return; }
+        const started = Date.now();
+        let wentDown = false;
+        const poll = async () => {
+            let up = false;
+            // A request to the server that is shutting down can hang: give each check 3 s.
+            const controller = new AbortController();
+            const timer = window.setTimeout(() => controller.abort(), 3_000);
+            try { up = (await fetch(`${apiBase()}/health`, { cache: 'no-store', signal: controller.signal })).ok; } catch { up = false; }
+            finally { window.clearTimeout(timer); }
+            if (!up) wentDown = true;
+            // Back once it answers after going away (or after 20 s, if the restart was too quick to see).
+            if (up && (wentDown || Date.now() - started > 20_000)) { setPhase('back'); window.setTimeout(() => window.location.reload(), 1_200); return; }
+            if (Date.now() - started > 120_000) { setPhase('slow'); return; }
+            window.setTimeout(() => void poll(), 1_500);
+        };
+        window.setTimeout(() => void poll(), 1_500);
+    };
+    return <section className="fh-credentials fh-restart">
+        <header><div><h3><Power size={17} /> Restart Family Hub</h3><p>Restarts the Family Hub server on the Pi, which clears its caches (weather, news, Formula 1, markets). It takes about 10–30 seconds; frames reconnect by themselves and nothing is lost.</p></div>
+            {phase === 'idle' && <button className="fh-button fh-secondary" onClick={() => setPhase('confirm')}><RotateCw size={15} />Restart</button>}</header>
+        {phase === 'confirm' && <p className="fh-update-confirm"><button className="fh-button fh-primary" onClick={() => void restart()}>Restart now</button><button className="fh-button fh-secondary" onClick={() => setPhase('idle')}>Cancel</button></p>}
+        {phase === 'restarting' && <p role="status" className="fh-fine-print">Restarting… this page reloads when Family Hub is back.</p>}
+        {phase === 'back' && <p role="status" className="fh-fine-print">Family Hub is back. Reloading…</p>}
+        {phase === 'slow' && <p role="alert" className="fh-credentials-error">Family Hub has not answered for two minutes. Check the Pi (<code>release.py status</code>).</p>}
+        {error && <p role="alert" className="fh-credentials-error">{error}</p>}
     </section>;
 }

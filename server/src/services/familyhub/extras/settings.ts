@@ -1,5 +1,6 @@
 import { query } from '../../../db';
 import { decryptCredentials, encryptCredentials } from '../../../utils/crypto';
+import { DEFAULT_NEWS_FEEDS, MAX_NEWS_FEEDS, type NewsFeed } from '../news';
 
 /**
  * Settings for the v1.2 dashboard additions, one validated JSON document per
@@ -20,6 +21,7 @@ export interface DashboardExtrasSettings {
     countdown: { enabled: boolean; title: string; target: string; checklist: ChecklistItem[] };
     markets: { enabled: boolean; stocks: string[]; crypto: string[]; currency: MarketCurrency };
     photos: { enabled: boolean; intervalSeconds: number };
+    news: { feeds: NewsFeed[] };
 }
 
 export interface DashboardSecrets { wifiPassword?: string; finnhubKey?: string; coingeckoKey?: string }
@@ -38,6 +40,7 @@ export const DEFAULT_EXTRAS: DashboardExtrasSettings = {
     countdown: { enabled: false, title: '', target: '', checklist: [] },
     markets: { enabled: false, stocks: [], crypto: ['BTC', 'ETH'], currency: 'USD' },
     photos: { enabled: false, intervalSeconds: 12 },
+    news: { feeds: DEFAULT_NEWS_FEEDS.map((feed) => ({ ...feed })) },
 };
 
 export const LOCAL_DATETIME = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T([01]\d|2[0-3]):[0-5]\d$/;
@@ -169,6 +172,43 @@ export function parseExtrasSettings(input: unknown, base: DashboardExtrasSetting
             out.photos.intervalSeconds = seconds;
         }
     }
+    if (value.news !== undefined) {
+        if (!isRecord(value.news)) fail('Invalid news settings.');
+        const n = value.news as Record<string, unknown>;
+        if (n.feeds !== undefined) out.news.feeds = feedList(n.feeds);
+    }
+    return out;
+}
+
+/**
+ * News feeds: public https addresses only (the fetch itself also refuses
+ * private networks), at most MAX_NEWS_FEEDS, each with a short display name.
+ */
+export function feedList(value: unknown): NewsFeed[] {
+    if (!Array.isArray(value)) fail('Invalid news feeds.');
+    const feeds: NewsFeed[] = [];
+    for (const entry of value as unknown[]) {
+        const item = isRecord(entry) ? entry : { url: entry };
+        const url = feedUrl(item.url);
+        if (feeds.some((feed) => feed.url === url)) continue;
+        const name = cleanText(item.name, 40) || new URL(url).hostname.replace(/^(www|feeds?|rss)\./, '');
+        feeds.push({ url, name });
+    }
+    if (feeds.length > MAX_NEWS_FEEDS) fail(`Choose at most ${MAX_NEWS_FEEDS} news feeds.`);
+    return feeds;
+}
+
+export function feedUrl(value: unknown): string {
+    const text = typeof value === 'string' ? value.trim() : '';
+    let url: URL;
+    try { url = new URL(text); } catch { return fail('Enter a full feed address, starting with https://.'); }
+    if (url.protocol !== 'https:') fail('Feed addresses must start with https://.');
+    if (url.username || url.password) fail('A feed address cannot contain a user name or password.');
+    if (url.port && url.port !== '443') fail('Feed addresses use the standard https port.');
+    if (/^(localhost|.*\.local|.*\.internal|\d+\.\d+\.\d+\.\d+|\[.*\])$/i.test(url.hostname) || !url.hostname.includes('.')) fail('Use a public feed address.');
+    url.hash = '';
+    const out = url.toString();
+    if (out.length > 400) fail('That feed address is too long.');
     return out;
 }
 

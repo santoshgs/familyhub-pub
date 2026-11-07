@@ -1,0 +1,35 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-font",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/model-pick.html"
+        ],
+        "createdAt": "2026-11-06T05:23:31.442Z",
+        "reason": "Spent direction-round sketch of an unchosen world (decision page); its font belongs to that alternative, not to Board Book"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/challenger-airport.html"
+        ],
+        "createdAt": "2026-11-06T05:23:31.476Z",
+        "reason": "Spent direction-round sketch of an unchosen world (decision page); its font belongs to that alternative, not to Board Book"
+      },
+      {
+        "rule": "design-system-font",
+        "value": "*",
+        "files": [
+          ".impeccable/mocks/decision/canon.html"
+        ],
+        "createdAt": "2026-11-06T05:23:31.511Z",
+        "reason": "Spent direction-round sketch of an unchosen world (decision page); its font belongs to that alternative, not to Board Book"
+      }
+    ]
+  }
+}

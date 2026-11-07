@@ -27,8 +27,7 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res) => {
         const result = await query(
             `SELECT id, email, name, role, currency, language, week_start_day, avatar_url,
                     (family_owner_id IS NULL) AS is_owner,
-                    (password_hash IS NOT NULL) AS has_password,
-                    EXISTS (SELECT 1 FROM user_identities WHERE user_id = users.id) AS sso_linked
+                    (password_hash IS NOT NULL) AS has_password
              FROM users WHERE id = $1`,
             [req.actualUserId]
         );
@@ -66,9 +65,8 @@ router.get('/config', (_req, res) => {
             passwordLogin: config.passwordLogin,
             passwordSignup: config.passwordSignup,
             passwordReset: passwordResetEnabled(),
-            oidc: config.oidc
-                ? { enabled: true, name: config.oidc.providerName, signup: config.oidcSignup }
-                : { enabled: false, name: null, signup: false },
+            // Kept for app versions cached before single sign-on was removed.
+            oidc: { enabled: false, name: null, signup: false },
         },
     });
 });

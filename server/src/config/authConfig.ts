@@ -1,40 +1,22 @@
-import { stripTrailingSlashes } from '../lib/asyncRoutes';
 import { loadEnv } from './loadEnv';
 import { isMailEnabled } from '../lib/mailer';
 import logger from '../lib/logger';
 
 /**
  * How people may sign in and create accounts on this server, decided once from
- * the environment and read through getAuthConfig() everywhere else:
+ * the environment and read through getAuthConfig() everywhere else.
  *
- *   PASSWORD_LOGIN_ENABLED     email + password sign-in (and password reset)
- *   REGISTRATION_ENABLED       creating an account with a password, without an invite
- *   OIDC_REGISTRATION_ENABLED  creating an account through SSO, without an invite
- *                              (follows REGISTRATION_ENABLED when unset)
+ * Family Hub signs in with email and password only: single sign-on (OpenID
+ * Connect) was removed in v1.4.2, so PASSWORD_LOGIN_ENABLED=false and the
+ * OIDC_* settings are ignored and password sign-in can never be switched off.
  *
- * Invitations bypass both sign-up switches, as they always have, but never a
- * sign-in method that is turned off. Password login cannot be turned off unless
- * SSO is fully configured, so a server can never lock everyone out.
+ *   REGISTRATION_ENABLED   creating an account with a password, without an invite
+ *
+ * Invitations bypass the sign-up switch, as they always have.
  */
-
-export interface OidcSettings {
-    issuerUrl: string;
-    clientId: string;
-    clientSecret: string;
-    /** Where the app is served (APP_PUBLIC_URL), where the callback sends the browser back to. */
-    appUrl: string;
-    redirectUri: string;
-    providerName: string;
-    scopes: string;
-    allowInsecureHttp: boolean;
-}
-
 export interface AuthConfig {
-    passwordLogin: boolean;
+    passwordLogin: true;
     passwordSignup: boolean;
-    oidcSignup: boolean;
-    /** Null when SSO is not configured. */
-    oidc: OidcSettings | null;
 }
 
 const flag = (value: string | undefined, fallback: boolean): boolean => {
@@ -44,77 +26,17 @@ const flag = (value: string | undefined, fallback: boolean): boolean => {
     return fallback;
 };
 
-const trimmed = (value: string | undefined): string => value?.trim() ?? '';
-
-const readOidcSettings = (): OidcSettings | null => {
-    const issuerUrl = trimmed(process.env.OIDC_ISSUER_URL);
-    const clientId = trimmed(process.env.OIDC_CLIENT_ID);
-    const clientSecret = trimmed(process.env.OIDC_CLIENT_SECRET);
-
-    if (!issuerUrl && !clientId && !clientSecret) {
-        return null;
-    }
-    const missing = [
-        !issuerUrl && 'OIDC_ISSUER_URL',
-        !clientId && 'OIDC_CLIENT_ID',
-        !clientSecret && 'OIDC_CLIENT_SECRET',
-    ].filter(Boolean);
-    if (missing.length > 0) {
-        logger.error('auth.oidc_disabled', { reason: `missing ${missing.join(', ')}` });
-        return null;
-    }
-
-    // The provider redirects to the API and the API then sends the browser to
-    // the app, so both public addresses must be known. They are never guessed
-    // from the request's Host header, nor from each other: the API may be
-    // served from another host than the app (VITE_API_URL).
-    const publicUrl = stripTrailingSlashes(trimmed(process.env.APP_PUBLIC_URL));
-    if (!publicUrl) {
-        logger.error('auth.oidc_disabled', { reason: 'set APP_PUBLIC_URL' });
-        return null;
-    }
-    const redirectUri = trimmed(process.env.OIDC_REDIRECT_URI) || `${publicUrl}/api/auth/oidc/callback`;
-
-    return {
-        issuerUrl,
-        clientId,
-        clientSecret,
-        appUrl: publicUrl,
-        redirectUri,
-        providerName: trimmed(process.env.OIDC_PROVIDER_NAME) || 'SSO',
-        scopes: trimmed(process.env.OIDC_SCOPES) || 'openid email profile',
-        allowInsecureHttp: flag(process.env.OIDC_ALLOW_INSECURE_HTTP, false),
-    };
-};
-
 const computeAuthConfig = (): AuthConfig => {
     loadEnv();
-    const oidc = readOidcSettings();
-
-    let passwordLogin = flag(process.env.PASSWORD_LOGIN_ENABLED, true);
-    if (!passwordLogin && !oidc) {
-        logger.warn('auth.password_login_forced_on', {
-            reason: 'PASSWORD_LOGIN_ENABLED=false ignored: single sign-on is not configured',
-        });
-        passwordLogin = true;
+    if (flag(process.env.PASSWORD_LOGIN_ENABLED, true) === false) {
+        logger.warn('auth.password_login_forced_on', { reason: 'PASSWORD_LOGIN_ENABLED=false ignored: Family Hub signs in with passwords only' });
     }
-
-    const registration = flag(process.env.REGISTRATION_ENABLED, true);
-    const config: AuthConfig = {
-        passwordLogin,
-        passwordSignup: passwordLogin && registration,
-        oidcSignup: Boolean(oidc) && flag(process.env.OIDC_REGISTRATION_ENABLED, registration),
-        oidc,
-    };
-
+    if (['OIDC_ISSUER_URL', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET'].some((name) => process.env[name]?.trim())) {
+        logger.info('auth.oidc_ignored', { reason: 'single sign-on was removed in v1.4.2; the OIDC_* settings can be deleted' });
+    }
+    const config: AuthConfig = { passwordLogin: true, passwordSignup: flag(process.env.REGISTRATION_ENABLED, true) };
     // The logger masks any field whose name mentions a password, hence these names.
-    logger.info('auth.config', {
-        localLogin: config.passwordLogin,
-        localSignup: config.passwordSignup,
-        oidc: Boolean(oidc),
-        issuer: oidc?.issuerUrl,
-        oidcSignup: config.oidcSignup,
-    });
+    logger.info('auth.config', { localLogin: true, localSignup: config.passwordSignup });
     return config;
 };
 

@@ -121,23 +121,20 @@ const startServer = async () => {
     }
 };
 
-// Handle graceful shutdown
-process.on('SIGTERM', () => {
-    logger.info('server.sigterm_received');
+// Graceful shutdown. Open WebSockets (frames, open tabs) and keep-alive
+// connections would otherwise hold server.close() open for a minute or more,
+// so idle connections are closed at once and the process exits after 5 seconds
+// at the latest (Docker's restart policy then starts it again).
+const shutdown = (signal: string) => {
+    logger.info(`server.${signal.toLowerCase()}_received`);
+    setTimeout(() => { logger.warn('server.forced_exit'); process.exit(0); }, 5_000).unref();
     server.close(() => {
         logger.info('server.closed');
-        pool.end();
-        process.exit(0);
+        void pool.end().finally(() => process.exit(0));
     });
-});
-
-process.on('SIGINT', () => {
-    logger.info('server.sigint_received');
-    server.close(() => {
-        logger.info('server.closed');
-        pool.end();
-        process.exit(0);
-    });
-});
+    server.closeIdleConnections?.();
+};
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 startServer();

@@ -20,7 +20,7 @@ If the Pi itself can open the HTTPS endpoint but the phone cannot, that does not
 | --- | --- |
 | Sample dashboard marked "Placeholder · offline" | The kiosk has no saved URL: `deploy/familyhub/frame/frame.sh url https://frame.example.com/display` |
 | "Can't reach the dashboard" | Check the Pi (`systemctl status caddy`), Wi-Fi, and that `frame.example.com` resolves to the Pi's LAN address |
-| Pairing screen instead of the dashboard | The frame was removed, idle over a week, or exited: pair it again from Display setup |
+| Pairing screen instead of the dashboard | The frame was removed, idle over a week, or exited: pair it again from Settings → Display |
 | "Use … as Home" prompt | Choose Home HQ → Always |
 | Frameo covers the dashboard after a restart | `frame.sh frameo-settings` → Disable, then `frame.sh home` |
 
@@ -36,6 +36,21 @@ More in [the photo frame](16-photo-frame.md) and the [frame runbook](../docs/fam
 | Wi-Fi password or API key "disappeared" | Secrets are write-only: the page shows only whether one is set; leave the field blank to keep it |
 | Photos rejected | One image per upload, up to 25 MB, up to 200 per household |
 
+## Formula 1 card says "temporarily unavailable"
+
+Since v1.5.3 the card keeps the last good race calendar when one refresh of the Jolpica schedule fails, so it should not go blank after a single failure. The server retries in five minutes and logs `familyhub.f1_schedule_failed` with the reason. On November 6, 2026 the card showed the message while Jolpica and the server's own fetch and parser worked by hand; it then recovered without a fix. If it persists, check the log and the source from inside the server container (service name `server` in `deploy/familyhub/compose.yml`; use the Jolpica URL in `server/src/services/familyhub/ambient.ts`):
+
+```sh
+docker compose --env-file <deployment env file> -f deploy/familyhub/compose.yml logs --tail 200 server | grep f1_schedule_failed
+docker compose --env-file <deployment env file> -f deploy/familyhub/compose.yml exec server node -e "fetch(process.argv[1]).then(r => console.log(r.status))" <jolpica-url>
+```
+
+If the message stays after a restart, check the Pi's internet access and the logged reason.
+
+## Restarting the server
+
+If the app seems stuck, use **Settings → Advanced → Restart Family Hub** (server administrator; v1.5.3). The page waits and reloads. On the Pi, `sudo python3 /opt/familyhub/release.py restart --state-dir /opt/familyhub/state --env-file /opt/familyhub/private.env` does the same (the arguments follow the other `release.py` commands in [releases](09-releases-updates.md)). Docker's `unless-stopped` policy brings the server back; the database and gateway keep running.
+
 ## A module opens Settings or answers 403
 
 Since v1.0 a module that a parent has switched off is closed on the server (403 `MODULE_DISABLED`) and its page redirects to Settings. A parent turns it back on with **Enabled** in **Settings → Modules**; the records were kept. If it is on but missing from your own menu, tick **Show**.
@@ -48,9 +63,13 @@ Joining a family by invitation or request now ends the account's older sessions,
 
 Only the server administrator sees and can use it (`FAMILYHUB_ADMIN_EMAIL`, otherwise the first account created). It also needs the updated `release.py`, `familyhub-update.service` (then `systemctl daemon-reload`) and `apply-credentials.sh` on the Pi, which a normal release does not install by itself; see [releases](09-releases-updates.md). The Pi still decides the version; if an install fails the previous release is restored and the failure is not retried automatically.
 
-## Google sign-in or ntfy does not work
+## Clicking the calendar or to-dos used to sign me out
 
-Both are built into v1.0 but off until set up on the Pi: `google-signin.sh enable` (after adding the redirect address in Google Cloud; see [GOOGLE_SIGNIN](../docs/familyhub/GOOGLE_SIGNIN.md)) and `sudo bash setup-ntfy.sh`. As of November 5, 2026 neither has been verified working on the household Pi, and password sign-in is unaffected. Run `google-signin.sh status` to see where Google sign-in stands.
+Before v1.4.2, when the Google connection needed re-authorizing the server answered with the same status as an expired sign-in, and the app signed out. Since v1.4.2 the Home page says that Google needs reconnecting and offers **Reconnect Google**; your sign-in is unaffected. A Google Cloud project left in **Testing** expires the authorization after 7 days; publishing the OAuth app (an unverified personal app is fine) stops that.
+
+## ntfy alerts do not arrive
+
+ntfy is off until `sudo bash setup-ntfy.sh` is run on the Pi (it needs `notify.sh` beside it, installed in `/opt/familyhub/`). Then subscribe to the printed topic in the ntfy app.
 
 ## A browser is stuck on the display
 

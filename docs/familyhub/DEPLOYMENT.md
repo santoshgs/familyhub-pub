@@ -25,6 +25,7 @@ installs new `familyhub-v*` releases with a protected pre-update backup.
 | SSH | Port 22 from the home network and over Tailscale. |
 | Admin helpers (v1.1, v1.2) | Reinstall after v1.1.0 and again after v1.2.0 (the local `.familyhub-local/pi/install-admin.sh` is not committed; the file and unit list is in [`deploy/familyhub/admin`](../../deploy/familyhub/admin/README.md), including `notify.sh`, `daemon-reload` and enabling the units). Since v1.1 the applier keeps its results in the root-only `/opt/familyhub/admin-state` (created on first run, 0700) and never follows paths in the exchange directory. Server credentials belong to `FAMILYHUB_ADMIN_EMAIL` in `/opt/familyhub/private.env` when set, otherwise the first account created. |
 | Software updates and alerts (v1.2) | Settings → Advanced → Software updates (server administrator) asks the Pi to check for or install a release now, through the admin exchange; it needs the updated `release.py`, `familyhub-update.service` and `apply-credentials.sh`. The updater still chooses the version, backs up and rolls back. ntfy alerts need `setup-ntfy.sh`, which has not been run on the household Pi. |
+| Restart (v1.5.3) | Settings → Advanced → **Restart Family Hub** (server administrator) calls `POST /api/familyhub/admin/restart`. The server exits cleanly within five seconds (bounded even with frames' WebSockets open) and Docker's `unless-stopped` policy starts it again; the database, client and gateway keep running. The page waits for `/health` and reloads. `release.py restart` on the Pi does the same from the shell. Not yet tried on the household Pi. |
 | Admin rights | The `pi` account has no passwordless sudo or Docker socket access. Host changes are scripts the owner runs with the Pi password; nothing runs unattended with sudo. |
 
 The earlier approach (a Pi-hosted DNS resolver plus a bootstrap Caddy config
@@ -87,6 +88,14 @@ keyboard/zoom, safe areas, portrait/landscape, home-screen launch, and protected
 display permissions. After loading the updated worker, confirm offline household
 requests fail rather than show a prior account's cached data. Test sign-out and
 account switching. Browser viewport simulation cannot substitute for this.
+
+## Restart and shutdown
+
+Restarting from Settings only restarts the server process; it is not a host reboot
+and does not run an update. Shutdown is bounded: idle connections close at once, and
+the process exits within five seconds even with display WebSockets open (before
+v1.5.3 it could wait a minute or more). A restart does not change the database or
+uploads.
 
 ## Recovery and operation
 

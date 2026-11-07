@@ -12,6 +12,12 @@ import {
     formatDateOnly,
     expandRecurringTransactions,
 } from '../lib/budgetRecurrence';
+import { isBudgetCategory } from '../lib/budgetCategories';
+import {
+    SharingError, readGroupBody, readSettlementBody, readSharingFields, saveDefaultSharers, sharingSummary,
+    type SharingFields,
+} from '../services/budgetSharing';
+import { importBudgetItems } from '../services/budgetImport';
 
 const router = Router();
 router.use(authMiddleware);
@@ -280,6 +286,105 @@ const syncRecurringTransactionCalendar = async (
     });
 };
 
+
+// ─── Shared expenses (Family Hub v1.5) ─────────────────────────────────────────
+
+const SHARING_TOUCHED = (body: any) => ['paid_by', 'split_with', 'group_id'].some((key) => body?.[key] !== undefined);
+const sharingError = (res: any, error: unknown) => {
+    if (error instanceof SharingError) { res.status(400).json({ success: false, error: error.message }); return true; }
+    return false;
+};
+/** Validates a new category: one of the fixed keys, or the row's current (legacy) value. */
+const categoryError = (category: unknown, current?: string) =>
+    category === undefined || category === null || category === '' || isBudgetCategory(category) || category === current
+        ? null : 'Choose one of the budget categories.';
+const applySharing = async (table: 'budget_entries' | 'recurring_expenses', id: string, userId: string, fields: SharingFields) => {
+    await query(`UPDATE ${table} SET paid_by = $1, split_with = $2::jsonb, group_id = $3 WHERE id = $4 AND user_id = $5`,
+        [fields.paid_by, JSON.stringify(fields.split_with), fields.group_id, id, userId]);
+};
+const asIdList = (value: unknown): string[] => Array.isArray(value) ? value.map(String) : [];
+const currentSharing = (row: any): SharingFields => ({ paid_by: row?.paid_by ?? null, split_with: asIdList(row?.split_with), group_id: row?.group_id ?? null });
+
+// GET /api/budget/sharing?month=YYYY-MM&group=all|none|<group id>
+router.get('/sharing', async (req: AuthRequest, res) => {
+    const month = typeof req.query.month === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(req.query.month) ? req.query.month : new Date().toISOString().slice(0, 7);
+    const group = typeof req.query.group === 'string' && (req.query.group === 'all' || req.query.group === 'none' || /^[0-9a-f-]{36}$/i.test(req.query.group)) ? req.query.group : 'all';
+    try {
+        res.set('Cache-Control', 'no-store').json({ success: true, data: await sharingSummary(req.userId!, month, group) });
+    } catch (error) {
+        console.error('Budget sharing summary error:', error);
+        res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
+
+router.put('/sharing/settings', requireParent, async (req: AuthRequest, res) => {
+    try { res.json({ success: true, data: { defaultSharers: await saveDefaultSharers(req.userId!, req.body?.defaultSharers) } }); }
+    catch (error) { if (!sharingError(res, error)) res.status(500).json({ success: false, error: 'Internal server error' }); }
+});
+
+router.post('/groups', requireParent, async (req: AuthRequest, res) => {
+    try {
+        const group = await readGroupBody(req.userId!, req.body);
+        const count = await query('SELECT count(*)::int AS n FROM budget_groups WHERE user_id = $1', [req.userId]);
+        if (count.rows[0].n >= 50) return res.status(400).json({ success: false, error: 'At most 50 expense groups.' });
+        const row = await query('INSERT INTO budget_groups (user_id, name, members) VALUES ($1, $2, $3::jsonb) RETURNING id, name, members, archived',
+            [req.userId, group.name, JSON.stringify(group.members)]);
+        broadcast(req.userId!, { type: 'update', entity: 'budget', action: 'created' });
+        res.json({ success: true, data: row.rows[0] });
+    } catch (error) { if (!sharingError(res, error)) res.status(500).json({ success: false, error: 'Internal server error' }); }
+});
+
+router.put('/groups/:id', requireParent, async (req: AuthRequest, res) => {
+    try {
+        if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return res.status(404).json({ success: false, error: 'Group not found' });
+        const group = await readGroupBody(req.userId!, req.body);
+        const row = await query('UPDATE budget_groups SET name = $1, members = $2::jsonb, archived = $3 WHERE id = $4 AND user_id = $5 RETURNING id, name, members, archived',
+            [group.name, JSON.stringify(group.members), group.archived, req.params.id, req.userId]);
+        if (!row.rows.length) return res.status(404).json({ success: false, error: 'Group not found' });
+        broadcast(req.userId!, { type: 'update', entity: 'budget', action: 'updated' });
+        res.json({ success: true, data: row.rows[0] });
+    } catch (error) { if (!sharingError(res, error)) res.status(500).json({ success: false, error: 'Internal server error' }); }
+});
+
+// Deleting a group keeps its expenses (they become ungrouped) and drops its settle-up payments.
+router.delete('/groups/:id', requireParent, async (req: AuthRequest, res) => {
+    if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return res.status(404).json({ success: false, error: 'Group not found' });
+    const row = await query('DELETE FROM budget_groups WHERE id = $1 AND user_id = $2 RETURNING id', [req.params.id, req.userId]);
+    if (!row.rows.length) return res.status(404).json({ success: false, error: 'Group not found' });
+    broadcast(req.userId!, { type: 'update', entity: 'budget', action: 'deleted' });
+    res.json({ success: true });
+});
+
+router.post('/settlements', requireParent, async (req: AuthRequest, res) => {
+    try {
+        const payment = await readSettlementBody(req.userId!, req.body);
+        const row = await query(`INSERT INTO budget_settlements (user_id, group_id, from_member, to_member, amount, date, note)
+            VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`, [req.userId, payment.groupId, payment.from, payment.to, payment.amount, payment.date, payment.note]);
+        broadcast(req.userId!, { type: 'update', entity: 'budget', action: 'created' });
+        res.json({ success: true, data: { id: row.rows[0].id, ...payment } });
+    } catch (error) { if (!sharingError(res, error)) res.status(500).json({ success: false, error: 'Internal server error' }); }
+});
+
+// Bulk import (Budget → Import from Splitwise), at most 1000 items per request.
+router.post('/import', requireParent, async (req: AuthRequest, res) => {
+    try {
+        const data = await importBudgetItems(req.userId!, req.body);
+        if (data.expenses || data.settlements) broadcast(req.userId!, { type: 'update', entity: 'budget', action: 'created' });
+        res.json({ success: true, data });
+    } catch (error) {
+        if (sharingError(res, error)) return;
+        console.error('Budget import error:', error);
+        res.status(500).json({ success: false, error: 'Internal server error' });
+    }
+});
+router.delete('/settlements/:id', requireParent, async (req: AuthRequest, res) => {
+    if (!/^[0-9a-f-]{36}$/i.test(req.params.id)) return res.status(404).json({ success: false, error: 'Payment not found' });
+    const row = await query('DELETE FROM budget_settlements WHERE id = $1 AND user_id = $2 RETURNING id', [req.params.id, req.userId]);
+    if (!row.rows.length) return res.status(404).json({ success: false, error: 'Payment not found' });
+    broadcast(req.userId!, { type: 'update', entity: 'budget', action: 'deleted' });
+    res.json({ success: true });
+});
+
 // Get budget entries
 router.get('/entries', async (req: AuthRequest, res) => {
     try {
@@ -350,12 +455,19 @@ router.post('/entries', requireParent, async (req: AuthRequest, res) => {
         if (assignedTo && !(await ensureMemberBelongsToUser(assignedTo, req.userId!))) {
             return res.status(400).json({ success: false, error: 'Member not found' });
         }
+        const badCategory = categoryError(category);
+        if (badCategory) return res.status(400).json({ success: false, error: badCategory });
+        let sharing: SharingFields;
+        try { sharing = await readSharingFields(req.body, req.userId!); }
+        catch (error) { if (sharingError(res, error)) return; throw error; }
 
         const result = await query(
             `INSERT INTO budget_entries (user_id, category, amount, description, date, is_expense, assigned_to)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
             [req.userId, category, parsedAmount, toNullIfEmpty(description), date, Boolean(is_expense), assignedTo]
         );
+
+        if (SHARING_TOUCHED(req.body)) await applySharing('budget_entries', result.rows[0].id, req.userId!, sharing);
 
         await syncBudgetEntryCalendar(
             req.userId!,
@@ -403,6 +515,13 @@ router.put('/entries/:id', requireParent, async (req: AuthRequest, res) => {
         if (assignedToValue && !(await ensureMemberBelongsToUser(assignedToValue, req.userId!))) {
             return res.status(400).json({ success: false, error: 'Member not found' });
         }
+        const before = await query('SELECT category, paid_by, split_with, group_id FROM budget_entries WHERE id = $1 AND user_id = $2', [id, req.userId]);
+        if (!before.rows.length) return res.status(404).json({ success: false, error: 'Budget entry not found' });
+        const badCategory = categoryError(category, before.rows[0].category);
+        if (badCategory) return res.status(400).json({ success: false, error: badCategory });
+        let sharing: SharingFields;
+        try { sharing = await readSharingFields(req.body, req.userId!, currentSharing(before.rows[0])); }
+        catch (error) { if (sharingError(res, error)) return; throw error; }
 
         const result = await query(
             `UPDATE budget_entries
@@ -428,6 +547,8 @@ router.put('/entries/:id', requireParent, async (req: AuthRequest, res) => {
         if (result.rows.length === 0) {
             return res.status(404).json({ success: false, error: 'Budget entry not found' });
         }
+
+        if (SHARING_TOUCHED(req.body)) await applySharing('budget_entries', String(id), req.userId!, sharing);
 
         await syncBudgetEntryCalendar(
             req.userId!,
@@ -616,7 +737,7 @@ router.get('/statistics', async (req: AuthRequest, res) => {
             const amount = toNumber(occurrence.amount);
             if (occurrence.is_expense) {
                 recurringExpenses += amount;
-                const category = String(occurrence.category || 'Autre');
+                const category = String(occurrence.category || 'general');
                 categoryTotals.set(category, (categoryTotals.get(category) || 0) + amount);
             } else {
                 recurringIncome += amount;
@@ -813,7 +934,7 @@ router.post(
             const category =
                 typeof req.body.category === 'string' && req.body.category.trim()
                     ? req.body.category.trim()
-                    : existingCategory || 'Autre';
+                    : existingCategory || 'general';
 
             const isExpense =
                 req.body.is_expense !== undefined
@@ -1127,6 +1248,12 @@ router.post('/recurring', requireParent, async (req: AuthRequest, res) => {
             });
         }
 
+        const badRecurringCategory = categoryError(category);
+        if (badRecurringCategory) return res.status(400).json({ success: false, error: badRecurringCategory });
+        let recurringSharing: SharingFields;
+        try { recurringSharing = await readSharingFields(req.body, req.userId!); }
+        catch (error) { if (sharingError(res, error)) return; throw error; }
+
         const result = await query(
             `INSERT INTO recurring_expenses (
                 user_id,
@@ -1146,7 +1273,7 @@ router.post('/recurring', requireParent, async (req: AuthRequest, res) => {
                 req.userId,
                 label,
                 parsedAmount,
-                category || 'Maison',
+                category || 'general',
                 startDate.getUTCDate(),
                 startDateValue,
                 frequency,
@@ -1155,6 +1282,11 @@ router.post('/recurring', requireParent, async (req: AuthRequest, res) => {
                 is_expense === undefined ? true : Boolean(is_expense),
             ]
         );
+
+        if (SHARING_TOUCHED(req.body)) {
+            await applySharing('recurring_expenses', result.rows[0].id, req.userId!, recurringSharing);
+            Object.assign(result.rows[0], { paid_by: recurringSharing.paid_by, split_with: recurringSharing.split_with, group_id: recurringSharing.group_id });
+        }
 
         await syncRecurringTransactionCalendar(
             req.userId!,
@@ -1193,6 +1325,11 @@ router.put('/recurring/:id', requireParent, async (req: AuthRequest, res) => {
 
         const label = req.body.label ?? existing.label;
         const category = req.body.category ?? existing.category;
+        const badRecurringCategory = categoryError(req.body.category, existingResult.rows[0].category);
+        if (badRecurringCategory) return res.status(400).json({ success: false, error: badRecurringCategory });
+        let recurringSharing: SharingFields;
+        try { recurringSharing = await readSharingFields(req.body, req.userId!, currentSharing(existingResult.rows[0])); }
+        catch (error) { if (sharingError(res, error)) return; throw error; }
         const amount = req.body.amount !== undefined
             ? toOptionalNumber(req.body.amount)
             : existing.amount;
@@ -1265,6 +1402,11 @@ router.put('/recurring/:id', requireParent, async (req: AuthRequest, res) => {
                 req.userId,
             ]
         );
+
+        if (SHARING_TOUCHED(req.body) && result.rows[0]) {
+            await applySharing('recurring_expenses', String(id), req.userId!, recurringSharing);
+            Object.assign(result.rows[0], { paid_by: recurringSharing.paid_by, split_with: recurringSharing.split_with, group_id: recurringSharing.group_id });
+        }
 
         await syncRecurringTransactionCalendar(
             req.userId!,

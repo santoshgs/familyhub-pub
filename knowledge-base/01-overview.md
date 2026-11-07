@@ -23,7 +23,7 @@ Google's account is separate from the Family Hub sign-in. Use the dedicated fami
 
 - Raspberry Pi 4, 4 GB RAM, Raspberry Pi OS Lite 64-bit based on Debian 13; the card reported approximately 128 GB, not the earlier 256 GB estimate.
 - Docker runs PostgreSQL, the Express server and the web client. The web client listens on the Pi's loopback interface and Tailscale Serve provides private HTTPS.
-- Releases `familyhub-v0.1.0` through `v1.2.0` have been installed on the Pi; on November 5, 2026 the owner confirmed that v1.1.0's image digests matched its release manifest, and that v1.2.0 is running and Settings → Advanced → Software updates reports up to date. See [releases](09-releases-updates.md).
+- Releases `familyhub-v0.1.0` through `v1.2.0` have been installed on the Pi; on November 5, 2026 the owner confirmed that v1.1.0's image digests matched its release manifest, and that v1.2.0 is running and Settings → Advanced → Software updates reports up to date. v1.5.1 was confirmed on the Pi on November 6; v1.5.2 and v1.5.3 were released that day, and their installation on the Pi is not yet confirmed in writing. See [releases](09-releases-updates.md).
 - A Frameo photo frame shows the read-only display over the home network through a display-only listener on the Pi. See [the photo frame](16-photo-frame.md).
 - The Pi's GitHub tokens are set to never expire and its frame certificate renews itself; a daily check and Settings → Advanced show what is due. See [renewals](17-renewals-and-credentials.md).
 - The owner confirmed the Pi-hosted page opened in Safari and that Calendar and To-Dos were visible. Visibility is not proof that every mutation, timezone edge case, or reconnection has been tested.
@@ -40,5 +40,6 @@ Google's account is separate from the Family Hub sign-in. Use the dedicated fami
 7. Added a `develop` branch, patched dependency advisories and removed the Android app and other unused OpenFamily parts (v0.3.6 and v0.3.7, November 4).
 8. Became its own fork (v1.0.0, November 4): removed unused modules and languages, enforced module switches on the server, and added optional sign in with Google and ntfy alerts.
 9. Ran a Claude Security scan and fixed its 33 verified findings (v1.1.0, November 5), then added the dashboard quick bar, richer panels, Settings → Display and Software updates (v1.2.0, November 5).
+10. Added the Board Book trial look behind a per-browser switch (v1.4.0, November 6), shared budget expenses with settle up and groups, and editing and deleting Google Calendar events (v1.5.0), Splitwise import (v1.5.1), a frame display layout chooser and per-account menu order (v1.5.2), and Restart Family Hub from Settings (v1.5.3). v1.5.0 to v1.5.3 were released on November 6.
 
 See [project history and verification](14-history-and-verification.md) for the evidence and remaining gaps. Older roadmap and product files contain historical checkpoints and should not be read as a current deployment status.

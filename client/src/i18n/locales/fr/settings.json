@@ -122,19 +122,42 @@
   },
   "signIn": {
     "title": "Connexion",
-    "subtitle": "Comment vous vous connectez à Family Hub, sur cet appareil et les autres.",
-    "ssoLinked": "Votre compte est lié à {{name}}.",
-    "ssoNotLinked": "Liez votre compte {{name}} pour vous connecter avec.",
-    "link": "Lier {{name}}",
-    "unlink": "Délier",
-    "confirmUnlink": "Délier {{name}} ? Vous vous connecterez avec votre mot de passe, et vos autres appareils seront déconnectés.",
-    "unlinkNeedsPassword": "Votre compte n'a pas encore de mot de passe. Définissez-en un avec « Mot de passe oublié ? » sur la page de connexion pour pouvoir délier.",
-    "unlinkPasswordOff": "La connexion par mot de passe est désactivée sur ce serveur : la connexion unique ne peut pas être déliée.",
-    "relinkNote": "Une fois le lien supprimé, la connexion avec {{name}} n'ouvre plus ce compte. Vous pourrez le lier à nouveau ici.",
-    "linked": "La connexion unique est maintenant liée.",
-    "unlinked": "La connexion unique est déliée. Vos autres appareils ont été déconnectés.",
+    "subtitle": "Déconnectez cet appareil ou tous vos appareils. Family Hub se connecte avec votre adresse e-mail et votre mot de passe.",
+    "logout": "Se déconnecter",
+    "logoutDesc": "Se déconnecter de cet appareil. Vos autres appareils restent connectés.",
     "logoutEverywhere": "Se déconnecter de tous les appareils",
     "logoutEverywhereDesc": "Téléphone perdu, ou connexion sur un ordinateur partagé ? Ceci vous déconnecte partout, y compris ici.",
     "confirmLogoutEverywhere": "Se déconnecter de tous les appareils, y compris celui-ci ?"
+  },
+  "groups": {
+    "you": {
+      "title": "Vous",
+      "summary": "Nom, ordre du menu, langue, notifications, connexion",
+      "intro": "Ne concerne que votre compte et cet appareil."
+    },
+    "household": {
+      "title": "Foyer",
+      "summary": "Membres, modules, assistant IA",
+      "intro": "Ces réglages s’appliquent à toute la famille.",
+      "members": "Gérer les membres de la famille",
+      "membersTitle": "Membres de la famille",
+      "membersHelp": "Les parents gèrent les réglages et approuvent les tâches.",
+      "invite": "Inviter ou gérer"
+    },
+    "display": {
+      "title": "Écran",
+      "summary": "Disposition, météo, mode nuit, cadres, photos",
+      "intro": "Ce qu’affiche le cadre de la cuisine. Le cadre reste en lecture seule."
+    },
+    "data": {
+      "title": "Données",
+      "summary": "Exporter et importer",
+      "intro": "JSON portable. Les mots de passe et secrets ne sont jamais inclus."
+    },
+    "advanced": {
+      "title": "Avancé",
+      "summary": "Identifiants du serveur, mises à jour",
+      "intro": "Administrateur du serveur uniquement."
+    }
   }
 }

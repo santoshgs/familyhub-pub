@@ -13,7 +13,6 @@ credentials** in FamilyHub, plus a daily expiry check.
 | `notify.sh` | `/opt/familyhub/notify.sh` | Sends one ntfy push. Best effort, never fails its caller, keeps any access token off the command line. |
 | `setup-ntfy.sh` | run once with sudo | Creates `/etc/familyhub-notify.env` (0600) with a long random topic and optional token, installs `notify.sh`, sends a test push. |
 | `../release.py`, `../familyhub-update.service` | `/opt/familyhub/release.py`, `/etc/systemd/system/` | The updater. Writes a secret-free `update-status.json` (running, previous and newest release, last check, result) and, with `--publish-dir`, copies it into the exchange for Settings → Advanced → Software updates. |
-| `google-signin.sh` | run with sudo | `enable`, `google-only`, `passwords-on`, `disable`, `status` for sign in with Google. See [GOOGLE_SIGNIN](../../../docs/familyhub/GOOGLE_SIGNIN.md). |
 | `remove-account.sh` | run with sudo | Removes one account by email (for example a review or test login): reports what would go, refuses an account other accounts have joined as their family, backs up the database, asks you to retype the address. See below. |
 
 Install or update from the Mac with `.familyhub-local/pi/install-admin.sh` (it

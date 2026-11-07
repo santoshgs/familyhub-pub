@@ -3,7 +3,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { isClientInputDbError, stripTrailingSlashes } from '../src/lib/asyncRoutes';
 import { parseIcs } from '../src/lib/icsCalendar';
-import { app, configure, createInvite, me, query, registerWithPassword, resetState, sso, startSuite, stopSuite } from './helpers';
+import { app, configure, createInvite, me, query, registerWithPassword, resetState, startSuite, stopSuite } from './helpers';
 
 // Regression tests for the November 2026 security scan (v1.1.0). Finding ids
 // (F1, F44…) refer to CLAUDE-SECURITY-20261104-174215.
@@ -134,19 +134,13 @@ describe('G2: privilege boundaries', () => {
         }
     });
 
-    it('F2: a photo-frame session cannot link a sign-in identity', async () => {
-        configure({ REGISTRATION_ENABLED: 'true' });
+    it('F2: single sign-on is gone, so no session (frame or full) can link an identity', async () => {
         const owner = await registerWithPassword('owner@example.org');
         const frame = (await request(app).post('/api/familyhub/ambient/display-session').set(auth(owner.token)).send({})).body.data.token as string;
-        const started = await request(app).post('/api/auth/oidc/start').set(auth(frame))
-            .send({ clientChallenge: 'a'.repeat(43), link: true });
-        expect(started.status).toBe(403);
-        const exchanged = await request(app).post('/api/auth/oidc/exchange').set(auth(frame))
-            .send({ code: 'x'.repeat(43), clientVerifier: 'y'.repeat(43) });
-        expect([400, 403]).toContain(exchanged.status);
-        // A full session still links.
-        const linked = await sso({ link: true, token: owner.token });
-        expect(linked.status).toBe(200);
+        for (const token of [frame, owner.token]) {
+            expect((await request(app).post('/api/auth/oidc/start').set(auth(token)).send({ clientChallenge: 'a'.repeat(43), link: true })).status).toBe(404);
+            expect((await request(app).post('/api/auth/oidc/exchange').set(auth(token)).send({ code: 'x'.repeat(43), clientVerifier: 'y'.repeat(43) })).status).toBe(404);
+        }
     });
 
     it('F45: joining another family ends the old sessions', async () => {

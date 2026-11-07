@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import pool, { query } from '../db';
 import { authMiddleware, AuthRequest, requireParent } from '../middleware/auth';
+import { BUDGET_CATEGORIES } from '../lib/budgetCategories';
 
 // Per-family customizable categories (issue #68).
 //
@@ -20,10 +21,8 @@ export type FamilyCategories = Record<CategoryModule, string[]>;
 
 export const DEFAULT_CATEGORIES: FamilyCategories = {
     shopping: ['Alimentation', 'Bebe', 'Menage', 'Sante', 'Autre'],
-    budget: [
-        'Logement', 'Alimentation', 'Transport', 'Santé', 'Loisirs',
-        'Abonnements', 'Assurance', 'Enfants', 'Maison', 'Autre',
-    ],
+    // Family Hub v1.5: fixed, grouped budget categories (lib/budgetCategories).
+    budget: [...BUDGET_CATEGORIES],
     task: ['Cuisine', 'Chambre', 'Salle de bain', 'Salon', 'Extérieur', 'École', 'Administratif', 'Autre'],
 };
 
@@ -49,6 +48,7 @@ export const parseCustomCategories = (raw: unknown): FamilyCategories => {
     try {
         const parsed = JSON.parse(raw) as Record<string, unknown>;
         for (const module of CATEGORY_MODULES) {
+            if (module === 'budget') continue; // fixed list, never customised
             const list = parsed?.[module];
             if (
                 Array.isArray(list)
@@ -100,6 +100,9 @@ router.put('/', authMiddleware, requireParent, async (req: AuthRequest, res) => 
             return res.status(400).json({ success: false, error: 'Invalid module' });
         }
         const module = mod as CategoryModule;
+        if (module === 'budget') {
+            return res.status(400).json({ success: false, error: 'Budget categories are fixed in Family Hub.' });
+        }
 
         if (!Array.isArray(categories) || categories.length === 0) {
             return res.status(400).json({ success: false, error: 'categories must be a non-empty array' });
@@ -158,7 +161,7 @@ router.put('/', authMiddleware, requireParent, async (req: AuthRequest, res) => 
                     [req.userId, to, from]
                 );
             }
-            if (module === 'budget') {
+            if ((module as string) === 'budget') {
                 // budget_limits has UNIQUE(user_id, category, month, year): move the
                 // months that don't collide with an existing limit, drop the rest.
                 await client.query(

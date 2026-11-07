@@ -22,9 +22,9 @@ it('preserves all-day boundaries, recurring instances, timezone and paginated ev
     expect(send.mock.calls[0][0]).toContain('shared%2Fid'); expect(send.mock.calls[1][0]).toContain('pageToken=next');
 });
 it('fetches hidden completions from native Google clients and filters deletions', async () => {
-    const send = vi.fn().mockResolvedValue(json({ items: [{ id: 'one', title: 'Read', status: 'completed', due: '2026-11-01T00:00:00Z' }, { id: 'gone', deleted: true }] }));
+    const send = vi.fn().mockResolvedValue(json({ items: [{ id: 'one', title: 'Read', status: 'completed', due: '2026-11-01T00:00:00Z', completed: '2026-11-01T15:20:00.000Z' }, { id: 'gone', deleted: true }] }));
     const result = await new GoogleAdapters(token, send).tasks('family');
-    expect(send.mock.calls[0][0]).toContain('showHidden=true'); expect(result).toEqual([expect.objectContaining({ completed: true, dueDate: '2026-11-01' })]);
+    expect(send.mock.calls[0][0]).toContain('showHidden=true'); expect(result).toEqual([expect.objectContaining({ completed: true, dueDate: '2026-11-01', completedAt: '2026-11-01T15:20:00.000Z' })]);
 });
 it('sends task mutations to Google with date-only meaning and no local writes', async () => {
     const send = vi.fn().mockImplementation(async () => json({ id: 'one', title: 'Read', status: 'needsAction' }));
@@ -106,4 +106,24 @@ it('never retries ambiguous calendar writes', async () => {
     const send = vi.fn().mockRejectedValue(new Error('Network interrupted'));
     await expect(new GoogleAdapters(token, send).createEvent('shared', { title: 'Demo', start: { date: '2026-11-01' }, end: { date: '2026-11-02' } })).rejects.toThrow('Network');
     expect(send).toHaveBeenCalledTimes(1);
+});
+it('edits and deletes one event with a Google colour, and validates before writing', async () => {
+    const send = vi.fn().mockImplementation(async (_url, options) => options.method === 'DELETE' ? new Response(null, { status: 204 })
+        : json({ id: 'evt_20261101', start: { date: '2026-11-01' }, end: { date: '2026-11-02' }, ...JSON.parse(options.body) }));
+    const api = new GoogleAdapters(token, send);
+    const edited = await api.updateEvent('shared', 'evt_20261101', { title: 'Demo outing', colorId: '11', start: { date: '2026-11-01' }, end: { date: '2026-11-02' } });
+    expect(edited).toMatchObject({ id: 'evt_20261101', colorId: '11', allDay: true });
+    expect(send.mock.calls[0][0]).toContain('calendars/shared/events/evt_20261101');
+    expect(send.mock.calls[0][1].method).toBe('PATCH');
+    expect(JSON.parse(send.mock.calls[0][1].body)).toMatchObject({ summary: 'Demo outing', colorId: '11', location: '' });
+    // Clearing the colour sends null so Google returns to the calendar colour.
+    await api.updateEvent('shared', 'evt_20261101', { title: 'Demo', colorId: '', start: { date: '2026-11-01' }, end: { date: '2026-11-02' } });
+    expect(JSON.parse(send.mock.calls[1][1].body).colorId).toBeNull();
+    await api.deleteEvent('shared', 'evt_20261101');
+    expect(send.mock.calls[2][1].method).toBe('DELETE');
+    send.mockClear();
+    await expect(api.updateEvent('shared', '../other', { title: 'Demo', start: { date: '2026-11-01' }, end: { date: '2026-11-02' } })).rejects.toThrow('identifier');
+    await expect(api.updateEvent('shared', 'one', { title: 'Demo', colorId: '12', start: { date: '2026-11-01' }, end: { date: '2026-11-02' } })).rejects.toThrow('colour');
+    await expect(api.deleteEvent('shared', 'a/b')).rejects.toThrow('identifier');
+    expect(send).not.toHaveBeenCalled();
 });

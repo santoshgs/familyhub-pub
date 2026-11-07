@@ -38,6 +38,7 @@ Private API responses are `no-store`; the service worker no longer provides offl
 | [`server/src/lib/asyncRoutes.ts`](../server/src/lib/asyncRoutes.ts) | Forwards every async route's errors to the error handler (v1.1) |
 | [`server/src/utils/urlGuard.ts`](../server/src/utils/urlGuard.ts), [`server/src/lib/safeFetch.ts`](../server/src/lib/safeFetch.ts) | Outbound-request guard: blocks private and special addresses, pins the vetted IP (v1.1) |
 | [`client/src/familyhub/AmbientExtras.tsx`](../client/src/familyhub/AmbientExtras.tsx), `DashboardExtrasSettings.tsx`, `ServerUpdates.tsx` | Quick bar and detail panels on the frame, Settings → Display, Settings → Software updates |
+| [`client/src/familyhub/look.tsx`](../client/src/familyhub/look.tsx), `FamilyHubNav.tsx` (`AppShell`), `board.css`, `SettingsGroups.tsx`, `Classic*.tsx` | The Classic / Board Book trial switch and the Board Book management look; see [the looks](18-management-look.md) |
 
 Family Hub is **web-only**. On November 4, 2026 the parts of OpenFamily it does not use were removed to shrink the code: the Android (Capacitor) app and its native-only code, the public website and waitlist endpoint, the Windows installer, CasaOS/Runtipi/Unraid packaging, Proxmox/update scripts, upstream-only workflows, and translated READMEs/install guides. They remain in Git history (tag `familyhub-v0.3.6`) and upstream. Merging a future upstream release will show conflicts in those paths; keep them deleted.
 

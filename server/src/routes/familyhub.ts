@@ -2,6 +2,7 @@ import express, { Router, type Response } from 'express';
 import { createHash, randomInt, randomUUID } from 'crypto';
 import rateLimit from 'express-rate-limit';
 import { query, withTransaction } from '../db';
+import logger from '../lib/logger';
 import { listFamilyNotes } from './notes';
 import { authMiddleware, requireParent, type AuthRequest } from '../middleware/auth';
 import { issueAccessToken } from '../lib/authTokens';
@@ -9,8 +10,8 @@ import { googleStatus, startGoogleConnection, finishGoogleConnection, disconnect
 import { googleApi, selection, configureSources, syncGoogle, invalidate } from '../services/familyhub/google/runtime';
 import { GoogleApiError } from '../services/familyhub/google/adapters';
 import { loadAmbientSnapshot, readAmbientSettings, saveAmbientSettings, searchWeatherLocations } from '../services/familyhub/ambient';
-import { getNewsArticle } from '../services/familyhub/news';
-import { ExtrasValidationError, publicView, readExtras, saveExtras } from '../services/familyhub/extras/settings';
+import { getNewsArticle, previewFeed } from '../services/familyhub/news';
+import { ExtrasValidationError, feedUrl, publicView, readExtras, saveExtras } from '../services/familyhub/extras/settings';
 import { clearMarketCache } from '../services/familyhub/extras/markets';
 import { addPhoto, deletePhoto, listPhotos, MAX_PHOTOS, MAX_UPLOAD_BYTES, PhotoError, readPhoto } from '../services/familyhub/extras/photos';
 import { credentialStatus, requestCheck, submitCredential } from '../services/familyhub/adminCredentials';
@@ -19,8 +20,10 @@ import { cleanModuleList, getDisabledModules, isModuleKey, requireModule, saveDi
 const router = Router();
 const CARDS = ['calendar', 'tasks', 'notes', 'daycare', 'classroom'];
 const fail = (res: Response, error: unknown) => {
-    if (error instanceof GoogleConnectionError) return res.status(error.status).json({ success: false, error: error.message });
-    if (error instanceof GoogleApiError) return res.status(error.status === 401 ? 409 : 502).json({ success: false, error: error.message });
+    // A lapsed Google grant is not a lapsed Family Hub session: answering 401 made
+    // the app sign the person out. It is a 409 the Home page offers to reconnect.
+    if (error instanceof GoogleConnectionError) return res.status(error.status === 401 ? 409 : error.status).json({ success: false, error: error.message, ...(error.status === 401 ? { code: 'GOOGLE_RECONNECT' } : {}) });
+    if (error instanceof GoogleApiError) return res.status(error.status === 401 ? 409 : 502).json({ success: false, error: error.message, ...(error.status === 401 ? { code: 'GOOGLE_RECONNECT' } : {}) });
     return res.status(400).json({ success: false, error: 'This change could not be completed. Check the fields and Google connection.' });
 };
 
@@ -127,6 +130,14 @@ router.post('/admin/credentials/check', credentialLimiter, requireParent, requir
 // Software updates (Settings → Advanced), server administrator only. The app can
 // ask the Pi to check GitHub or to start its updater now; it cannot choose a
 // version, and the updater keeps its backup, health check and rollback.
+// v1.5.3: restart the Family Hub server from Settings → Advanced (server administrator).
+// The process exits cleanly and Docker's restart policy (unless-stopped) starts it
+// again in a few seconds; the database, web and gateway containers keep running.
+router.post('/admin/restart', credentialLimiter, requireParent, requireOwner, (req: AuthRequest, res) => {
+    logger.warn('familyhub.restart_requested', { by: req.actualUserId });
+    res.json({ success: true });
+    setTimeout(() => process.kill(process.pid, 'SIGTERM'), 750).unref();
+});
 router.get('/admin/updates', requireParent, requireOwner, async (_req: AuthRequest, res) => {
     try { res.set('Cache-Control', 'no-store').json({ success: true, data: await updateStatus() }); }
     catch { res.status(503).json({ success: false, error: 'Update status is unavailable.' }); }
@@ -172,10 +183,29 @@ router.get('/ambient/article', async (req: AuthRequest, res) => {
     const id = typeof req.query.id === 'string' ? req.query.id : '';
     try {
         if (!(await readAmbientSettings(req.userId!)).widgets.includes('news')) return res.status(404).json({ success: false, error: 'News is not enabled for this display.' });
-        const article = await getNewsArticle(id);
+        const article = await getNewsArticle(id, (await readExtras(req.userId!)).settings.news.feeds);
         if (!article) return res.status(404).json({ success: false, error: 'That story is no longer in the headlines.' });
         res.json({ success: true, data: article });
     } catch { res.status(503).json({ success: false, error: 'The story could not be loaded.' }); }
+});
+// v1.5.2: the order of the management menu, per account (paths such as "/calendar").
+const NAV_PATH = /^\/[a-z0-9-]{0,40}$/;
+router.get('/nav', async (req: AuthRequest, res) => {
+    try {
+        const row = (await query('SELECT familyhub_nav_order FROM users WHERE id = $1', [req.actualUserId ?? req.userId])).rows[0];
+        const order = Array.isArray(row?.familyhub_nav_order) ? row.familyhub_nav_order.filter((item: unknown) => typeof item === 'string' && NAV_PATH.test(item)) : [];
+        res.json({ success: true, data: { order } });
+    } catch { res.status(500).json({ success: false, error: 'Internal server error' }); }
+});
+router.put('/nav', async (req: AuthRequest, res) => {
+    const order = req.body?.order;
+    if (!Array.isArray(order) || order.length > 30 || order.some((item: unknown) => typeof item !== 'string' || !NAV_PATH.test(item)) || new Set(order).size !== order.length) {
+        return res.status(400).json({ success: false, error: 'Invalid menu order.' });
+    }
+    try {
+        await query('UPDATE users SET familyhub_nav_order = $1::jsonb WHERE id = $2', [order.length ? JSON.stringify(order) : null, req.actualUserId ?? req.userId]);
+        res.json({ success: true, data: { order } });
+    } catch { res.status(500).json({ success: false, error: 'Internal server error' }); }
 });
 router.get('/ambient/settings', async (req: AuthRequest, res) => {
     try { res.json({ success: true, data: await readAmbientSettings(req.userId!) }); }
@@ -208,6 +238,19 @@ router.put('/dashboard/settings', requireParent, async (req: AuthRequest, res) =
     } catch (error) {
         if (error instanceof ExtrasValidationError) return res.status(400).json({ success: false, error: error.message });
         res.status(503).json({ success: false, error: 'Dashboard settings could not be saved.' });
+    }
+});
+// Settings → Display → News: checks a feed address before it is saved.
+const feedPreviewLimiter = rateLimit({ windowMs: 15 * 60 * 1000, limit: 60, standardHeaders: true, legacyHeaders: false });
+router.post('/dashboard/news/preview', feedPreviewLimiter, requireParent, async (req: AuthRequest, res) => {
+    try {
+        const url = feedUrl(req.body?.url);
+        const preview = await previewFeed(url);
+        if (!preview.ok) return res.status(422).json({ success: false, error: 'No headlines could be read from that address. Check that it is an RSS or Atom feed.' });
+        res.json({ success: true, data: { url, ...preview } });
+    } catch (error) {
+        if (error instanceof ExtrasValidationError) return res.status(400).json({ success: false, error: error.message });
+        res.status(503).json({ success: false, error: 'The feed could not be checked.' });
     }
 });
 const photoFailure = (res: Response, error: unknown) => error instanceof PhotoError
@@ -367,6 +410,29 @@ router.post('/google/events', requireParent, async (req: AuthRequest, res) => {
         const data = await googleApi(req.userId!).createEvent(config.calendarId, input);
         await invalidate(req.userId!, 'calendar');
         res.json({ success: true, data });
+    } catch (error) { fail(res, error); }
+});
+// Edit or delete one Google Calendar event from Family Hub (v1.5).
+router.patch('/google/events/:id', requireParent, async (req: AuthRequest, res) => {
+    try {
+        const config = await configured(req.userId!);
+        const data = await googleApi(req.userId!).updateEvent(config.calendarId, req.params.id, req.body ?? {});
+        await invalidate(req.userId!, 'calendar');
+        res.json({ success: true, data });
+    } catch (error) { fail(res, error); }
+});
+router.delete('/google/events/:id', requireParent, async (req: AuthRequest, res) => {
+    try {
+        const config = await configured(req.userId!);
+        await googleApi(req.userId!).deleteEvent(config.calendarId, req.params.id);
+        await invalidate(req.userId!, 'calendar');
+        res.json({ success: true });
+    } catch (error) { fail(res, error); }
+});
+router.get('/google/colors', requireParent, async (req: AuthRequest, res) => {
+    try {
+        const config = await configured(req.userId!);
+        res.json({ success: true, data: await googleApi(req.userId!).eventColors(config.calendarId) });
     } catch (error) { fail(res, error); }
 });
 router.post('/google/tasks', requireParent, requireModule('todos'), async (req: AuthRequest, res) => {

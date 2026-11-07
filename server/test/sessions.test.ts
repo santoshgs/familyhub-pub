@@ -5,7 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { withTransaction } from '../src/db';
 import { clients } from '../src/lib/broadcaster';
 import { revokeUserSessions } from '../src/lib/authTokens';
-import { app, createInvite, me, query, registerWithPassword, resetState, sso, startSuite, stopSuite } from './helpers';
+import { app, createInvite, me, query, registerWithPassword, resetState, startSuite, stopSuite } from './helpers';
 
 beforeAll(startSuite);
 afterAll(stopSuite);
@@ -67,25 +67,6 @@ describe('events that sign an account out everywhere', () => {
         expect(reset.status).toBe(200);
         expect(await status(bob.token)).toBe(401);
         expect(await status(await login('bob@example.org', 'a-new-password-1'))).toBe(200);
-    });
-
-    it('unlinking SSO: other sessions end, this one gets a fresh token', async () => {
-        const bob = await registerWithPassword('bob@example.org');
-        await sso({ link: true, token: bob.token });
-        const other = await login('bob@example.org');
-        const unlink = await request(app).delete('/api/auth/oidc/link').set('Authorization', `Bearer ${bob.token}`);
-        expect(unlink.status).toBe(200);
-        expect(await status(other)).toBe(401);
-        expect(await status(unlink.body.data.token)).toBe(200);
-        expect((await me(unlink.body.data.token)).body.data.user.sso_linked).toBe(false);
-    });
-
-    it('unlinking is refused when it would leave no way in', async () => {
-        const alice = await sso();
-        const unlink = await request(app).delete('/api/auth/oidc/link').set('Authorization', `Bearer ${alice.body.data.token}`);
-        expect(unlink.status).toBe(409);
-        expect(unlink.body.error).toBe('no_other_sign_in');
-        expect(await status(alice.body.data.token)).toBe(200);
     });
 
     it('removal from the family: the member\'s tokens stop reaching the family', async () => {

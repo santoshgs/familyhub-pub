@@ -1,4 +1,5 @@
 import type { ReactElement } from 'react';
+import { NavOrderSettings } from './familyhub/FamilyHubNav';
 import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -8,7 +9,6 @@ import { ModulePage } from './familyhub/ModulePage';
 import { moduleForPath } from './familyhub/modules';
 import Login from './pages/Login';
 import ResetPassword from './pages/ResetPassword';
-import SsoCallback from './pages/SsoCallback';
 import Dashboard from './pages/Dashboard';
 import ShoppingList from './pages/ShoppingList';
 import Tasks from './pages/Tasks';
@@ -19,19 +19,25 @@ const Budget = lazy(() => import('./pages/Budget'));
 import Family from './pages/Family';
 import Settings from './pages/Settings';
 import Join from './pages/Join';
+import { SettingsGroups } from './familyhub/SettingsGroups';
 import { ProfileName } from './familyhub/ProfileName';
 import { ServerCredentials } from './familyhub/ServerCredentials';
-import { ServerUpdates } from './familyhub/ServerUpdates';
+import { ServerRestart, ServerUpdates } from './familyhub/ServerUpdates';
+import { SettingsSection } from './components/app/SettingsSection';
+import { Monitor, ServerCog } from 'lucide-react';
+import { getLook } from './familyhub/look';
 const Integrations = lazy(() => import('./pages/Integrations'));
 
 const AiHub = lazy(() => import('./familyhub/AiHub'));
 const ConnectedHub = lazy(() => import('./familyhub/ConnectedHub'));
+const ClassicConnectedHub = lazy(() => import('./familyhub/ClassicConnectedHub'));
+const DashboardExtrasSettings = lazy(() => import('./familyhub/DashboardExtrasSettings'));
 const LocalNotes = lazy(() => import('./familyhub/LocalNotes'));
 const FamilyHub = lazy(() => import('./familyhub/FamilyHub'));
 const AmbientDisplay = lazy(() => import('./familyhub/AmbientDisplay'));
 const DisplaySettings = lazy(() => import('./familyhub/DisplaySettings'));
+const DisplaySetupPanel = lazy(() => import('./familyhub/DisplaySettings').then((module) => ({ default: module.DisplaySetupPanel })));
 const DisplayPair = lazy(() => import('./familyhub/DisplayPair'));
-const DashboardExtrasSettings = lazy(() => import('./familyhub/DashboardExtrasSettings'));
 
 function App() {
     const { isAuthenticated, loading, isModuleEnabled, user } = useAuth();
@@ -60,11 +66,6 @@ function App() {
         return <ResetPassword onDone={() => navigate('/', { replace: true })} />;
     }
 
-    // The identity provider sends the browser back here, signed in or not.
-    if (location.pathname === '/auth/callback') {
-        return <SsoCallback onDone={(path) => navigate(path, { replace: true })} />;
-    }
-
     // A paired frame that lands on the pairing page goes straight back to its display.
     if (location.pathname === '/display-pair' && user?.is_display) return <Navigate to="/display" replace />;
     if (location.pathname === '/display-pair' || (!isAuthenticated && location.pathname === '/display')) return <Suspense fallback={<div role="status">Opening frame pairing…</div>}><DisplayPair /></Suspense>;
@@ -81,7 +82,10 @@ function App() {
         // Pocket money manages its reward chores on the Chores page.
         const reachable = mod && (isModuleEnabled(mod.key) || (mod.key === 'chores' && isModuleEnabled('rewards')));
         if (mod && !reachable) return <Navigate to="/settings" replace />;
-        if (location.pathname === '/settings' && !user?.is_display) return <ModulePage><ProfileName /><p className="mb-4">Choose which modules your family uses below. Switching one off hides it for everyone and keeps its saved data.</p><a href="/family" className="fh-text-button">Manage family members</a><Settings />{(user?.is_owner || user?.role === 'parent') && <details className="fh-card fh-advanced" id="display"><summary>Display</summary><Suspense fallback={<p role="status" className="fh-extras-loading">Loading display options…</p>}><DashboardExtrasSettings /></Suspense></details>}{user?.is_owner && <details className="fh-card fh-advanced"><summary>Advanced</summary><ServerUpdates /><ServerCredentials /></details>}</ModulePage>;
+        if (location.pathname === '/settings' && !user?.is_display) return getLook() === 'board' ? <ModulePage title="Settings"><SettingsGroups /></ModulePage>
+            : <ModulePage><div className="mb-6 space-y-6"><ProfileName asSection /><NavOrderSettings asSection /></div><p className="mb-4">Choose which modules your family uses below. Switching one off hides it for everyone and keeps its saved data.</p><a href="/family" className="fh-text-button">Manage family members</a><Settings />
+                {(user?.is_owner || user?.role === 'parent') && <div className="mt-6"><SettingsSection id="display" icon={<Monitor size={20} />} title="Display" subtitle="Frame layout, weather location, night mode, paired frames, and what each card and panel shows."><Suspense fallback={<p role="status" className="fh-extras-loading">Loading display options…</p>}><DisplaySetupPanel /><DashboardExtrasSettings /></Suspense></SettingsSection></div>}
+                {user?.is_owner && <div className="mt-6"><SettingsSection id="advanced" icon={<ServerCog size={20} />} title="Advanced" subtitle="Software updates, restart and server credentials."><ServerUpdates /><ServerRestart /><ServerCredentials /></SettingsSection></div>}</ModulePage>;
         const optionalPages: Record<string, ReactElement> = {
             '/budget': <Budget />, '/rewards': <><p className="mb-4">Pocket money uses local reward chores and parent approvals. Google to-dos do not earn points automatically. <a className="fh-text-button" href="/chores">Manage reward chores</a></p><Rewards /></>,
             '/shopping': <ShoppingList />, '/planning': <Planning />, '/integrations': <Integrations />,
@@ -90,7 +94,7 @@ function App() {
         };
         if (!user?.is_display && optionalPages[location.pathname]) return <ModulePage>{optionalPages[location.pathname]}</ModulePage>;
         if (!['/', '/calendar', '/tasks', '/notes', '/ai', '/daycare', '/classroom'].includes(location.pathname)) return <Navigate to="/" replace />;
-        return <Suspense fallback={<div role="status" className="p-8">Opening Family Hub…</div>}>{location.pathname === '/notes' ? <LocalNotes /> : location.pathname === '/ai' && !user?.is_display ? <AiHub /> : <ConnectedHub />}</Suspense>;
+        return <Suspense fallback={<div role="status" className="p-8">Opening Family Hub…</div>}>{location.pathname === '/notes' ? <LocalNotes /> : location.pathname === '/ai' && !user?.is_display ? <AiHub /> : getLook() === 'board' ? <ConnectedHub /> : <ClassicConnectedHub />}</Suspense>;
     }
 
     // Phase 1 lives in the existing authenticated demo shell. Both flags are

@@ -12,3 +12,21 @@ export const weatherGlyph = (code: number, isDay: boolean) => {
     if (code >= 95) return CloudLightning;
     return Cloud;
 };
+
+/**
+ * Cached date formatters. Building an Intl.DateTimeFormat is slow on the frame's
+ * Android 6 WebView, and the display formats dozens of times per render (every
+ * detail panel opening re-rendered them all), so each locale/options pair is
+ * built once.
+ */
+const formatters = new Map<string, Intl.DateTimeFormat>();
+export function dateFormat(locale: string | undefined, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+    const key = `${locale ?? ''}|${JSON.stringify(options)}`;
+    let formatter = formatters.get(key);
+    if (!formatter) {
+        formatter = new Intl.DateTimeFormat(locale, options);
+        if (formatters.size > 200) formatters.clear();
+        formatters.set(key, formatter);
+    }
+    return formatter;
+}

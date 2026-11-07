@@ -15,6 +15,10 @@
 - Access ends with membership (v1.1): leaving or removal replaces the shared calendar feed link and deletes the member's push subscriptions; joining a family ends older sessions; a child cannot multiply or reverse chore points; a parent's data import changes only their own preferences.
 - Outbound requests (v1.1): saved integration and AI keys are sent only to the address they were saved for and are cleared when that address changes; private, special, IPv4-mapped and NAT64 addresses are blocked; DNS rebinding is blocked by connecting to the vetted address; push endpoints must be real push services.
 - Reset and invite links need a trusted host (`APP_PUBLIC_URL`); login timing no longer reveals whether an account exists; the calendar feed token is redacted from logs.
+- Restart Family Hub (v1.5.3) needs a parent who is also the server administrator, and it is rate limited (`POST /api/familyhub/admin/restart`). Display sessions cannot use it.
+- Editing and deleting Google Calendar events (v1.5.0) is limited to parents and the saved calendar; display sessions cannot write.
+- Splitwise import (v1.5.1): the CSV is read in the browser. Only the mapped items (people, categories, amounts, dates and settle-up payments) are sent to `POST /api/budget/import`; the file itself is not uploaded. Keep the export out of Git and shared folders.
+- Menu order (v1.5.2) is a per-account preference; it grants no access and is not shared.
 
 ## Secrets and private records
 
@@ -32,6 +36,10 @@ The GitHub image token is a classic token limited to `read:packages`. The separa
 - [`client/.snyk`](../client/.snyk) accepts two build-only findings with no patched release, each expiring on 2027-02-04 so Snyk raises them again: `braces` (via Tailwind 3; the only fix, Tailwind 4, needs Chrome 111+/Safari 16.4+ and would break the frame's WebView 107 and Safari 15.4) and `deepmerge` (via the PWA/Workbox build). Dependabot alert #1 is the same `deepmerge` issue.
 - The first Snyk Code scan reported 95 findings. Three were fixed in v0.3.6 (integration request type checks — a malformed field could crash the server; the Immich photo proxy now re-serves only image types; the native server URL check, later removed with the app). The rest were reviewed as false positives or by design: parameterized SQL, SSRF guard with per-redirect checks and metadata blocking, allowlisted file names, test fixtures. Snyk Code ignores can only be recorded in the Snyk web app, so local scans keep listing them.
 - **Claude Security** (the `/claude-security` plugin in Claude Code) ran once, on November 4, 2026. It needs the Workflow tool, so enable *Dynamic workflows* and run it on a clone. That scan was medium effort, scoped to `server/` and `deploy/`, at revision `252e83c` (before v1.0), and verified 33 findings: 1 high, 17 medium and 15 low. All 33 were still present on `develop` on November 5 and all were fixed in v1.1.0 (next section). **Not scanned:** `client/` (282 files), `scripts/`, `shared/`, and everything added after that revision (sign in with Google, the ntfy scripts, the module guard, `release.py` changes and all of v1.2). A diff-mode scan of those from `252e83c` has not been recorded.
+
+## Least-privilege hardening (proposed)
+
+Not started. The next batch would: run the server container as a non-root user (the root cause behind the v1.1 Pi-helper findings); use an unprivileged nginx image for the client; drop all Linux capabilities and set `no-new-privileges`; make the root filesystem read-only; put PostgreSQL on an internal-only Docker network; add resource limits; and split the updater so that only the final compose step runs as root. Rootless Docker and user-namespace remapping are not recommended for this Pi for now. Each step needs a test on the Pi and a rollback path, and it is tracked in [WISHLIST.md](../WISHLIST.md).
 
 ## The November 2026 scan and v1.1.0
 

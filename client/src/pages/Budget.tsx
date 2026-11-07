@@ -5,10 +5,17 @@ import { useAuth } from '../contexts/AuthContext';
 import { formatCurrency } from '../lib/utils';
 import {
     Plus, ChevronLeft, ChevronRight, Check, RefreshCw,
-    Trash2, Edit2, TrendingUp, TrendingDown, Wallet, Eye,
-    X, Calendar, AlertTriangle, Lock
+    Trash2, TrendingUp, TrendingDown, Wallet, Eye,
+    AlertTriangle, Lock
 } from 'lucide-react';
 import KakeiboView from './budget/KakeiboView';
+import { Sheet } from './budget/Sheet';
+import { SplitwiseImportSheet } from './budget/SplitwiseImport';
+import {
+    CategoryPicker, GroupChips, GroupsSheet, PaidInline, SettleUpSheet, SharingAnalytics, SharingFields, SharingSummary,
+    useSharing, type Sharing, type SharingValue,
+} from './budget/SharedExpenses';
+import { CategoryTile, DEFAULT_CATEGORY } from '../familyhub/budgetCategories';
 import {
     PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip,
     ResponsiveContainer, Legend,
@@ -17,7 +24,6 @@ import ChartCard from '../components/app/ChartCard';
 import { format, parseISO } from 'date-fns';
 import { useTranslation } from 'react-i18next';
 import { dateLocale, intlLocale } from '../i18n/format';
-import { useCategories } from '../hooks/useCategories';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -39,6 +45,9 @@ interface RecurringTransaction {
     is_pointed: boolean;
     pointed_at?: string | null;
     linked_calendar_event_id?: string | null;
+    paid_by?: string | null;
+    split_with?: string[];
+    group_id?: string | null;
 }
 
 interface BudgetEntry {
@@ -49,6 +58,9 @@ interface BudgetEntry {
     date: string;
     is_expense: boolean;
     linked_calendar_event_id?: string | null;
+    paid_by?: string | null;
+    split_with?: string[];
+    group_id?: string | null;
 }
 
 interface Forecast {
@@ -107,29 +119,6 @@ const toNumber = (v: unknown): number => {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-const Sheet: React.FC<{ open: boolean; onClose: () => void; title: string; children: React.ReactNode }> = ({
-    open, onClose, title, children
-}) => {
-    if (!open) return null;
-    return (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end" onClick={onClose}>
-            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
-            <div
-                className="relative bg-background rounded-t-2xl shadow-2xl max-h-[90vh] overflow-y-auto"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="flex items-center justify-between p-4 border-b border-border">
-                    <h2 className="text-lg font-semibold">{title}</h2>
-                    <button onClick={onClose} className="p-2 rounded-full hover:bg-surface-2 transition-colors">
-                        <X className="w-5 h-5" />
-                    </button>
-                </div>
-                <div className="p-4">{children}</div>
-            </div>
-        </div>
-    );
-};
-
 const Field: React.FC<{
     label: string;
     type?: string;
@@ -157,30 +146,6 @@ const Field: React.FC<{
         />
     </div>
 );
-
-const CategorySelect: React.FC<{ value: string; onChange: (v: string) => void }> = ({ value, onChange }) => {
-    const { t } = useTranslation('budget');
-    // Family-customizable list (Settings → Categories). If the current value is no
-    // longer in the list (legacy row, renamed category), keep it selectable so the
-    // form doesn't silently change the entry's category.
-    const { categories: familyCategories } = useCategories();
-    const list = !value || familyCategories.budget.includes(value)
-        ? familyCategories.budget
-        : [value, ...familyCategories.budget];
-    return (
-        <div>
-            <label className="block text-sm font-medium text-foreground mb-1">{t('fields.category')}</label>
-            <select
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-border bg-surface-1 text-foreground text-base
-                           focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition"
-            >
-                {list.map((c) => <option key={c} value={c}>{t(`categories.${c}`, { defaultValue: c })}</option>)}
-            </select>
-        </div>
-    );
-};
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -222,16 +187,30 @@ const Budget: React.FC = () => {
     const [transactionForm, setTransactionForm] = useState({
         description: '',
         amount: '',
-        category: 'Autre',
+        category: DEFAULT_CATEGORY,
         date: format(new Date(), 'yyyy-MM-dd'),
         is_expense: true,
         recurrence_frequency: 'none' as 'none' | RecurringTransaction['recurrence_frequency'],
         recurrence_interval: '1',
         recurrence_until: '',
     });
-    const [limitForm, setLimitForm] = useState({ category: 'Alimentation', monthly_limit: '' });
+    const [limitForm, setLimitForm] = useState({ category: 'groceries', monthly_limit: '' });
     const [formError, setFormError] = useState('');
     const [transactionAddToCalendar, setTransactionAddToCalendar] = useState(false);
+
+    // Shared expenses (Family Hub v1.5): who paid, the split and the group.
+    const monthKey = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+    const [sharingTick, setSharingTick] = useState(0);
+    const sharing = useSharing(monthKey, sharingTick);
+    const [shareForm, setShareForm] = useState<SharingValue>({ paid_by: '', split_with: [], group_id: '' });
+    const [sheetSettle, setSheetSettle] = useState(false);
+    const [sheetGroups, setSheetGroups] = useState(false);
+    const [sheetImport, setSheetImport] = useState(false);
+    const monthLabel = format(new Date(currentYear, currentMonth - 1), 'MMMM yyyy', { locale: dateLocale() });
+    const inGroup = (item: { group_id?: string | null }) => sharing.group === 'all' || (sharing.group === 'none' ? !item.group_id : item.group_id === sharing.group);
+    const sharingOf = (item: { paid_by?: string | null; split_with?: string[]; group_id?: string | null }): SharingValue =>
+        ({ paid_by: item.paid_by ?? '', split_with: item.split_with ?? [], group_id: item.group_id ?? '' });
+    const sharingPayload = () => ({ paid_by: shareForm.paid_by || null, split_with: shareForm.paid_by ? shareForm.split_with : [], group_id: shareForm.group_id || null });
 
     // Local-date formatting: toISOString() shifts to UTC and can drop the first
     // or last day of the month depending on the user's timezone.
@@ -288,7 +267,7 @@ const Budget: React.FC = () => {
     }, [currentMonth, currentYear, startOfMonth, endOfMonth]);
 
     useEffect(() => { void loadAll(); }, [loadAll]);
-    useWebSocketUpdates('budget', () => { void loadAll(); });
+    useWebSocketUpdates('budget', () => { void loadAll(); setSharingTick((n) => n + 1); });
 
     const navigateMonth = (dir: -1 | 1) => {
         let m = currentMonth + dir;
@@ -328,13 +307,15 @@ const Budget: React.FC = () => {
         setTransactionForm({
             description: '',
             amount: '',
-            category: 'Autre',
+            category: DEFAULT_CATEGORY,
             date: format(new Date(), 'yyyy-MM-dd'),
             is_expense: true,
             recurrence_frequency: 'none',
             recurrence_interval: '1',
             recurrence_until: '',
         });
+        // New expenses join the group being viewed; the payer is chosen each time.
+        setShareForm({ paid_by: '', split_with: [], group_id: sharing.group !== 'all' && sharing.group !== 'none' ? sharing.group : '' });
         setFormError('');
         setSheetTransaction(true);
     };
@@ -353,6 +334,7 @@ const Budget: React.FC = () => {
             recurrence_interval: r.recurrence_interval.toString(),
             recurrence_until: r.recurrence_until ?? '',
         });
+        setShareForm(sharingOf(r));
         setFormError('');
         setSheetTransaction(true);
     };
@@ -371,6 +353,7 @@ const Budget: React.FC = () => {
             recurrence_interval: '1',
             recurrence_until: '',
         });
+        setShareForm(sharingOf(entry));
         setFormError('');
         setSheetTransaction(true);
     };
@@ -430,6 +413,7 @@ const Budget: React.FC = () => {
                     recurrence_until: transactionForm.recurrence_until || null,
                     is_expense: transactionForm.is_expense,
                     add_to_calendar: transactionAddToCalendar,
+                    ...(transactionForm.is_expense ? sharingPayload() : { paid_by: null, split_with: [], group_id: null }),
                 };
 
                 if (editingRecurring) {
@@ -448,6 +432,7 @@ const Budget: React.FC = () => {
                     date: transactionForm.date,
                     is_expense: transactionForm.is_expense,
                     add_to_calendar: transactionAddToCalendar,
+                    ...(transactionForm.is_expense ? sharingPayload() : { paid_by: null, split_with: [], group_id: null }),
                 };
 
                 if (editingEntry) {
@@ -459,6 +444,7 @@ const Budget: React.FC = () => {
 
             setSheetTransaction(false);
             void loadAll();
+            setSharingTick((n) => n + 1);
         } catch (err) {
             setFormError(err instanceof Error ? err.message : t('budget:errors.save'));
         }
@@ -466,18 +452,18 @@ const Budget: React.FC = () => {
 
     const handleDeleteRecurring = async (id: string) => {
         if (!confirm(t('budget:confirm.deleteRecurring'))) return;
-        try { await api.delete(`/api/budget/recurring/${id}`); void loadAll(); } catch { /* ignore */ }
+        try { await api.delete(`/api/budget/recurring/${id}`); setSheetTransaction(false); void loadAll(); } catch { /* ignore */ }
     };
 
     const handleDeleteEntry = async (id: string) => {
         if (!confirm(t('budget:confirm.deleteEntry'))) return;
-        try { await api.delete(`/api/budget/entries/${id}`); void loadAll(); } catch { /* ignore */ }
+        try { await api.delete(`/api/budget/entries/${id}`); setSheetTransaction(false); void loadAll(); } catch { /* ignore */ }
     };
 
     const openLimitSheet = (category?: string) => {
         const existing = category ? limits.find((l) => l.category === category) : undefined;
         setLimitForm({
-            category: category || 'Alimentation',
+            category: category || 'groceries',
             monthly_limit: existing ? existing.monthly_limit.toString() : '',
         });
         setFormError('');
@@ -519,8 +505,9 @@ const Budget: React.FC = () => {
         .map((l) => ({ ...l, spent: spentByCategory[l.category] || 0 }))
         .filter((l) => l.monthly_limit > 0 && l.spent >= l.monthly_limit * 0.8);
 
-    const expenses = entries.filter((e) => e.is_expense);
+    const expenses = entries.filter((e) => e.is_expense && inGroup(e));
     const incomes = entries.filter((e) => !e.is_expense);
+    const shownRecurring = recurring.filter((r) => !r.is_expense || inGroup(r));
     const pointedCount = recurring.filter((r) => r.is_pointed).length;
 
     if (loading) {
@@ -620,6 +607,8 @@ const Budget: React.FC = () => {
 
             {mode === 'analytics' && (
                 <div className="px-4 pt-4 space-y-3">
+                    {sharing.data && <GroupChips data={sharing.data} group={sharing.group} onChange={sharing.setGroup} onManage={() => setSheetGroups(true)} canEdit={canEdit} />}
+                    {sharing.data && <SharingAnalytics data={sharing.data} currency={currency} monthLabel={monthLabel} />}
                             {/* Répartition par catégorie */}
                             <ChartCard
                                 title={t('budget:charts.expensesByCategory')}
@@ -731,6 +720,11 @@ const Budget: React.FC = () => {
                     </div>
                 )}
 
+                {/* Shared expenses: group filter, what is owed, this month's payers */}
+                {sharing.data && <GroupChips data={sharing.data} group={sharing.group} onChange={sharing.setGroup} onManage={() => setSheetGroups(true)} canEdit={canEdit} />}
+                {sharing.data && <SharingSummary data={sharing.data} currency={currency} canEdit={canEdit} onSettle={() => setSheetSettle(true)} monthLabel={monthLabel} />}
+                {sharing.error && <p className="text-sm text-danger">{sharing.error}</p>}
+
                 {/* Alertes de plafond */}
                 {limitAlerts.length > 0 && (
                     <div className="rounded-card bg-danger/10 border border-danger/20 p-3 space-y-1.5">
@@ -748,47 +742,6 @@ const Budget: React.FC = () => {
                 )}
 
 
-                <div className={`rounded-card p-5 ${balancePositive ? 'bg-success/10' : 'bg-danger/10'}`}>
-                    <div className="flex items-center gap-2 mb-1">
-                        <Wallet className={`w-4 h-4 ${balancePositive ? 'text-success' : 'text-danger'}`} />
-                        <span className="text-sm font-medium text-muted-foreground">{t('budget:balance.current')}</span>
-                    </div>
-                    <p className={`text-4xl font-bold tracking-tight ${balancePositive ? 'text-success' : 'text-danger'}`}>
-                        {formatCurrency(forecast?.currentBalance ?? 0, currency)}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                        {t('budget:balance.opening', {
-                            amount: formatCurrency(forecast?.openingBalance ?? 0, currency),
-                        })}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                        {t('budget:balance.pointed', { count: pointedCount })}
-                        {' '}· {t('budget:balance.expenses', { count: expenses.length })}
-                    </p>
-                </div>
-
-                {/* Prévisionnel */}
-                {forecast && (
-                    forecast.upcomingRecurringExpenses > 0 ||
-                    forecast.upcomingRecurringIncome > 0
-                ) && (
-                    <div className={`rounded-card p-4 border-2 ${forecastPositive ? 'border-info/20 bg-info/5' : 'border-peach/20 bg-peach/5'}`}>
-                        <div className="flex items-center gap-2 mb-1">
-                            <Eye className={`w-4 h-4 ${forecastPositive ? 'text-info' : 'text-peach'}`} />
-                            <span className="text-sm font-medium text-muted-foreground">{t('budget:forecast.title')}</span>
-                        </div>
-                        <p className={`text-3xl font-bold ${forecastPositive ? 'text-info' : 'text-peach'}`}>
-                            {formatCurrency(forecast.forecastBalance, currency)}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                            {t('budget:forecast.subtitle', {
-                                income: formatCurrency(forecast.upcomingRecurringIncome, currency),
-                                expenses: formatCurrency(forecast.upcomingRecurringExpenses, currency),
-                            })}
-                        </p>
-                    </div>
-                )}
-
                 {/* Prélèvements récurrents */}
                 <section>
                     <div className="flex items-center justify-between mb-2 mt-4">
@@ -803,91 +756,52 @@ const Budget: React.FC = () => {
                         </div>
                     </div>
 
-                    {recurring.length === 0 ? (
+                    {shownRecurring.length === 0 ? (
                         <div className="rounded-card border border-dashed border-border p-6 text-center">
                             <RefreshCw className="w-8 h-8 text-muted-foreground mx-auto mb-2 opacity-40" />
                             <p className="text-sm text-muted-foreground">{t('budget:recurring.empty')}</p>
                         </div>
                     ) : (
-                        <div className="space-y-2">
-                            {recurring.map((r) => (
-                                <div
-                                    key={r.occurrence_id ?? `${r.id}:${r.occurrence_date ?? r.debit_day}`}
-                                    className={`flex items-start gap-3 rounded-card p-4 transition-all
-                                        ${r.is_pointed ? 'bg-surface-1 opacity-60' : 'bg-surface-1 border border-border shadow-sm'}`}
-                                >
-                                    <button
-                                        onClick={() => handleTogglePoint(r)}
-                                        disabled={!canEdit}
-                                        className={`mt-0.5 flex-shrink-0 w-7 h-7 rounded-full border-2 flex items-center justify-center
-                                            transition-all active:scale-90 disabled:opacity-50
-                                            ${r.is_pointed ? 'bg-success/100 border-success' : 'border-border hover:border-success/50'}`}
-                                        title={r.is_pointed ? t('budget:recurring.markOff') : t('budget:recurring.markOn')}
-                                    >
-                                        {r.is_pointed && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
-                                    </button>
-
-                                    {/* Two lines at every width: what and how much, then
-                                        when and how often with the actions. Side by side,
-                                        the details were squeezed into one-letter columns
-                                        on a phone. */}
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-start justify-between gap-3">
-                                            <p className={`min-w-0 break-words font-medium text-base ${r.is_pointed ? 'line-through text-muted-foreground' : ''}`}>
-                                                {r.label}
-                                            </p>
-                                            <span className={`whitespace-nowrap text-base font-bold ${
-                                                r.is_pointed
-                                                    ? 'text-muted-foreground'
-                                                    : r.is_expense
-                                                        ? 'text-danger'
-                                                        : 'text-success'
-                                            }`}>
-                                                {r.is_expense ? '-' : '+'}{formatCurrency(r.amount, currency)}
-                                            </span>
-                                        </div>
-                                        <div className="mt-1 flex items-center justify-between gap-2">
-                                            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-                                                <span className="whitespace-nowrap">{categoryLabel(r.category)}</span>
-                                                <span aria-hidden>·</span>
-                                                <span className="flex items-center gap-1 whitespace-nowrap">
-                                                    <Calendar className="w-3 h-3" />
-                                                    {r.occurrence_date
-                                                        ? new Date(`${r.occurrence_date}T00:00:00`).toLocaleDateString(intlLocale(), {
-                                                            month: 'short',
-                                                            day: 'numeric',
-                                                        })
-                                                        : `${t('budget:recurring.dayPrefix')} ${r.debit_day}`}
-                                                </span>
-                                                <span aria-hidden>·</span>
-                                                <span className="whitespace-nowrap">
-                                                    {t(`budget:recurring.frequency.${r.recurrence_frequency}`)}
-                                                </span>
-                                            </div>
-                                            {canEdit && (
-                                                <div className="-mr-1.5 flex flex-shrink-0 items-center">
-                                                    <button
-                                                        onClick={() => openEditRecurring(r)}
-                                                        title={t('common:actions.edit')}
-                                                        aria-label={t('common:actions.edit')}
-                                                        className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-surface-2 transition-colors"
-                                                    >
-                                                        <Edit2 className="w-3.5 h-3.5 text-muted-foreground" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => handleDeleteRecurring(r.series_id ?? r.id)}
-                                                        title={t('common:actions.delete')}
-                                                        aria-label={t('common:actions.delete')}
-                                                        className="flex h-8 w-8 items-center justify-center rounded-lg hover:bg-danger/10 transition-colors"
-                                                    >
-                                                        <Trash2 className="w-3.5 h-3.5 text-danger/60" />
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
+                        <div className="divide-y divide-border overflow-hidden rounded-card border border-border bg-surface-1">
+                            {shownRecurring.map((r) => {
+                                const when = r.occurrence_date
+                                    ? new Date(`${r.occurrence_date}T00:00:00`).toLocaleDateString(intlLocale(), { month: 'short', day: 'numeric' })
+                                    : `${t('budget:recurring.dayPrefix')} ${r.debit_day}`;
+                                const body = <>
+                                    <CategoryTile category={r.category} size={30} />
+                                    <span className="min-w-0 flex-1">
+                                        <span className={`block truncate text-sm font-medium ${r.is_pointed ? 'line-through text-muted-foreground' : ''}`}>{r.label}</span>
+                                        {r.is_expense && r.paid_by && sharing.data
+                                            ? <PaidInline data={sharing.data} entry={r} currency={currency} />
+                                            : <span className="block truncate text-xs text-muted-foreground">{categoryLabel(r.category)}</span>}
+                                    </span>
+                                    <span className="flex shrink-0 flex-col items-end">
+                                        <span className={`whitespace-nowrap text-sm font-semibold ${r.is_pointed ? 'text-muted-foreground' : r.is_expense ? 'text-danger' : 'text-success'}`}>
+                                            {r.is_expense ? '-' : '+'}{formatCurrency(r.amount, currency)}
+                                        </span>
+                                        <span className="whitespace-nowrap text-[11px] text-muted-foreground">{when} · {t(`budget:recurring.frequency.${r.recurrence_frequency}`)}</span>
+                                    </span>
+                                </>;
+                                return (
+                                    <div key={r.occurrence_id ?? `${r.id}:${r.occurrence_date ?? r.debit_day}`}
+                                        className={`flex items-center gap-2 pl-2.5 ${r.is_pointed ? 'opacity-60' : ''}`}>
+                                        <button
+                                            onClick={() => handleTogglePoint(r)}
+                                            disabled={!canEdit}
+                                            className={`flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all active:scale-90 disabled:opacity-50
+                                                ${r.is_pointed ? 'bg-success/100 border-success' : 'border-border hover:border-success/50'}`}
+                                            title={r.is_pointed ? t('budget:recurring.markOff') : t('budget:recurring.markOn')}
+                                            aria-label={r.is_pointed ? t('budget:recurring.markOff') : t('budget:recurring.markOn')}
+                                        >
+                                            {r.is_pointed && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
+                                        </button>
+                                        {canEdit
+                                            ? <button type="button" onClick={() => openEditRecurring(r)} aria-label={`${t('common:actions.edit')}: ${r.label}`}
+                                                className="flex min-w-0 flex-1 items-center gap-2.5 py-2 pr-3 text-left hover:bg-surface-2 active:bg-surface-2 transition-colors">{body}</button>
+                                            : <div className="flex min-w-0 flex-1 items-center gap-2.5 py-2 pr-3">{body}</div>}
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </section>
@@ -911,15 +825,15 @@ const Budget: React.FC = () => {
                             <p className="text-sm text-muted-foreground">{t('budget:empty.expenses')}</p>
                         </div>
                     ) : (
-                        <div className="space-y-2">
+                        <div className="divide-y divide-border overflow-hidden rounded-card border border-border bg-surface-1">
                             {expenses.map((entry) => (
                                 <EntryRow
                                     key={entry.id}
                                     entry={entry}
+                                    sharing={sharing.data}
                                     currency={currency}
                                     canEdit={canEdit}
                                     onEdit={openEditEntry}
-                                    onDelete={handleDeleteEntry}
                                 />
                             ))}
                         </div>
@@ -945,17 +859,45 @@ const Budget: React.FC = () => {
                             <p className="text-sm text-muted-foreground">{t('budget:empty.income')}</p>
                         </div>
                     ) : (
-                        <div className="space-y-2">
+                        <div className="divide-y divide-border overflow-hidden rounded-card border border-border bg-surface-1">
                             {incomes.map((entry) => (
                                 <EntryRow
                                     key={entry.id}
                                     entry={entry}
+                                    sharing={sharing.data}
                                     currency={currency}
                                     canEdit={canEdit}
                                     onEdit={openEditEntry}
-                                    onDelete={handleDeleteEntry}
                                 />
                             ))}
+                        </div>
+                    )}
+                </section>
+
+                {/* Current balance and forecast (v1.5.2: compact, at the bottom) */}
+                <section className="mt-4 divide-y divide-border overflow-hidden rounded-card border border-border bg-surface-1 text-sm">
+                    <div className="flex items-center gap-2.5 px-3 py-2.5">
+                        <Wallet className={`w-4 h-4 shrink-0 ${balancePositive ? 'text-success' : 'text-danger'}`} />
+                        <span className="min-w-0 flex-1">
+                            <span className="block font-medium">{t('budget:balance.current')}</span>
+                            <span className="block truncate text-xs text-muted-foreground">
+                                {t('budget:balance.opening', { amount: formatCurrency(forecast?.openingBalance ?? 0, currency) })}
+                                {' '}· {t('budget:balance.pointed', { count: pointedCount })}
+                            </span>
+                        </span>
+                        <span className={`shrink-0 whitespace-nowrap text-base font-semibold ${balancePositive ? 'text-success' : 'text-danger'}`}>{formatCurrency(forecast?.currentBalance ?? 0, currency)}</span>
+                    </div>
+                    {forecast && (forecast.upcomingRecurringExpenses > 0 || forecast.upcomingRecurringIncome > 0) && (
+                        <div className="flex items-center gap-2.5 px-3 py-2.5">
+                            <Eye className={`w-4 h-4 shrink-0 ${forecastPositive ? 'text-info' : 'text-peach'}`} />
+                            <span className="min-w-0 flex-1">
+                                <span className="block font-medium">{t('budget:forecast.title')}</span>
+                                <span className="block truncate text-xs text-muted-foreground">{t('budget:forecast.subtitle', {
+                                    income: formatCurrency(forecast.upcomingRecurringIncome, currency),
+                                    expenses: formatCurrency(forecast.upcomingRecurringExpenses, currency),
+                                })}</span>
+                            </span>
+                            <span className={`shrink-0 whitespace-nowrap text-base font-semibold ${forecastPositive ? 'text-info' : 'text-peach'}`}>{formatCurrency(forecast.forecastBalance, currency)}</span>
                         </div>
                     )}
                 </section>
@@ -1027,10 +969,12 @@ const Budget: React.FC = () => {
                         required
                     />
 
-                    <CategorySelect
+                    <CategoryPicker
                         value={transactionForm.category}
                         onChange={(v) => setTransactionForm((f) => ({ ...f, category: v }))}
                     />
+
+                    {transactionForm.is_expense && <SharingFields data={sharing.data} value={shareForm} onChange={setShareForm} />}
 
                     <Field
                         label={
@@ -1131,6 +1075,19 @@ const Budget: React.FC = () => {
                     </label>
 
                     <div className="flex gap-3 pt-2">
+                        {(editingRecurring || editingEntry) && (
+                            <button
+                                type="button"
+                                onClick={() => editingRecurring
+                                    ? void handleDeleteRecurring(editingRecurring.series_id ?? editingRecurring.id)
+                                    : editingEntry && void handleDeleteEntry(editingEntry.id)}
+                                title={t('common:actions.delete')}
+                                aria-label={t('common:actions.delete')}
+                                className="flex w-12 flex-shrink-0 items-center justify-center rounded-xl border border-danger/30 text-danger active:scale-95 transition-transform"
+                            >
+                                <Trash2 className="w-4 h-4" />
+                            </button>
+                        )}
                         <button
                             type="button"
                             onClick={() => setSheetTransaction(false)}
@@ -1162,7 +1119,7 @@ const Budget: React.FC = () => {
                             {formError}
                         </div>
                     )}
-                    <CategorySelect
+                    <CategoryPicker
                         value={limitForm.category}
                         onChange={(v) => setLimitForm((f) => ({ ...f, category: v }))}
                     />
@@ -1197,6 +1154,11 @@ const Budget: React.FC = () => {
                 </form>
             </Sheet>
 
+            {sharing.data && <SettleUpSheet open={sheetSettle} onClose={() => setSheetSettle(false)} data={sharing.data} group={sharing.group} currency={currency} onSaved={() => setSharingTick((n) => n + 1)} />}
+            {sharing.data && <GroupsSheet open={sheetGroups} onClose={() => setSheetGroups(false)} data={sharing.data} onSaved={() => { setSharingTick((n) => n + 1); void loadAll(); }}
+                onImport={canEdit ? () => { setSheetGroups(false); setSheetImport(true); } : undefined} />}
+            {sharing.data && canEdit && <SplitwiseImportSheet open={sheetImport} onClose={() => setSheetImport(false)} data={sharing.data} currency={currency}
+                onImported={() => { setSharingTick((n) => n + 1); void loadAll(); }} />}
         </div>
     );
 };
@@ -1205,53 +1167,40 @@ const Budget: React.FC = () => {
 
 const EntryRow: React.FC<{
     entry: BudgetEntry;
+    sharing?: Sharing | null;
     currency: string;
     canEdit?: boolean;
     onEdit: (e: BudgetEntry) => void;
-    onDelete: (id: string) => void;
-}> = ({ entry, currency, canEdit = true, onEdit, onDelete }) => {
+}> = ({ entry, sharing = null, currency, canEdit = true, onEdit }) => {
     const { t } = useTranslation('budget');
     const categoryLabel = (v: string) => t(`categories.${v}`, { defaultValue: v });
     // parseISO treats date-only strings ("yyyy-MM-dd") as local midnight,
     // avoiding the previous-day shift that new Date() (UTC midnight) causes.
-    const dateStr = format(parseISO(entry.date), 'dd MMM', { locale: dateLocale() });
-    return (
-        <div className="flex items-center gap-3 bg-surface-1 border border-border rounded-card p-3.5 shadow-sm">
-            <div className="flex-1 min-w-0">
-                <p className="font-medium text-base truncate">
-                    {entry.description || categoryLabel(entry.category)}
-                </p>
-                <div className="flex items-center gap-2 mt-0.5">
-                    {entry.description && (
-                        <>
-                            <span className="text-xs text-muted-foreground">{categoryLabel(entry.category)}</span>
-                            <span className="text-xs text-muted-foreground">·</span>
-                        </>
-                    )}
-                    <span className="text-xs text-muted-foreground">{dateStr}</span>
-                </div>
-            </div>
-            <span className={`text-base font-bold flex-shrink-0 ${entry.is_expense ? 'text-danger' : 'text-success'}`}>
-                {entry.is_expense ? '-' : '+'}{formatCurrency(entry.amount, currency)}
-            </span>
-            {canEdit && (
-                <div className="flex items-center gap-1 flex-shrink-0">
-                    <button
-                        onClick={() => onEdit(entry)}
-                        className="p-1.5 rounded-lg hover:bg-surface-2 transition-colors"
-                    >
-                        <Edit2 className="w-3.5 h-3.5 text-muted-foreground" />
-                    </button>
-                    <button
-                        onClick={() => onDelete(entry.id)}
-                        className="p-1.5 rounded-lg hover:bg-danger/10 transition-colors"
-                    >
-                        <Trash2 className="w-3.5 h-3.5 text-danger/60" />
-                    </button>
-                </div>
-            )}
-        </div>
-    );
+    const date = parseISO(entry.date);
+    const title = entry.description || categoryLabel(entry.category);
+    // One compact line per expense, like an expense-sharing app: date, tile,
+    // what and who paid, amount. Tap the row to edit (delete is in the sheet).
+    const body = <>
+        <span className="flex w-7 shrink-0 flex-col items-center leading-none text-muted-foreground">
+            <span className="text-[10px] uppercase tracking-wide">{format(date, 'MMM', { locale: dateLocale() }).replace('.', '')}</span>
+            <span className="mt-0.5 text-base font-medium text-foreground">{format(date, 'd')}</span>
+        </span>
+        <CategoryTile category={entry.category} size={30} />
+        <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium">{title}</span>
+            {entry.is_expense && entry.paid_by && sharing
+                ? <PaidInline data={sharing} entry={entry} currency={currency} />
+                : entry.description ? <span className="block truncate text-xs text-muted-foreground">{categoryLabel(entry.category)}</span> : null}
+        </span>
+        <span className={`shrink-0 whitespace-nowrap text-sm font-semibold ${entry.is_expense ? 'text-danger' : 'text-success'}`}>
+            {entry.is_expense ? '-' : '+'}{formatCurrency(entry.amount, currency)}
+        </span>
+    </>;
+    const layout = 'flex w-full items-center gap-2.5 px-2.5 py-2 text-left';
+    return canEdit
+        ? <button type="button" onClick={() => onEdit(entry)} aria-label={`${t('common:actions.edit', { defaultValue: 'Edit' })}: ${title}`}
+            className={`${layout} hover:bg-surface-2 active:bg-surface-2 transition-colors`}>{body}</button>
+        : <div className={layout}>{body}</div>;
 };
 
 export default Budget;
