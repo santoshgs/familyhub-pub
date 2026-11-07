@@ -57,7 +57,7 @@ export async function createNotification(input: CreateNotificationInput): Promis
             body: input.message,
             url: input.url ?? '/',
             tag: input.type,
-        });
+        }, 'account');
     } catch (err) {
         logger.warn('notification.create_failed', {
             type: input.type,

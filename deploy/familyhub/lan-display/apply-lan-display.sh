@@ -155,8 +155,9 @@ check GET /
 check GET /api/notes
 check GET /api/familyhub/ambient/settings
 check GET /api/familyhub/ambient/article
+check GET /api/familyhub/ambient/photos/00000000-0000-0000-0000-000000000000
 check POST /api/auth/login '{}'
 check POST /api/familyhub/display/pair '{"code":"1"}'
-printf '\nExpected: /display and /display-pair 200; / and /login 302 -> /display; ambient/article 401 (no token);\nother API paths 404;\n'
+printf '\nExpected: /display and /display-pair 200; / and /login 302 -> /display; ambient/article and ambient/photos 401 (no token);\nother API paths 404;\n'
 printf 'pairing POST 400 once the v0.3.1 app is running (404 on older releases).\n'
 printf '\nDone. The frame should open https://%s/display. Backups are in %s\n' "$LAN_HOST" "$BACKUP"

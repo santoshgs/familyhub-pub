@@ -10,5 +10,7 @@ Type=oneshot
 User=root
 EnvironmentFile=/opt/familyhub/github-release.env
 UMask=0077
-ExecStart=/usr/bin/python3 /opt/familyhub/release.py update --state-dir /opt/familyhub/state --env-file /opt/familyhub/private.env
+# --publish-dir copies the secret-free update status into the app's exchange
+# folder for Settings → Advanced → Software updates (see admin/README.md).
+ExecStart=/usr/bin/python3 /opt/familyhub/release.py update --state-dir /opt/familyhub/state --env-file /opt/familyhub/private.env --publish-dir /opt/familyhub/admin-exchange
 TimeoutStartSec=20min

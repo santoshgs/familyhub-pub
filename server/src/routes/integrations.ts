@@ -105,6 +105,10 @@ router.post('/test', requireParent, async (req: AuthRequest, res) => {
 });
 
 // POST /api/integrations - connect
+const originOf = (value: string): string => {
+    try { return new URL(value).origin; } catch { return ''; }
+};
+
 router.post('/', requireParent, async (req: AuthRequest, res) => {
     const fields = readIntegrationTextFields(req.body);
     const configFromBody = (req.body as { config?: unknown } | undefined)?.config;
@@ -141,6 +145,16 @@ router.post('/', requireParent, async (req: AuthRequest, res) => {
     }
 
     const encrypted = Object.keys(credentials).length > 0 ? encryptCredentials(credentials) : null;
+
+    // Saved credentials stay with the address they were entered for: a new
+    // server address needs them entered again, so they are never sent elsewhere.
+    if (!encrypted) {
+        const existing = await query('SELECT base_url, encrypted_credentials FROM integrations WHERE family_id = $1 AND type = $2', [req.userId, type]);
+        const saved = existing.rows[0] as { base_url: string; encrypted_credentials: string | null } | undefined;
+        if (saved?.encrypted_credentials && originOf(saved.base_url) !== originOf(cleanUrl)) {
+            return res.status(400).json({ success: false, error: 'CREDENTIALS_REQUIRED' });
+        }
+    }
 
     try {
         const result = await query(

@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { Router } from 'express';
 import bcrypt from 'bcrypt';
+import logger from '../lib/logger';
 import rateLimit from 'express-rate-limit';
 import { query, withTransaction } from '../db';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
@@ -16,14 +17,17 @@ import { isAcceptablePassword, MIN_PASSWORD_LENGTH } from '../lib/passwordPolicy
 
 const router = Router();
 
+// A cost-12 hash of a random value nobody knows, compared against when there is
+// no account to check (login timing must not reveal registered addresses).
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(crypto.randomBytes(16).toString('hex'), 12);
+
 router.get('/me', authMiddleware, async (req: AuthRequest, res) => {
     try {
         // Use actualUserId so members see their own profile, not the owner's
         const result = await query(
             `SELECT id, email, name, role, currency, language, week_start_day, avatar_url,
                     (family_owner_id IS NULL) AS is_owner,
-                    (password_hash IS NOT NULL) AS has_password,
-                    EXISTS (SELECT 1 FROM user_identities WHERE user_id = users.id) AS sso_linked
+                    (password_hash IS NOT NULL) AS has_password
              FROM users WHERE id = $1`,
             [req.actualUserId]
         );
@@ -61,9 +65,8 @@ router.get('/config', (_req, res) => {
             passwordLogin: config.passwordLogin,
             passwordSignup: config.passwordSignup,
             passwordReset: passwordResetEnabled(),
-            oidc: config.oidc
-                ? { enabled: true, name: config.oidc.providerName, signup: config.oidcSignup }
-                : { enabled: false, name: null, signup: false },
+            // Kept for app versions cached before single sign-on was removed.
+            oidc: { enabled: false, name: null, signup: false },
         },
     });
 });
@@ -167,6 +170,9 @@ router.post('/login', async (req, res) => {
         // An account created through single sign-on has no password: it can
         // never be signed into with one, whatever is sent.
         if (!user || !user.password_hash || typeof password !== 'string') {
+            // Same bcrypt cost as a real check, so the response time does not
+            // reveal which addresses have a password account.
+            await bcrypt.compare(typeof password === 'string' ? password : '', DUMMY_PASSWORD_HASH);
             return res.status(401).json({ success: false, error: 'Invalid credentials' });
         }
 
@@ -231,6 +237,14 @@ router.post('/password/forgot', passwordResetRateLimiter, async (req, res) => {
 
         const generic = { success: true, message: 'If this address matches an account, a reset email has been sent.' };
 
+        // No trusted origin for the link (APP_PUBLIC_URL unset and an unknown
+        // Host header): never email a token to an address the request chose.
+        const baseUrl = resolveAppBaseUrl(req);
+        if (!baseUrl) {
+            logger.warn('auth.password_reset_untrusted_host');
+            return res.json(generic);
+        }
+
         const userResult = await query(
             'SELECT id, email, name, language FROM users WHERE LOWER(email) = $1',
             [normalizedEmail]
@@ -250,7 +264,7 @@ router.post('/password/forgot', passwordResetRateLimiter, async (req, res) => {
             [user.id, hashResetToken(token), expiresAt.toISOString()]
         );
 
-        const resetUrl = `${resolveAppBaseUrl(req)}/reset-password?token=${token}`;
+        const resetUrl = `${baseUrl}/reset-password?token=${token}`;
         // Deliberately not awaited. A hit would otherwise pay a full SMTP round
         // trip while a miss returns after a single SELECT, and that gap is a
         // timing oracle that undoes the generic answer above. deliver() logs and

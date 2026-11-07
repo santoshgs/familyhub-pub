@@ -20,7 +20,8 @@ The household Pi is a Raspberry Pi 4 with 4 GB RAM and a roughly 128 GB microSD 
 | nftables `inet familyhub_lan` | HTTPS from the frame, SSH from the home network, Tailscale transport; drops other new LAN input on Wi-Fi and Ethernet |
 | certbot | Renews the frame certificate through Cloudflare DNS |
 | `familyhub-renewals.timer` | Daily expiry check; status for Settings → Advanced |
-| `familyhub-credentials.path` | Applies tokens submitted from Settings → Advanced |
+| `familyhub-credentials.path` | Applies tokens submitted from Settings → Advanced and runs the update check or update start requested from Settings → Software updates |
+| `notify.sh` and ntfy | Phone alerts for expiring credentials, installed releases, failed updates and rollbacks; stays silent until `setup-ntfy.sh` has been run (not yet done on the household Pi) |
 
 The database and server are not published as host ports. The inactive public-ingress Compose profile is not the chosen deployment. No router forwarding or Tailscale Funnel is required. See [networking](08-tailscale-networking.md).
 
@@ -28,11 +29,13 @@ Host changes are made with committed scripts that the owner runs from the Mac; e
 
 | Script (in `.familyhub-local/pi/`) | What it installs or changes | Source |
 | --- | --- | --- |
-| `apply-lan-display.sh` | Installs the newest release, then the LAN listener, certificate, firewall | [`deploy/familyhub/lan-display`](../deploy/familyhub/lan-display/README.md) |
-| `install-admin.sh` | Renewal check and credential applier | [`deploy/familyhub/admin`](../deploy/familyhub/admin/README.md) |
+| `apply-lan-display.sh` | Installs the newest release, then the LAN listener, certificate, firewall. Re-run after a release that adds a display route (v0.3.4 added the article route, v1.2 the photo route) | [`deploy/familyhub/lan-display`](../deploy/familyhub/lan-display/README.md) |
+| `install-admin.sh` | Renewal check and credential applier (a local script that is not committed; the admin README has the full checklist) | [`deploy/familyhub/admin`](../deploy/familyhub/admin/README.md) |
 | `update-github-tokens.sh` | Replaces the GitHub tokens at hidden prompts | same |
 
-The root-protected deployment environment is `/opt/familyhub/private.env`; release state and backups are under `/opt/familyhub/state/`; the release tool is `/opt/familyhub/release.py`. A separate protected file, `/opt/familyhub/github-release.env`, contains the GitHub release-read credential. These are operational locations, not files to publish. Docker volumes hold the database and uploads. Secrets and tokens must not be copied into documentation.
+Two more helpers are committed in the same folder and are copied to the Pi and run there with sudo: `setup-ntfy.sh` (phone alerts) and `remove-account.sh` (remove a leftover login after a dry run and a backup). Some releases also change files outside the containers (`release.py`, `familyhub-update.service`, the admin helpers); the release notes say when to reinstall them, because the hourly updater does not.
+
+The root-protected deployment environment is `/opt/familyhub/private.env`; release state and backups are under `/opt/familyhub/state/`; the release tool is `/opt/familyhub/release.py`. A separate protected file, `/opt/familyhub/github-release.env`, contains the GitHub release-read credential. These are operational locations, not files to publish. Docker volumes hold the database and uploads; the frame's slideshow photos (v1.2) live under `familyhub-photos/` in the uploads volume, which the pre-update backup covers. The credential applier keeps its results in the root-only `/opt/familyhub/admin-state` (v1.1). Secrets and tokens must not be copied into documentation.
 
 ## SSH from the prepared Mac
 

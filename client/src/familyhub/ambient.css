@@ -30,6 +30,9 @@
 .ambient-chores { grid-column:span 4; grid-row:2; }
 .ambient-notifications { grid-column:span 4; grid-row:2; }
 .ambient-race { grid-column:span 5; grid-row:1; background:linear-gradient(145deg,rgba(65,21,32,.96),rgba(26,22,39,.97) 68%,rgba(17,24,39,.98)); }
+/* v1.6: the household orders the cards; each gets its span and row from the layout. */
+.ambient-grid > .ambient-card { grid-column:span var(--span,4); grid-row:var(--row,auto); }
+.ambient-grid.is-one-row { grid-template-rows:minmax(0,1fr); }
 .ambient-card-heading { display:flex; align-items:center; gap:12px; margin-bottom:clamp(14px,1.5vw,21px); }
 .ambient-card-heading > div { flex:1; min-width:0; }
 .ambient-card-heading > svg:last-child { width:16px; height:16px; color:#67758e; }
@@ -151,8 +154,8 @@
     .ambient-clock { grid-column:2; grid-row:1/3; }
     .ambient-toolbar { grid-column:3; grid-row:1/3; }
     .ambient-grid { flex:initial; grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:auto; }
-    .ambient-calendar,.ambient-weather,.ambient-tasks,.ambient-chores,.ambient-notifications,.ambient-race { grid-column:span 1; grid-row:auto; min-height:260px; }
-    .ambient-calendar { grid-column:span 2; }
+    .ambient-grid > .ambient-card { grid-column:span 1; grid-row:auto; min-height:260px; }
+    .ambient-grid > .ambient-card:first-child { grid-column:span 2; }
     .ambient-footer { padding-top:16px; }
 }
 @media (max-width:640px) {
@@ -166,8 +169,8 @@
     .ambient-manage { min-height:40px; }
     .ambient-status-row { flex-wrap:wrap; min-height:44px; font-size:10px; }
     .ambient-grid { grid-template-columns:minmax(0,1fr); gap:11px; }
-    .ambient-calendar,.ambient-weather,.ambient-tasks,.ambient-chores,.ambient-notifications,.ambient-race { grid-column:1; min-height:230px; }
-    .ambient-calendar { min-height:280px; }
+    .ambient-grid > .ambient-card, .ambient-grid > .ambient-card:first-child { grid-column:1; min-height:230px; }
+    .ambient-grid > .ambient-calendar { min-height:280px; }
     .ambient-temperature { font-size:68px; }
     .ambient-footer { align-items:flex-start; flex-direction:column; gap:6px; padding-top:13px; }
     .ambient-detail-backdrop { padding:12px; }
@@ -271,3 +274,311 @@
 .ambient-reader .ambient-reader-meta { margin-bottom:16px; color:#8e9bb2; font-size:12px; }
 .ambient-reader .ambient-reader-li { padding-left:10px; }
 .ambient-reader-note { color:#9aa7bc; font-size:13px; }
+
+/* ── v1.2: footer status, quick bar and detail panels ─────────────────────────
+   Plain flexbox/grid only: the photo frame runs Android System WebView 104
+   (no :has, color-mix, nesting or backdrop-filter). */
+.ambient-footer { min-height:24px; align-items:center; padding-top:7px; }
+.ambient-footer-status { display:flex; align-items:center; gap:8px; color:#97a4ba; letter-spacing:.035em; min-width:0; overflow:hidden; white-space:nowrap; }
+.ambient-footer-motto { color:#7d8aa2; letter-spacing:.14em; font-weight:600; white-space:nowrap; }
+.ambient-footer-meta { white-space:nowrap; }
+.ambient-quickbar { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-top:clamp(8px,.9vw,12px); padding:5px 8px 5px 16px; border:1px solid rgba(125,170,235,.2); border-radius:16px; background:linear-gradient(100deg,rgba(17,27,43,.96),rgba(14,22,36,.96)); }
+.ambient-quickbar-label { display:flex; align-items:center; gap:8px; flex:0 0 auto; color:#7fb2ef; font-size:10px; font-weight:750; letter-spacing:.16em; }
+.ambient-quickbar-label i { width:7px; height:7px; border-radius:50%; background:#5fb0f0; }
+.ambient-quickbar-pills { display:flex; align-items:center; justify-content:flex-end; gap:9px; min-width:0; overflow:hidden; }
+.ambient-pill { min-height:34px; display:inline-flex; align-items:center; gap:8px; padding:0 15px; flex:0 1 auto; min-width:0; color:#eef2f8; font:inherit; font-size:12.5px; border:1px solid rgba(200,215,255,.12); border-radius:999px; background:#152236; white-space:nowrap; touch-action:manipulation; }
+.ambient-pill:active { background:#1f3150; border-color:rgba(125,170,235,.5); }
+.ambient-pill > svg { flex:0 0 auto; color:#9cc4f5; }
+.ambient-pill > span { overflow:hidden; text-overflow:ellipsis; font-weight:550; }
+.ambient-pill small { color:#8fb7e8; font-size:11px; font-weight:600; }
+.ambient-pill b { font-weight:700; }
+.ambient-pill-badge { padding:3px 9px; border-radius:999px; color:#bfe0ff; background:rgba(80,150,230,.2); font-size:11px; }
+.is-up { color:#6fd59c; }
+.is-down { color:#f08a8a; }
+
+/* Opacity and translate only (no scale), on their own layers, so the frame's
+   GPU composites the opening instead of repainting the sheet every frame. */
+@keyframes ambient-sheet-in { from { opacity:0; transform:translate3d(0,8px,0); } to { opacity:1; transform:none; } }
+@keyframes ambient-fade-in { from { opacity:0; } to { opacity:1; } }
+/* v1.6: no open animation. On the frame's GPU a fade over the whole screen read as lag; the panel now appears at once. */
+.ambient-detail.is-wide { width:min(820px,100%); max-height:min(88vh,720px); }
+.ambient-detail > header > div { min-width:0; }
+.ambient-detail-kicker { display:block; margin-bottom:4px; color:#7fb2ef; font-size:10px; font-weight:750; letter-spacing:.15em; }
+
+.ambient-panel { display:flex; flex-direction:column; gap:14px; color:#dfe5ef; }
+.ambient-panel-heading { margin:4px 0 0; color:#a9bddf; font-size:11px; font-weight:750; letter-spacing:.13em; text-transform:uppercase; }
+.ambient-f1-schedule { display:flex; flex-direction:column; gap:8px; }
+.ambient-panel-sub { margin:-4px 0 0; color:#94a2b8; font-size:12px; }
+.ambient-panel-note { margin:0; color:#7f8ca3; font-size:11px; line-height:1.5; }
+.ambient-panel-note.is-warning { color:#f0c080; }
+.ambient-stat-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
+.ambient-stat { display:flex; flex-direction:column; gap:5px; min-width:0; padding:12px 13px; border:1px solid var(--ambient-line); border-radius:14px; background:rgba(255,255,255,.03); }
+.ambient-stat small { color:#8f9bb1; font-size:10px; font-weight:700; letter-spacing:.13em; }
+.ambient-stat strong { display:flex; align-items:center; flex-wrap:wrap; gap:6px; color:#fff; font-size:24px; font-weight:550; letter-spacing:-.03em; }
+.ambient-stat strong em { font-style:normal; color:#b8c4d8; font-size:13px; font-weight:500; letter-spacing:0; }
+.ambient-stat > span { display:flex; align-items:center; gap:4px; color:#9eabc0; font-size:11.5px; }
+.ambient-aqi { padding:2px 8px; border-radius:6px; font-size:10px; font-weight:750; letter-spacing:.04em; text-transform:uppercase; }
+.ambient-aqi.is-good { color:#7fe0a6; background:rgba(60,170,110,.18); }
+.ambient-aqi.is-moderate { color:#f1d27a; background:rgba(210,170,60,.18); }
+.ambient-aqi.is-sensitive { color:#f5b073; background:rgba(230,130,50,.2); }
+.ambient-aqi.is-unhealthy { color:#f59090; background:rgba(220,70,70,.2); }
+.ambient-aqi.is-very, .ambient-aqi.is-hazardous { color:#e4a6f2; background:rgba(150,70,180,.24); }
+.ambient-sun-times { font-size:14px !important; gap:12px !important; }
+.ambient-sun-times span { display:inline-flex; align-items:center; gap:4px; }
+.ambient-sun-track { position:relative; height:6px; margin:4px 0 2px; border-radius:3px; background:#1e293b; }
+.ambient-sun-track i { position:absolute; left:0; top:0; bottom:0; border-radius:3px; background:linear-gradient(90deg,#f4b860,#f6d77d); }
+.ambient-sun-track b { position:absolute; top:50%; width:11px; height:11px; margin:-5.5px 0 0 -5.5px; border-radius:50%; background:#5b6880; }
+.ambient-sun-track b.is-up { background:#ffd56b; box-shadow:0 0 8px rgba(255,210,100,.7); }
+.ambient-moon { display:flex; align-items:center; gap:14px; padding:12px 14px; border:1px solid var(--ambient-line); border-radius:14px; background:rgba(255,255,255,.03); }
+.ambient-moon > div { display:flex; flex-direction:column; gap:3px; }
+.ambient-moon small { color:#e7cf86; font-size:10px; font-weight:750; letter-spacing:.14em; }
+.ambient-moon strong { color:#fff; font-size:15px; font-weight:600; }
+.ambient-moon span { color:#9eabc0; font-size:12px; }
+.ambient-forecast { display:flex; flex-direction:column; padding:2px 14px; border:1px solid rgba(200,215,255,.06); border-radius:14px; background:rgba(9,14,24,.5); }
+.ambient-forecast-row { display:grid; grid-template-columns:96px minmax(0,1fr) 54px 34px 120px 34px; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid rgba(200,215,255,.06); font-size:12.5px; }
+.ambient-forecast-row:last-child { border-bottom:0; }
+.ambient-forecast-day { color:#e3e8f1; font-weight:600; }
+.ambient-forecast-cond { display:flex; align-items:center; gap:7px; min-width:0; overflow:hidden; color:#b9c4d6; white-space:nowrap; text-overflow:ellipsis; }
+.ambient-forecast-cond svg { flex:0 0 auto; color:#f4c978; }
+.ambient-forecast-rain { display:flex; align-items:center; gap:3px; color:#7fb8f0; font-size:11.5px; }
+.ambient-forecast-low { color:#8f9bb1; text-align:right; }
+.ambient-forecast-high { color:#fff; font-weight:650; }
+.ambient-range { position:relative; height:6px; border-radius:3px; background:#1e293b; overflow:hidden; }
+.ambient-range i { position:absolute; top:0; bottom:0; border-radius:3px; background:linear-gradient(90deg,#5ab8f2,#f6c35b); }
+
+.ambient-f1-sessions { display:grid; grid-template-columns:repeat(auto-fill,minmax(170px,1fr)); gap:8px; }
+.ambient-f1-sessions > div { display:flex; justify-content:space-between; gap:8px; padding:9px 11px; border:1px solid rgba(255,170,160,.16); border-radius:11px; background:rgba(220,59,62,.08); font-size:12.5px; }
+.ambient-f1-sessions > div.is-past { opacity:.45; }
+.ambient-f1-sessions time { color:#f2c5bf; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.ambient-f1-tables { display:grid; grid-template-columns:minmax(0,1fr); gap:16px; }
+.ambient-f1-tables.is-split { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.ambient-f1-tables section { display:flex; flex-direction:column; gap:8px; min-width:0; }
+.ambient-table { display:flex; flex-direction:column; padding:0 12px; border:1px solid rgba(200,215,255,.07); border-radius:14px; background:rgba(9,14,24,.5); }
+.ambient-table-row { display:flex; align-items:center; gap:9px; min-height:40px; padding:6px 0; border-bottom:1px solid rgba(200,215,255,.06); font-size:12.5px; }
+.ambient-table-row:last-child { border-bottom:0; }
+.ambient-table-row.is-favorite { margin:0 -12px; padding:6px 12px; background:rgba(232,0,45,.12); }
+.ambient-pos { width:18px; color:#8f9bb1; font-weight:650; text-align:right; font-variant-numeric:tabular-nums; }
+.ambient-team-stripe { width:4px; height:22px; flex:0 0 auto; border-radius:2px; }
+.ambient-table-name { flex:1; min-width:0; display:flex; flex-direction:column; gap:1px; overflow:hidden; color:#f2f5fa; font-weight:600; white-space:nowrap; text-overflow:ellipsis; }
+.ambient-table-name > span { overflow:hidden; text-overflow:ellipsis; }
+.ambient-table-name em { margin-right:3px; color:#9fb0cc; font-family:'Fraunces',Georgia,serif; font-weight:500; }
+.ambient-table-name small { color:#8492a8; font-size:10.5px; font-weight:500; }
+.ambient-wins { color:#d9b56a; font-size:11px; white-space:nowrap; }
+.ambient-table-row > b { min-width:44px; color:#fff; font-weight:700; text-align:right; font-variant-numeric:tabular-nums; }
+.ambient-quote-price { color:#fff; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.ambient-quote-change { min-width:96px !important; display:flex; flex-direction:column; align-items:flex-end; font-size:11.5px; white-space:nowrap; }
+.ambient-quote-change small { font-size:10.5px; font-weight:600; }
+.ambient-quote-change.is-up { color:#6fd59c !important; }
+.ambient-quote-change.is-down { color:#f08a8a !important; }
+
+.ambient-wifi { flex-direction:row; align-items:center; gap:28px; }
+.ambient-qr { flex:0 0 auto; width:230px; height:230px; padding:12px; border-radius:18px; background:#fff; }
+.ambient-qr svg { display:block; width:100%; height:100%; }
+.ambient-wifi-copy { display:flex; flex-direction:column; gap:12px; min-width:0; }
+.ambient-wifi-copy div { display:flex; flex-direction:column; gap:3px; }
+.ambient-wifi-copy small { color:#8f9bb1; font-size:10px; font-weight:700; letter-spacing:.14em; }
+.ambient-wifi-copy strong { color:#fff; font-family:ui-monospace,'SFMono-Regular',Menlo,Consolas,monospace; font-size:26px; font-weight:700; word-break:break-all; }
+.ambient-wifi-password { color:#8fd0ff !important; }
+.ambient-wifi-copy > span { color:#9eabc0; font-size:12px; }
+.ambient-wifi-copy p { margin:0; padding:10px 12px; color:#c9d3e2; font-size:12.5px; line-height:1.5; border:1px solid var(--ambient-line); border-radius:12px; background:rgba(255,255,255,.03); }
+
+.ambient-countdown { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; text-align:center; }
+.ambient-countdown > div { display:flex; flex-direction:column; gap:4px; padding:14px 8px; border:1px solid var(--ambient-line); border-radius:16px; background:rgba(255,255,255,.035); }
+.ambient-countdown > div.is-days { border-color:rgba(90,170,240,.35); background:rgba(70,140,230,.1); }
+.ambient-countdown strong { color:#fff; font-size:44px; font-weight:650; letter-spacing:-.03em; font-variant-numeric:tabular-nums; }
+.ambient-countdown .is-days strong { color:#7cc4ff; }
+.ambient-countdown .is-seconds strong { color:#f6cf79; }
+.ambient-countdown small { color:#8f9bb1; font-size:10px; font-weight:700; letter-spacing:.14em; }
+.ambient-countdown-target { margin:0; padding:10px 14px; color:#dfe7f3; font-size:13px; border:1px solid var(--ambient-line); border-radius:12px; background:rgba(255,255,255,.03); }
+.ambient-checklist { display:flex; flex-direction:column; padding:2px 14px; border:1px solid rgba(200,215,255,.07); border-radius:14px; background:rgba(9,14,24,.5); }
+.ambient-checklist > div { display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid rgba(200,215,255,.06); color:#e8edf5; font-size:13px; }
+.ambient-checklist > div:last-child { border-bottom:0; }
+.ambient-checklist > div.is-done { color:#8fd6a9; }
+.ambient-checklist .ambient-checkbox { font-size:12px; font-weight:800; }
+
+.ambient-slideshow { gap:12px; }
+.ambient-photo { position:relative; height:min(56vh,430px); display:flex; align-items:center; justify-content:center; overflow:hidden; border:1px solid var(--ambient-line); border-radius:16px; background:#05080f; }
+.ambient-photo img { width:100%; height:100%; object-fit:contain; animation:ambient-fade-in .5s ease-out; }
+.ambient-photo p { color:#9aa7bc; font-size:13px; }
+.ambient-photo-count { position:absolute; right:12px; bottom:10px; padding:3px 9px; color:#e5ebf5; font-size:11px; font-variant-numeric:tabular-nums; border-radius:999px; background:rgba(0,0,0,.55); }
+.ambient-photo-controls { display:flex; justify-content:center; gap:10px; }
+.ambient-photo-controls .ambient-manage:disabled { opacity:.4; }
+
+@media (max-width:1040px) {
+    .ambient-quickbar { flex-direction:column; align-items:stretch; }
+    .ambient-quickbar-pills { flex-wrap:wrap; justify-content:flex-start; }
+    .ambient-footer-motto { display:none; }
+    .ambient-stat-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:640px) {
+    .ambient-footer-status, .ambient-footer-meta { white-space:normal; }
+    .ambient-f1-tables.is-split { grid-template-columns:minmax(0,1fr); }
+    .ambient-wifi { flex-direction:column; align-items:stretch; }
+    .ambient-qr { align-self:center; }
+    .ambient-forecast-row { grid-template-columns:78px minmax(0,1fr) 30px 70px 30px; }
+    .ambient-forecast-rain { display:none; }
+    .ambient-countdown strong { font-size:30px; }
+}
+@media (orientation:landscape) and (max-height:700px) {
+    .ambient-pill { min-height:30px; }
+}
+/* With the quick bar, a 1280 × 800 frame has a little less height per card. */
+@media (min-width:1041px) and (orientation:landscape) {
+    .ambient-header { min-height:86px; padding-bottom:14px; }
+    .ambient-grid { margin-top:14px; }
+    .ambient-card-heading { margin-bottom:12px; }
+    .ambient-race .ambient-card-heading { margin-bottom:4px; }
+    .ambient-race-place { margin-bottom:6px; }
+    .ambient-weather .ambient-weather-bottom { padding-top:8px; }
+    .ambient-weather .ambient-attribution { margin-top:4px; }
+}
+
+
+/* ── v1.3: theme toggle, full-screen photos, light theme ─────────────────────
+   Same WebView 104 limits as above: plain selectors, no :has or color-mix. */
+.ambient-theme-toggle svg { color:#f4c978; }
+.ambient-photo-full { position:fixed; inset:0; z-index:150; display:flex; align-items:center; justify-content:center; background:#000; animation:ambient-fade-in .25s ease-out; }
+.ambient-photo-full-image { width:100%; height:100%; object-fit:contain; animation:ambient-fade-in .6s ease-out; }
+.ambient-photo-full.is-fill .ambient-photo-full-image { object-fit:cover; }
+.ambient-photo-full > p { color:#9aa7bc; font-size:14px; }
+.ambient-photo-full-bar { position:absolute; left:0; right:0; display:flex; align-items:center; gap:10px; padding:18px 22px; opacity:0; pointer-events:none; transition:opacity .25s ease; }
+.ambient-photo-full.has-controls .ambient-photo-full-bar { opacity:1; pointer-events:auto; }
+.ambient-photo-full-top { top:0; justify-content:flex-end; background:linear-gradient(180deg,rgba(0,0,0,.6),transparent); }
+.ambient-photo-full-top > span { margin-right:auto; color:#e5ebf5; font-size:13px; font-variant-numeric:tabular-nums; }
+.ambient-photo-full-bottom { bottom:0; justify-content:center; background:linear-gradient(0deg,rgba(0,0,0,.6),transparent); }
+.ambient-photo-full .ambient-manage { color:#eef2f8; border-color:rgba(255,255,255,.22); background:rgba(10,14,22,.72); }
+.ambient-photo-controls { flex-wrap:wrap; }
+
+/* Light theme. Colours only: layout stays identical to the dark theme. */
+.ambient-screen.is-light { --ambient-line:rgba(31,45,72,.12); color:#1d2433; background:radial-gradient(ellipse at 8% 5%,rgba(120,160,220,.28),transparent 40%),radial-gradient(ellipse at 94% 8%,rgba(230,150,140,.22),transparent 36%),linear-gradient(130deg,#f5f2ec 0%,#eef1f6 55%,#f3eff2 100%); }
+.is-light .ambient-identity span:not(.ambient-mark), .is-light .ambient-welcome small { color:#687287; }
+.is-light .ambient-mark { color:#2f5ea8; border-color:rgba(47,94,168,.25); background:rgba(47,94,168,.08); }
+.is-light .ambient-clock, .is-light .ambient-temperature { color:#151b28; }
+.is-light .ambient-icon-button, .is-light .ambient-manage { color:#3c475d; background:#ffffff; border-color:rgba(31,45,72,.14); }
+.is-light .ambient-icon-button:active { background:#e7ecf4; }
+.is-light .ambient-theme-toggle svg { color:#4a63a8; }
+.is-light .ambient-card { background:linear-gradient(145deg,#ffffff,#f8f9fc); box-shadow:0 8px 22px rgba(31,45,72,.08),inset 0 1px rgba(255,255,255,.9); }
+.is-light .ambient-card::after { background:none; }
+.is-light .ambient-card:active { background:#eef2f8; border-color:rgba(47,94,168,.3); }
+.is-light .ambient-race { background:linear-gradient(145deg,#fff1ee,#fdf7f6 68%,#f8f9fc); }
+.is-light .ambient-race-art { opacity:.3; }
+.is-light .ambient-weather-art::after { background:linear-gradient(180deg,transparent,rgba(255,255,255,.9)); }
+.is-light .ambient-card-heading h2, .is-light .ambient-event strong, .is-light .ambient-headline strong, .is-light .ambient-notice strong,
+.is-light .ambient-list-row, .is-light .ambient-progress strong, .is-light .ambient-race-title, .is-light .ambient-detail-list strong,
+.is-light .ambient-next-session strong, .is-light .ambient-next-session time, .is-light .ambient-race-brand > span b { color:#1a2130; }
+.is-light .ambient-card-heading small, .is-light .ambient-event span, .is-light .ambient-list-row time, .is-light .ambient-progress > span,
+.is-light .ambient-notice span, .is-light .ambient-empty, .is-light .ambient-race-place, .is-light .ambient-weather-condition,
+.is-light .ambient-weather-tomorrow, .is-light .ambient-weather-bottom, .is-light .ambient-detail-list article span,
+.is-light .ambient-detail-copy, .is-light .ambient-loading, .is-light .ambient-footer-status, .is-light .ambient-headline time,
+.is-light .ambient-notice time, .is-light .ambient-race-brand > small, .is-light .ambient-next-session span { color:#5f6a7e; }
+.is-light .ambient-card-heading > svg:last-child, .is-light .ambient-attribution, .is-light .ambient-footer, .is-light .ambient-footer-motto,
+.is-light .ambient-version, .is-light .ambient-more-line span:last-child, .is-light .ambient-temperature span { color:#7b8496; }
+.is-light .ambient-event time, .is-light .ambient-more-line, .is-light .ambient-event time small { color:#2f5ea8; }
+.is-light .ambient-weather-bottom > span:last-child { color:#2a3346; }
+.is-light .ambient-event, .is-light .ambient-headline, .is-light .ambient-notice { border-bottom-color:rgba(31,45,72,.08); }
+.is-light .ambient-card-icon { color:#2f5ea8; border-color:rgba(47,94,168,.18); background:rgba(47,94,168,.08); }
+.is-light .ambient-weather-icon { color:#b7791f; background:rgba(210,160,64,.14); }
+.is-light .ambient-task-icon { color:#2f7a55; background:rgba(60,150,100,.12); }
+.is-light .ambient-chore-icon { color:#a06a1c; background:rgba(203,147,66,.14); }
+.is-light .ambient-notification-icon { color:#a8435e; background:rgba(190,102,126,.12); }
+.is-light .ambient-news-icon { color:#4a5bb8; background:rgba(110,130,220,.14); }
+.is-light .ambient-f1-mark { color:#c8302b; }
+.is-light .ambient-checkbox { border-color:#a3adc0; }
+.is-light .ambient-next-session { border-color:rgba(200,60,60,.2); background:linear-gradient(100deg,rgba(220,59,62,.12),rgba(255,255,255,.7)); }
+.is-light .ambient-next-session small { color:#b8423b; }
+.is-light .ambient-session-pill { color:#3c475d; border-color:rgba(31,45,72,.12); background:rgba(255,255,255,.7); }
+.is-light .ambient-session-pill time { color:#5f6a7e; }
+.is-light .ambient-race-brand > span { color:#9a6b12; }
+.is-light .ambient-quickbar { border-color:rgba(47,94,168,.2); background:linear-gradient(100deg,#ffffff,#f6f8fc); }
+.is-light .ambient-quickbar-label { color:#2f5ea8; }
+.is-light .ambient-pill { color:#1d2433; border-color:rgba(31,45,72,.14); background:#f1f4fa; }
+.is-light .ambient-pill:active { background:#e2e9f5; }
+.is-light .ambient-pill > svg, .is-light .ambient-pill small { color:#2f5ea8; }
+.is-light .ambient-pill-badge { color:#1f4f96; background:rgba(47,94,168,.12); }
+.is-light .is-up { color:#1f8a52; }
+.is-light .is-down { color:#c23b3b; }
+.is-light .ambient-detail-backdrop { background:rgba(30,38,54,.45); }
+.is-light .ambient-detail { color:#1d2433; background:#ffffff; box-shadow:0 18px 50px rgba(31,45,72,.25); }
+.is-light .ambient-detail-kicker, .is-light .ambient-panel-heading, .is-light .ambient-detail-days h3 { color:#2f5ea8; }
+.is-light .ambient-panel, .is-light .ambient-detail-text, .is-light .ambient-detail-list article time { color:#3c475d; }
+.is-light .ambient-panel-sub, .is-light .ambient-panel-note, .is-light .ambient-stat small, .is-light .ambient-stat > span,
+.is-light .ambient-moon span, .is-light .ambient-wifi-copy small, .is-light .ambient-wifi-copy > span, .is-light .ambient-countdown small,
+.is-light .ambient-pos, .is-light .ambient-table-name small, .is-light .ambient-forecast-low { color:#6a7487; }
+.is-light .ambient-stat, .is-light .ambient-moon, .is-light .ambient-countdown > div, .is-light .ambient-countdown-target,
+.is-light .ambient-wifi-copy p { background:#f5f7fb; }
+.is-light .ambient-stat strong, .is-light .ambient-moon strong, .is-light .ambient-countdown strong, .is-light .ambient-wifi-copy strong,
+.is-light .ambient-table-name, .is-light .ambient-table-row > b, .is-light .ambient-quote-price, .is-light .ambient-forecast-high,
+.is-light .ambient-forecast-day, .is-light .ambient-checklist > div, .is-light .ambient-countdown-target { color:#1a2130; }
+.is-light .ambient-stat strong em, .is-light .ambient-forecast-cond { color:#4b566b; }
+.is-light .ambient-forecast, .is-light .ambient-table, .is-light .ambient-checklist { border-color:rgba(31,45,72,.1); background:#f7f9fc; }
+.is-light .ambient-forecast-row, .is-light .ambient-table-row, .is-light .ambient-checklist > div { border-bottom-color:rgba(31,45,72,.08); }
+.is-light .ambient-range, .is-light .ambient-sun-track { background:#dde3ee; }
+.is-light .ambient-table-row.is-favorite { background:rgba(232,0,45,.07); }
+.is-light .ambient-f1-sessions > div { border-color:rgba(200,60,60,.18); background:rgba(220,59,62,.06); }
+.is-light .ambient-f1-sessions time { color:#a3332d; }
+.is-light .ambient-countdown .is-days strong { color:#1f62b0; }
+.is-light .ambient-countdown .is-seconds strong { color:#a8720f; }
+.is-light .ambient-wifi-password { color:#1f62b0 !important; }
+.is-light .ambient-qr { border:1px solid rgba(31,45,72,.12); }
+.is-light .ambient-photo { background:#e9edf4; }
+.is-light .ambient-photo p { color:#5f6a7e; }
+.is-light .ambient-reader article h3, .is-light .ambient-reader article h4 { color:#1a2130; }
+.is-light .ambient-reader article p, .is-light .ambient-reader article blockquote { color:#30394a; }
+.is-light .ambient-reader .ambient-reader-meta, .is-light .ambient-reader-note, .is-light .ambient-news-snippet { color:#5f6a7e !important; }
+.is-light .ambient-reader-back { color:#2f5ea8; background:#f1f4fa; }
+.is-light .ambient-detail-manage { color:#5f6a7e; }
+.is-light .ambient-detail-manage a { color:#2f5ea8; }
+.is-light .ambient-hold-exit { color:#5f6a7e; }
+.is-light .ambient-hold-exit.is-holding { color:#1a2130; }
+.is-light .ambient-hold-exit i { background:#2f5ea8; }
+.is-light .ambient-loader { border-color:#c9d1df; border-top-color:#2f5ea8; }
+.is-light .ambient-offline { color:#b55d1f; }
+
+/* v1.5: Google Calendar colour box beside each event (like the F1 team colours). */
+.ambient-event-swatch { display:inline-block; width:10px; height:10px; margin:0 8px 2px 0; flex:0 0 auto; vertical-align:middle; border-radius:3px; box-shadow:0 0 0 1px rgba(255,255,255,.18); }
+.is-light .ambient-event-swatch { box-shadow:0 0 0 1px rgba(31,45,72,.18); }
+.ambient-detail-list .ambient-event-label { color:#8f9bb0; font-size:12px; }
+.is-light .ambient-detail-list .ambient-event-label { color:#6a7487; }
+
+/* v1.6: quick cards as grid cards, and pills for the other modules */
+.ambient-extra-icon { color:#9cc4f5; background:rgba(95,176,240,.13); }
+.ambient-wifi-card-body { flex:1; min-height:0; display:flex; align-items:center; gap:16px; }
+.ambient-wifi-card-body svg { flex:0 0 auto; width:min(44%,150px); height:auto; aspect-ratio:1; border-radius:10px; }
+.ambient-wifi-card-body div { min-width:0; display:flex; flex-direction:column; gap:5px; }
+.ambient-wifi-card-body small { color:#7fb2ef; font-size:10px; font-weight:750; letter-spacing:.16em; }
+.ambient-wifi-card-body strong { overflow:hidden; color:#f3f6fb; font-size:20px; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
+.ambient-wifi-card-body span { color:#9aa7bc; font-size:12px; }
+.ambient-countdown-big { flex:1; display:flex; align-items:baseline; gap:10px; }
+.ambient-countdown-big strong { font-size:clamp(54px,6vw,88px); font-weight:300; line-height:1; letter-spacing:-.04em; color:#f5f7fb; }
+.ambient-countdown-big span { color:#a9b5c9; font-size:14px; }
+.ambient-extra-note { color:#9aa7bc; font-size:12px; }
+.ambient-quote-row { display:grid; grid-template-columns:minmax(0,1fr) auto 64px; gap:10px; }
+.ambient-quote-row span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ambient-quote-row b { color:#eef2f8; font-weight:600; font-variant-numeric:tabular-nums; }
+.ambient-quote-row em { font-style:normal; text-align:right; font-variant-numeric:tabular-nums; }
+.ambient-quote-row em.is-up { color:#76d2a0; } .ambient-quote-row em.is-down { color:#ff8f86; }
+.ambient-photos-card { padding:0; background:#0b111c; }
+.ambient-photos-card > img { position:absolute; z-index:0; inset:0; width:100%; height:100%; object-fit:cover; }
+.ambient-photos-card > .ambient-photos-card-label { position:absolute; z-index:1; left:12px; bottom:12px; display:inline-flex; align-items:center; gap:7px; padding:6px 12px; color:#fff; font-size:12.5px; font-weight:600; border-radius:999px; background:rgba(5,10,18,.62); }
+.ambient-photos-card-label small { color:#cfdcf0; font-size:11px; font-weight:500; }
+.ambient-extra-card.is-unset { opacity:.75; }
+.ambient-pill-f1 { flex:0 0 auto; padding:1px 5px; color:#fff; font-size:10px; font-weight:800; border-radius:4px; background:#d92c3b; }
+/* Instant feedback on touch, painted before the panel is ready. */
+.ambient-card { -webkit-tap-highlight-color:transparent; }
+.ambient-card:active { border-color:rgba(125,170,235,.45); }
+.ambient-screen { touch-action:manipulation; }
+.ambient-detail-placeholder { min-height:180px; }
+.is-light .ambient-wifi-card-body strong, .is-light .ambient-countdown-big strong, .is-light .ambient-quote-row b { color:#1d2433; }
+.is-light .ambient-wifi-card-body span, .is-light .ambient-countdown-big span, .is-light .ambient-extra-note { color:#5d6880; }
+.is-light .ambient-wifi-card-body small, .is-light .ambient-extra-icon { color:#2f5ea8; }
+.is-light .ambient-quote-row em.is-up { color:#1f8a55; } .is-light .ambient-quote-row em.is-down { color:#c2412f; }
+.is-light .ambient-photos-card { background:#e6e9ef; }
+.ambient-quickbar.is-crowded .ambient-pill small { display:none; }
+.ambient-quickbar.is-crowded .ambient-pill { padding:0 12px; }
+
+/* v1.5.4: screensaver (touch anywhere to exit) and the night "off" screen */
+.ambient-screensaver { position:fixed; inset:0; z-index:190; background:#000; cursor:pointer; touch-action:manipulation; -webkit-tap-highlight-color:transparent; }
+.ambient-screensaver img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; animation:ambient-saver-in 1.2s ease-out; }
+@keyframes ambient-saver-in { from { opacity:0; } to { opacity:1; } }
+.ambient-screensaver-clock { position:absolute; right:28px; bottom:22px; padding:6px 14px; color:#fff; font-size:28px; font-weight:300; letter-spacing:-.01em; border-radius:999px; background:rgba(0,0,0,.38); font-variant-numeric:tabular-nums; }
+.ambient-night.is-off { background:#000; cursor:default; }

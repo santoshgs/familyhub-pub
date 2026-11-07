@@ -280,6 +280,19 @@ const shiftSpan = (span: Span, newStart: string): Span => {
     return { ...span, start: newStart, end };
 };
 
+/**
+ * Work limits for one parse. Each RRULE iterator step runs synchronously on the
+ * event loop, so a hostile followed calendar with many recurring series could
+ * otherwise stall the whole server. Steps over every series count against one
+ * budget; past it, or past MAX_ICS_SERIES, the result is marked truncated.
+ */
+export const MAX_ICS_SERIES = 5000;
+export const MAX_ICS_ITERATOR_STEPS = 200_000;
+/** Wall-clock cap for one parse: a single iterator step can itself be slow. */
+export const MAX_ICS_PARSE_MS = 3_000;
+/** Sub-daily rules make each iterator step scan minutes or hours; not stored. */
+const SUB_DAILY = new Set(['SECONDLY', 'MINUTELY', 'HOURLY']);
+
 export function parseIcs(input: string, options: IcsParseOptions): IcsParseResult {
     if (!/BEGIN:VCALENDAR/i.test(input)) throw new IcsError('NOT_ICS');
     let jcal: any;
@@ -308,9 +321,23 @@ export function parseIcs(input: string, options: IcsParseOptions): IcsParseResul
 
     // Masters and their modified instances, grouped by UID.
     const groups = new Map<string, { master: ICAL.Component | null; instances: ICAL.Component[] }>();
+    let steps = 0;
+    const deadline = Date.now() + MAX_ICS_PARSE_MS;
+    const step = (): boolean => {
+        if (++steps > MAX_ICS_ITERATOR_STEPS || ((steps & 63) === 0 && Date.now() > deadline)) {
+            steps = MAX_ICS_ITERATOR_STEPS + 1;
+            truncated = true;
+            return false;
+        }
+        return true;
+    };
     for (const root of roots) {
         for (const comp of root.getAllSubcomponents('vevent')) {
             const uid = text(comp, 'uid', 500) ?? `nouid-${text(comp, 'dtstart', 40)}-${text(comp, 'summary', 80)}`;
+            if (!groups.has(uid) && groups.size >= MAX_ICS_SERIES) {
+                truncated = true;
+                continue;
+            }
             const group = groups.get(uid) ?? { master: null, instances: [] };
             if (comp.hasProperty('recurrence-id')) group.instances.push(comp);
             else if (!group.master) group.master = comp;
@@ -328,7 +355,8 @@ export function parseIcs(input: string, options: IcsParseOptions): IcsParseResul
         windowStartNaive !== null && (span.end ?? span.start) < windowStartNaive;
 
     for (const [uid, group] of groups) {
-        if (truncated) break;
+        if (truncated && steps > MAX_ICS_ITERATOR_STEPS) break;
+        if (events.length >= options.maxEvents) { truncated = true; break; }
 
         // Instances whose series is not in the file: plain events.
         if (!group.master) {
@@ -358,6 +386,7 @@ export function parseIcs(input: string, options: IcsParseOptions): IcsParseResul
         }
 
         const rule = master.getFirstPropertyValue('rrule') as ICAL.Recur | null;
+        if (rule && SUB_DAILY.has(String(rule.freq).toUpperCase())) continue;
         const simple = rule && !master.hasProperty('rdate') && master.getAllProperties('rrule').length === 1
             ? simpleRule(rule, event.startDate)
             : null;
@@ -370,7 +399,7 @@ export function parseIcs(input: string, options: IcsParseOptions): IcsParseResul
             } else if (rule.count) {
                 const it = event.iterator();
                 let last: ICAL.Time | null = null;
-                for (let i = 0, next = it.next(); next && i < rule.count && i < 5000; i++, next = it.next()) last = next;
+                for (let i = 0, next = it.next(); next && i < rule.count && i < 5000 && step(); i++, next = it.next()) last = next;
                 until = last ? toLocalNaive(last, zone, startTzid).slice(0, 10) : span.start.slice(0, 10);
             }
             if (until && windowStartNaive && until < windowStartNaive.slice(0, 10)) continue;
@@ -428,7 +457,7 @@ export function parseIcs(input: string, options: IcsParseOptions): IcsParseResul
 
         // A rule OpenFamily cannot store: one event per occurrence in the window.
         const it = event.iterator();
-        for (let i = 0, next = it.next(); next && i < 5000; i++, next = it.next()) {
+        for (let i = 0, next = it.next(); next && i < 5000 && step(); i++, next = it.next()) {
             const details = event.getOccurrenceDetails(next);
             const item = details.item.component;
             const occurrenceSpan = spanOf(details.startDate, details.endDate ?? null, zone,
@@ -436,7 +465,7 @@ export function parseIcs(input: string, options: IcsParseOptions): IcsParseResul
             if (occurrenceSpan.start > windowEndNaive) break;
             if (endsBeforeWindow(occurrenceSpan) || isCancelled(item)) continue;
             push({ uid: `${uid}@@${toLocalNaive(details.recurrenceId, zone, startTzid)}`, ...describe(item), ...occurrenceSpan, recurrence: null, exceptions: [] });
-            if (truncated) break;
+            if (events.length >= options.maxEvents) break;
         }
     }
 

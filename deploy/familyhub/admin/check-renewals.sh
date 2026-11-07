@@ -30,7 +30,7 @@ row() { # kind, name, expiry (epoch|never|unknown), note
 }
 gh_expiry() { # token -> epoch|never|unknown from GitHub's expiry header
 	local headers exp
-	headers=$(curl -s -o /dev/null -D - -m 15 -H "Authorization: Bearer $1" https://api.github.com/user 2>/dev/null) || { echo unknown; return; }
+	headers=$(curl -s -o /dev/null -D - -m 15 -H @<(printf 'Authorization: Bearer %s\n' "$1") https://api.github.com/user 2>/dev/null) || { echo unknown; return; }
 	grep -qE '^HTTP/[0-9.]+ 200' <<<"$headers" || { echo unknown; return; }
 	exp=$(grep -i '^github-authentication-token-expiration:' <<<"$headers" | cut -d' ' -f2- | tr -d '\r')
 	[[ -z $exp ]] && { echo never; return; }
@@ -75,7 +75,7 @@ fi
 # 4. Cloudflare DNS token used by certbot to renew that certificate.
 if [[ -r /etc/family-hub-lan/cloudflare.ini ]]; then
 	CF=$(sed -n 's/^dns_cloudflare_api_token *= *//p' /etc/family-hub-lan/cloudflare.ini)
-	CFJ=$(curl -s -m 15 -H "Authorization: Bearer $CF" https://api.cloudflare.com/client/v4/user/tokens/verify)
+	CFJ=$(curl -s -m 15 -H @<(printf 'Authorization: Bearer %s\n' "$CF") https://api.cloudflare.com/client/v4/user/tokens/verify)
 	unset CF
 	CFS=$(python3 -c 'import json,sys; r=json.load(sys.stdin).get("result") or {}; print(r.get("status",""), r.get("expires_on") or "never")' <<<"$CFJ" 2>/dev/null)
 	if [[ ${CFS%% *} == active ]]; then
@@ -91,9 +91,20 @@ if command -v tailscale >/dev/null; then
 fi
 
 if [[ -n ${STATUS_JSON:-} ]]; then
-	tmp=$(mktemp "${STATUS_JSON}.XXXXXX")
-	printf '%s\n' "${JSON_ROWS[@]}" | python3 -c 'import json,sys,datetime; items=[json.loads(l) for l in sys.stdin if l.strip()]; print(json.dumps({"checkedAt": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "warnDays": int(sys.argv[1]), "items": items}, indent=1))' "$WARN_DAYS" > "$tmp"
-	chmod 0644 "$tmp"; mv "$tmp" "$STATUS_JSON"
+	# Written through one descriptor and renamed into place: nothing is reopened
+	# or chmodded by path, so a symlink planted in a shared directory is never
+	# followed. (The applier points STATUS_JSON at a root-only directory.)
+	printf '%s\n' "${JSON_ROWS[@]}" | python3 -c '
+import json, os, sys, datetime, tempfile
+path, warn = sys.argv[1], int(sys.argv[2])
+items = [json.loads(l) for l in sys.stdin if l.strip()]
+body = json.dumps({"checkedAt": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"), "warnDays": warn, "items": items}, indent=1)
+fd, tmp = tempfile.mkstemp(dir=os.path.dirname(os.path.abspath(path)), prefix=".status.")
+try:
+    os.write(fd, body.encode()); os.fchmod(fd, 0o644)
+finally:
+    os.close(fd)
+os.replace(tmp, path)' "$STATUS_JSON" "$WARN_DAYS"
 fi
 printf '%-34s %-12s %6s  %s\n' "Item" "Expires" "Days" "Notes"
 printf '%s\n' "${ROWS[@]}"

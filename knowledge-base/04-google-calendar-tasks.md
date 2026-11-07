@@ -6,12 +6,13 @@ The household connection uses one **dedicated Google account**. Family Hub verif
 
 ## What the integration can do
 
-- List eligible calendars, read the selected shared calendar and create events in it. The dedicated account needs permission to make event changes.
+- List eligible calendars, read the selected shared calendar, and create, edit and delete events in it (v1.5.0; parents only). The dedicated account needs permission to make event changes. A change to a repeating event affects only that occurrence.
+- Event colours: Google stores the colour of each event, but its API does not expose colour names. Family Hub keeps its own **Calendar colours** legend (parent-editable labels, stored for the household), so the colour picker and calendar show the household's names, for example "Blue: Alex". Changing a label does not change the Google event.
 - List task lists and read, create, edit, complete, reopen and delete tasks in the selected list. Switch to the dedicated account in the native Google Tasks app to see the same list.
 - Use the selected sources and household time zone for the dashboard and full calendar. Google Tasks scheduling is date-only in this integration.
 - Display the last successful snapshot as stale if a source fails. Calendar/Tasks snapshots normally have a 60-second freshness window, with periodic refresh. A stale label is not confirmation that a recent Google change succeeded.
 
-The current calendar UI does not combine every calendar in the account and does not offer editing/deleting existing events. Its month/week/day range is bounded. Google is still the place to use capabilities not exposed by Family Hub.
+The calendar UI does not combine every calendar in the account; it works with the one saved calendar. Its month/week/day range is bounded. Google is still the place for anything Family Hub does not expose.
 
 ## Cloud setup and consent
 

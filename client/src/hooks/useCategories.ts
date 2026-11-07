@@ -7,6 +7,7 @@
 // silently falls back to the historical defaults below.
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../lib/api';
+import { BUDGET_CATEGORY_KEYS } from '../familyhub/budgetCategories';
 
 export const CATEGORY_MODULES = ['shopping', 'budget', 'task'] as const;
 export type CategoryModule = (typeof CATEGORY_MODULES)[number];
@@ -15,10 +16,8 @@ export type FamilyCategories = Record<CategoryModule, string[]>;
 // Keep in sync with server/src/routes/categories.ts (DEFAULT_CATEGORIES).
 export const DEFAULT_CATEGORIES: FamilyCategories = {
     shopping: ['Alimentation', 'Bebe', 'Menage', 'Sante', 'Autre'],
-    budget: [
-        'Logement', 'Alimentation', 'Transport', 'Santé', 'Loisirs',
-        'Abonnements', 'Assurance', 'Enfants', 'Maison', 'Autre',
-    ],
+    // Fixed in Family Hub v1.5 (familyhub/budgetCategories.tsx).
+    budget: BUDGET_CATEGORY_KEYS,
     task: ['Cuisine', 'Chambre', 'Salle de bain', 'Salon', 'Extérieur', 'École', 'Administratif', 'Autre'],
 };
 

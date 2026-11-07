@@ -10,24 +10,26 @@ available separately.
 
 The initial cards are Calendar, Weather, Google To-dos, OpenFamily reward
 chores, short daycare updates, and the next Formula 1 weekend. Parents select
-the visible cards and weather location at `/display-settings`. Optional news,
+the display layout and weather location in **Settings → Display** (the former `/display-settings` page now redirects there). Optional news,
 travel, Bitcoin, weekly activity, and shopping cards are future work.
 
 ## Access and setup
 
-Parents manage the display from **More → Display setup** (`/display-settings`)
-on the tailnet: weather location, visible cards, night dimming, and paired
-photo frames. The photo frame itself never signs in.
+Parents manage the display from **Settings → Display** on the tailnet (v1.5.2
+merged the former Display setup page into it): the display layout, weather
+location, night dimming, paired photo frames and the extras. `/settings#display`
+opens the section, and `/display-settings` redirects there. The photo frame itself
+never signs in.
 
 **Pairing a photo frame (normal path).**
 
-1. On a phone or computer, open Display setup → **Paired displays**, enter a
+1. On a phone or computer, open Settings → Display → **Paired displays**, enter a
    name (for example "Kitchen frame") and choose **Create pairing code**.
 2. On the frame, the dashboard URL shows **Connect this frame** whenever the
    frame is not paired. Enter the 8-digit code. Codes work once and expire
    after five minutes; creating a new code cancels the previous unused one.
 3. The frame switches to `/display` with an ambient read-only token bound to its
-   own display session. Display setup lists it with *paired* and *last seen*
+   own display session. Settings → Display lists it with *paired* and *last seen*
    times. **Remove** signs out that frame alone and returns it to the pairing
    screen; other devices and parent sessions are unaffected.
 
@@ -73,7 +75,34 @@ and recovery are in [FRAME.md](FRAME.md).
   becomes visible again, and every six hours. Tokens last seven days, so a
   frame that is used at least weekly never signs itself out.
 * **Performance.** Detail panels use a solid scrim rather than a full-screen
-  backdrop blur, which was slow on the frame's Rockchip GPU.
+  backdrop blur, which was slow on the frame's Rockchip GPU. In v1.5.2 the grid
+  and quick bar are memoised, so opening a panel re-renders only the panel; the
+  panel shell paints first and its contents follow on the next frame; the open
+  animations were removed; the frame uses `touch-action: manipulation`. Measured
+  with Playwright, touch tap, CPU throttled: at 8× 66–142 ms before and 33–81 ms
+  after; at 20× 120–452 ms before and 65–167 ms after. Measured in a browser, not
+  on the physical frame.
+
+### Display layout (v1.5.2)
+
+**Settings → Display → Display layout** gives each module one state: a **card**,
+a **quick pill** or **off**. Modules are calendar, weather, to-dos, chores, news,
+daycare, Formula 1, family photos, guest Wi-Fi, countdown, stocks and crypto.
+
+* At most six cards, in the household's order.
+* Row rule: the first row holds half the cards, rounded up, at most three; three
+  or fewer cards use one row.
+* Column weights in each row (12 columns): calendar 4, weather 3, Formula 1 5,
+  others 4.
+* A seventh card turns the last card into the first pill.
+* Households without a saved layout get one derived from their old settings
+  (enabled cards in the old order; a seventh becomes a pill; enabled quick cards
+  become pills).
+* The layout is stored in `familyhub_ambient_settings.layout` (JSONB, nullable;
+  migration `familyhub/0016-display-layout`). `PUT /api/familyhub/ambient/settings`
+  accepts `layout`. A page that sends only `widgets` still works and resets the
+  layout to the derived one.
+* The frame is read-only and cannot change the layout.
 * **Refresh.** The snapshot reloads every minute and the clock every 15
   seconds. Display sessions do not open the live-update WebSocket.
 
@@ -110,8 +139,8 @@ is visible on its screen.
 | Chores | FamilyHub chores (OpenFamily `tasks` records) due today, with or without points; assigned family member names are included. Parents add and assign them under **Chores** in the navigation. Google to-dos and chores remain separate. |
 | Daycare | Existing Gmail/Lillio integration cache: the five most recent notices with title, one-line summary and up to 900 characters of text for the panel. |
 | Weather | Open-Meteo geocoding and forecast services. Selected city and coordinates are stored in the household's `familyhub_ambient_settings` row. Current temperature, condition, today's high/low and tomorrow's condition and high/low (shown under the current conditions) are cached in process for 20 minutes. No key is needed. The interface attributes Open-Meteo. |
-| News | Opt-in **News** card. BBC News World and Technology RSS feeds, merged newest first, at most 10 headlines, cached 15 minutes. The card shows three; the panel lists all ten with a one-line summary. Tapping a story opens a reader view: the server fetches that BBC page once, extracts the article with Mozilla Readability, and sends only plain-text paragraphs, headings, list items and quotes (cached six hours). Only URLs that arrived in the feeds, on BBC hosts, are fetched; if extraction fails the panel shows the feed summary. No images or scripts from the article reach the display. BBC feeds are for personal, non-commercial use. |
-| Formula 1 | Jolpica F1 Ergast-compatible schedule API. The server checks current and following season, filters for a strictly future race, returns sessions in the API's UTC schedule, and the browser displays them in the household time zone. Successful schedules are cached in process for six hours. The interface attributes Jolpica F1. |
+| News | Opt-in **News** card. Headlines from the RSS or Atom feeds chosen in Settings → Display → News (default BBC News World and Technology; at most 8 public `https` feeds, each checked on the Pi before it is added), merged newest first, at most 12, cached 15 minutes per feed. The card shows three under the feed names; the panel lists all with a one-line summary. Tapping a story opens a reader view: the server fetches that page once through the private-address guard, extracts the article with Mozilla Readability, and sends only plain-text paragraphs, headings, list items and quotes (cached six hours). Only links that arrived in a configured feed are fetched; if extraction fails the panel shows the feed summary. No images or scripts from the article reach the display. Check each feed's terms (BBC feeds are for personal, non-commercial use). |
+| Formula 1 | Jolpica F1 Ergast-compatible schedule API. The server checks current and following season, filters for a strictly future race, returns sessions in the API's UTC schedule, and the browser displays them in the household time zone. Successful schedules are cached in process for six hours. If a refresh fails, the last good schedule is kept (v1.5.3): retries after five minutes, a stalled read times out, a cached race that has started is passed over, and each failure is logged as `familyhub.f1_schedule_failed` with its reason. The interface attributes Jolpica F1. |
 
 Logo images supplied by the household go in
 `client/public/assets/familyhub-brand/` (see the README there): `f1-logo.svg`
@@ -129,6 +158,24 @@ and hides it if it cannot load;
 the card also names the team directly. The ambient background and weather/race
 artwork use CSS and SVG rather than stock-image URLs.
 
+### Quick bar and detail panels (v1.2)
+
+Below the cards, a quick bar shows pills for guest Wi-Fi, a countdown, markets
+and the photo slideshow; each appears only when set up in **Settings → Display**
+and opens a panel in place. All data is prepared on the Pi and included in the
+`extras` field of `GET /api/familyhub/ambient`: the weather panel (Open-Meteo
+forecast and air quality, sun progress, moon phase and its SVG path, forecast
+bar positions), Formula 1 standings (Jolpica, cached for the chosen interval),
+the Wi-Fi QR code as an SVG path, the countdown target instant, market prices
+and the slideshow's photo ids. The display draws these as given; it ticks only
+the countdown's seconds, from the server's clock. Market prices are fetched at
+9:35, 12:30 and 16:05 New York time on weekdays (and when the settings change),
+so the frame never polls a market API. Photos are uploaded from a phone or
+computer, decoded once on the Pi, turned upright, scaled to fit 1280 × 800 and
+re-encoded without EXIF data; the frame downloads one at a time with its token
+and releases the previous one. The guest Wi-Fi password is shown on the frame by
+design; the market API keys never leave the server.
+
 ### Google Photos widget feasibility
 
 Google's Ambient API is the appropriate route for a photo-frame slideshow. A
@@ -140,7 +187,7 @@ has access to the intended family album can be used for the frame authorization;
 individual family members' personal accounts do not need to be shown on the
 display.
 
-This is **not implemented**. Google currently requires acceptance into its
+The v1.2 slideshow uses photos uploaded to the Pi instead. Google Photos is **not implemented**. Google currently requires acceptance into its
 Photos Partner Program before granting Ambient API access. Standard Library API
 shared-album listing is no longer available, and Picker is intended for a
 user's explicit media selection rather than a continuously synchronized album.
@@ -169,8 +216,12 @@ release policy records it as rollback-safe.
 | --- | --- | --- |
 | `GET /api/familyhub/ambient` | Authenticated management or display session | Household timezone, today's date, selected display widgets, and minimized card data. |
 | `GET /api/familyhub/ambient/article?id=` | Management or display session; News card enabled | Reader view of a headline currently in the feed. |
+| `POST /api/familyhub/dashboard/news/preview` | Parent | Checks that a public `https` address is a readable RSS/Atom feed (title, headline count, three latest) before it is added. |
+| `GET /api/familyhub/ambient/photos/:id` | Management or display session | One slideshow photo (JPEG, pre-scaled to 1280 × 800). The only path-parameter route ambient tokens may read. |
+| `GET/PUT /api/familyhub/dashboard/settings` | Parent/owner | v1.2 options (Settings → Display; the v1.5.2 Display layout is saved through the ambient settings below): `weather`, `formula1`, `wifi`, `countdown`, `markets`, `photos`, plus write-only `secrets` (`wifiPassword`, `finnhubKey`, `coingeckoKey`: omit to keep, `null` to clear). Responses report only whether each secret is set. |
+| `GET/POST /api/familyhub/photos`, `DELETE /api/familyhub/photos/:id`, `GET /api/familyhub/photos/:id/thumb` | Parent/owner | List, upload (raw image body, one per request, 25 MB, 200 per family), delete, thumbnail. |
 | `GET /api/familyhub/ambient/settings` | Authenticated management session | Read widget and weather-location settings. |
-| `PUT /api/familyhub/ambient/settings` | Parent/owner | Save `{ location: null \| { city, country, latitude, longitude }, widgets: string[], night?: { enabled, start: "HH:MM", end: "HH:MM", brightness: 0–80 } }`. Omitting `night` keeps the saved schedule. |
+| `PUT /api/familyhub/ambient/settings` | Parent/owner | Save `{ location: null \| { city, country, latitude, longitude }, widgets: string[], layout?: { … } (v1.5.2), night?: { enabled, start: "HH:MM", end: "HH:MM", brightness: 0–80 } }`. Omitting `night` keeps the saved schedule. |
 | `GET /api/familyhub/ambient/locations?q=Springfield` | Parent/owner | Search Open-Meteo geocoding; `q` must contain 2–80 characters. |
 | `POST /api/familyhub/ambient/display-session` | Parent/owner | Turn this browser into a display (creates a "Browser display" session). |
 | `POST /api/familyhub/display/pairing-code` | Parent/owner | `{ name? }` → `{ code, name, expiresInSeconds: 300 }`. Cancels the previous unused code. |
@@ -181,7 +232,7 @@ release policy records it as rollback-safe.
 
 The legacy `POST /api/familyhub/display-session` endpoint retains the earlier
 protected overview scope for compatibility with existing clients. The Ambient
-Display setup uses the narrower endpoint above.
+display settings in Settings → Display use the narrower endpoint above.
 
 There are no new environment variables, provider API keys, or user secrets for
 this feature. Existing Google connection credentials remain in the existing
@@ -199,7 +250,7 @@ network through the LAN display listener; it has no Tailscale client. Setup,
 recovery and day-to-day commands are in [FRAME.md](FRAME.md).
 
 The dashboard was checked in a browser at 1280 × 800 with fictional data
-(display, every detail panel, night dimming, pairing screen and Display setup).
+(display, every detail panel, night dimming, pairing screen and Settings → Display).
 Long-duration burn-in on the physical frame and native iOS Safari keyboard
 verification are still outstanding.
 
@@ -217,3 +268,13 @@ verification are still outstanding.
 - The [requested X visual reference](https://x.com/software_chef/status/2110113979439927740)
   was not retrievable during implementation; the dark card design follows the
   visual requirements supplied in the project request.
+
+## Frame theme and full-screen photos (v1.3)
+
+The **Light / Dark** button next to *Hold to exit* switches the frame's colour
+theme. The choice is kept in that frame's browser storage (a display session
+cannot write settings), so each frame keeps its own; dark is the default. The
+photo slideshow has a **Full screen** button: the photo fills the screen edge to
+edge (*Fit* or *Fill screen*), controls appear for four seconds after a tap, and
+the night dimmer still covers it.
+

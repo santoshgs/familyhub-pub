@@ -33,8 +33,31 @@ Private API responses are `no-store`; the service worker no longer provides offl
 | [`docs/familyhub/`](../docs/familyhub/) | Detailed incremental design, setup and the historical QA record |
 | [`client/src/familyhub/version.ts`](../client/src/familyhub/version.ts) | Version label shown in footers (injected by `client/vite.config.ts`) |
 | [`client/.snyk`](../client/.snyk) | Accepted Snyk dependency findings, with reasons and expiry |
+| [`server/src/services/familyhub/extras/`](../server/src/services/familyhub/extras/) | v1.2 display extras on the Pi: weather panel, astronomy (moon phase), Formula 1, markets, guest Wi-Fi and countdown, photos (`sharp`), validated settings |
+| [`server/src/services/familyhub/adminUpdates.ts`](../server/src/services/familyhub/adminUpdates.ts) | Software updates status and requests, written to the admin exchange |
+| [`server/src/lib/asyncRoutes.ts`](../server/src/lib/asyncRoutes.ts) | Forwards every async route's errors to the error handler (v1.1) |
+| [`server/src/utils/urlGuard.ts`](../server/src/utils/urlGuard.ts), [`server/src/lib/safeFetch.ts`](../server/src/lib/safeFetch.ts) | Outbound-request guard: blocks private and special addresses, pins the vetted IP (v1.1) |
+| [`client/src/familyhub/AmbientExtras.tsx`](../client/src/familyhub/AmbientExtras.tsx), `DashboardExtrasSettings.tsx`, `ServerUpdates.tsx` | Quick bar and detail panels on the frame, Settings → Display, Settings → Software updates |
+| [`client/src/familyhub/look.tsx`](../client/src/familyhub/look.tsx), `FamilyHubNav.tsx` (`AppShell`), `board.css`, `SettingsGroups.tsx`, `Classic*.tsx` | The Classic / Board Book trial switch and the Board Book management look; see [the looks](18-management-look.md) |
 
 Family Hub is **web-only**. On November 4, 2026 the parts of OpenFamily it does not use were removed to shrink the code: the Android (Capacitor) app and its native-only code, the public website and waitlist endpoint, the Windows installer, CasaOS/Runtipi/Unraid packaging, Proxmox/update scripts, upstream-only workflows, and translated READMEs/install guides. They remain in Git history (tag `familyhub-v0.3.6`) and upstream. Merging a future upstream release will show conflicts in those paths; keep them deleted.
+
+v1.0.0 (November 4, 2026) went further and removed OpenFamily's Recipes, Meal planning, Family posts, kiosk, Mealie/Tandoor/Grocy integrations, the Support OpenFamily card and every language except English and French. The remaining modules are one list in `server/src/lib/modules.ts`, mirrored in `client/src/familyhub/modules.ts`, and the server closes a module that is off. Expect conflicts there too when merging upstream.
+
+## Migrations since v1.0
+
+| Migration | Release | What it does |
+| --- | --- | --- |
+| `familyhub/0009` | v1.0.0 | Drops the removed modules' tables and Mealie/Tandoor/Grocy integration rows, moves other languages to English (destructive; rollback tested) |
+| `familyhub/0010-module-visibility` | v1.0.0 | Per-member `hidden_modules` (the **Show** checkbox) |
+| `familyhub/0011` | v1.1.0 | Nullable `push_subscriptions.account_id` and an index, so removal can delete a member's subscriptions |
+| `familyhub/0012` | v1.2.0 | New tables `familyhub_dashboard_extras` (one validated JSON document per family, secrets encrypted apart) and `familyhub_photos` |
+
+`deploy/familyhub/release-policy.json` records, per release, why each was safe to roll back. New dependencies in v1.2: `qrcode` (MIT) and `sharp` (Apache-2.0).
+
+## Display constraints
+
+The frame's WebView is old, so the client builds for Safari 15.4 and Chromium 104 (`client/vite.config.ts`). The display CSS added in v1.2 avoids `:has`, `color-mix`, nesting, `@layer` and `backdrop-filter` (the management pages do use some of them; only the display runs on the frame). One older rule, the Formula 1 logo mark in `ambient.css`, still uses `:has`, which the frame's WebView 107 supports but Chromium 104 does not. Everything heavy happens on the Pi: fetching, calculation, QR generation and image scaling. The display only counts down seconds from a server-sent target, and new display endpoints must be added to both the server's ambient allowlist and the LAN listener's `Caddyfile.lan`, after which the owner re-runs `apply-lan-display.sh`.
 
 Preserve upstream history, license notices and root `ROADMAP.md`. Add Family Hub migrations in their namespace; do not edit shipped upstream migrations. The audited upstream base is recorded in [`UPSTREAM.md`](../UPSTREAM.md); its older statements about repository creation and Phase 1 are historical.
 
@@ -68,6 +91,6 @@ FAMILYHUB_TEST_BUILT_SW=true node --test scripts/service-worker.test.mjs
 python3 -m unittest discover -s deploy/familyhub -p 'test_release.py'
 ```
 
-These are the release workflow's validation steps. At v0.3.7: 163 server tests and 16 Family Hub client tests.
+These are the release workflow's validation steps. At v1.2.0: 218 server tests (PostgreSQL 16); the client tests, the public-safety scan, the release-tool tests and the Pi admin-helper tests also passed. Add a regression test with every security fix (`server/test/securityV11.test.ts` holds the v1.1 ones).
 
 Run backend/integration tests against the designated isolated test database using the repository's scripts. The release workflow also checks the built service worker and packaged containers. Builds, mocked provider tests, visual inspection, actual Safari use and live-provider round trips are distinct evidence. See [verification](14-history-and-verification.md) and the historical [QA record](../docs/familyhub/QA.md) (its screenshots are archived in Git history).

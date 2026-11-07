@@ -11,7 +11,7 @@ the Pi side is in [`deploy/familyhub/lan-display`](../../deploy/familyhub/lan-di
 | --- | --- |
 | Hardware | Frameo-branded 10" frame labelled 105K, Rockchip RK312x board |
 | Android | 6.0.1 (API 23). The build fingerprint says `userdebug`, but `adb root` is refused ("production build"), so ADB runs as the unprivileged shell user |
-| Browser engine | Android System WebView 107 |
+| Browser engine | Android System WebView 107 (since v1.2 the client also builds for Chromium 104, for margin) |
 | Screen | 1280 × 800 landscape, always on (screen-off timeout disabled) |
 | Home screen | HomeHQ kiosk launcher (`com.wesbos.homehq`), set as the **Always** home app |
 | Frameo app | `net.frameo.frame`: unhidden but still **disabled**; it can be enabled from its App info screen (see below) |
@@ -39,7 +39,7 @@ Pi: host Caddy bound to the LAN address, Let's Encrypt certificate
 * The frame uses ordinary DNS (Wi-Fi **IP settings: DHCP**). It no longer needs
   the Pi as its DNS server; the earlier Pi-hosted resolver and the Android DNS
   override it required are retired.
-* Management (sign-in, Display setup, pairing codes) is only on the tailnet
+* Management (sign-in, Settings → Display, pairing codes) is only on the tailnet
   address. The frame cannot reach it.
 
 ## Kiosk (HomeHQ)
@@ -65,7 +65,7 @@ restart.
 
 ## Pairing and recovery
 
-1. On a phone or computer on the tailnet: FamilyHub → Display setup →
+1. On a phone or computer on the tailnet: FamilyHub → Settings → Display →
    **Paired displays** → name the frame → **Create pairing code**.
 2. On the frame: enter the 8-digit code on **Connect this frame**.
 
@@ -90,8 +90,16 @@ disabled System UI. Use either:
   updater (`com.adups.fota`) stays hidden. To return to the previous state, tap
   **Disable** on the same App info screen.
 
-FamilyHub's own night dimming (Display setup → Night mode) darkens the dashboard
+FamilyHub's own night dimming (Settings → Display → Night mode) darkens the dashboard
 on a schedule on top of whatever backlight level is set here.
+
+## What the frame shows (v1.5.2)
+
+The cards, pills and their order are set in **Settings → Display → Display layout**
+(see [AMBIENT_DISPLAY.md](AMBIENT_DISPLAY.md#display-layout-v152)). The frame has
+no controls for this and picks up a change on its next refresh. Detail panels
+open faster than before v1.5.2; the timings are in AMBIENT_DISPLAY.md. Not
+measured on the physical frame.
 
 ## ADB
 

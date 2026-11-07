@@ -13,12 +13,26 @@ was set up and how to keep it running. Command-level details are in the
 
 * **Cards:** Family calendar (Up next), Weather with tomorrow's forecast, the
   next Formula 1 weekend, To-dos, Chores or News, and Daycare updates. Parents
-  choose the cards and weather city in **More → Display setup**.
+  choose the weather city in **Settings → Display**.
+* **Display layout (v1.5.2):** each module, and the new Wi-Fi, countdown, markets
+  and photos options, is a card, a quick pill or off. Up to six cards appear, in
+  the order set in **Settings → Display → Display layout**. The first row holds
+  half the cards (rounded up, at most three); three or fewer use one row. A
+  seventh card turns the last card into a pill. The frame cannot change it.
 * **Detail panels:** tap any card. Calendar shows the next 7 days by day; News
   lists ten headlines and opens a reader view; Daycare shows each note in full.
-  **All headlines** goes back; tapping outside closes the panel.
+  **All headlines** goes back; tapping outside closes the panel. Panels open
+  faster since v1.5.2: the panel frame appears first and its contents follow;
+  there is no opening animation. Measured with Playwright at 20× CPU throttling,
+  a tap-to-panel took 65–167 ms (120–452 ms before). Not measured on the
+  physical frame.
+* **Formula 1:** if a refresh of the race calendar fails, the card keeps the last
+  good schedule instead of going blank (v1.5.3).
 * **More indicators:** "+2 more events today", "+7 more headlines" and so on.
-* **Night mode:** the screen dims on the schedule set in Display setup; a tap
+* **Quick bar (v1.2):** pills above the footer for guest Wi-Fi (with a QR code), a countdown with a checklist, markets and a photo slideshow. A pill appears once that feature is set up in **Settings → Display**; the frame stays read-only, so nothing can be ticked on it.
+* **Richer panels (v1.2):** weather adds feels-like, wind, humidity, air quality, sunrise and sunset, the moon phase and a 7- or 14-day forecast; Formula 1 adds driver and constructor standings next to the schedule. The status line now sits in the footer. Everything is fetched and calculated on the Pi.
+* **Not yet checked on the real frame:** v1.2 and later have not been tested on the physical device. Photos need the LAN listener's photo route, so re-run `apply-lan-display.sh` after installing v1.2.
+* **Night mode:** the screen dims on the schedule set in Settings → Display; a tap
   wakes it for two minutes.
 * **Hold to exit:** the only control that leaves the display. Holding it for two
   seconds returns the frame to its pairing screen.
@@ -35,7 +49,7 @@ was set up and how to keep it running. Command-level details are in the
 | --- | --- |
 | Board | Rockchip RK312x, a low-power quad-core chip |
 | Android | 6.0.1 (API 23); `userdebug` fingerprint but `adb root` refused |
-| Browser engine | Android System WebView 107 |
+| Browser engine | Android System WebView 107 (the client also builds for Chromium 104, for margin) |
 | Screen | 1280 × 800 landscape, always on |
 | Network | 2.4 GHz Wi-Fi on the guest network, address reserved in the router |
 | Home app | HomeHQ kiosk (`com.wesbos.homehq`), set as **Always** |
@@ -53,7 +67,7 @@ Pi: Caddy bound to the LAN address, Let's Encrypt certificate
 ```
 
 The name is public but points at a private address, so it only works inside the
-house. Management (sign-in, Display setup) is only on the Tailscale address;
+house. Management (sign-in, Settings → Display) is only on the Tailscale address;
 the frame cannot reach it.
 
 ## Pairing a frame
@@ -61,13 +75,13 @@ the frame cannot reach it.
 A frame never signs in. When it is not paired, its dashboard address shows the
 pairing screen.
 
-| On the frame | In Display setup (phone or Mac, on Tailscale) |
+| On the frame | In Settings → Display (phone or Mac, on Tailscale) |
 | --- | --- |
 | <img src="../docs/familyhub/images/pairing.jpg" alt="Connect this frame pairing screen" width="400"> | <img src="../docs/familyhub/images/setup-pairing.png" alt="Paired displays and Create pairing code" width="400"> |
 
-1. Display setup → **Paired displays** → name it → **Create pairing code**.
+1. Settings → Display → **Paired displays** → name it → **Create pairing code**.
 2. Type the 8 digits on the frame. Codes work once and expire in five minutes.
-3. The frame shows the dashboard. Display setup lists it with *last seen*.
+3. The frame shows the dashboard. Settings → Display lists it with *last seen*.
 
 **Remove** signs out that frame alone. The frame renews its session whenever the
 dashboard loads, so it only needs a new code if it was off for over a week, was

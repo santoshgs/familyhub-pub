@@ -1,4 +1,5 @@
 import { Request } from 'express';
+import { stripTrailingSlashes } from './asyncRoutes';
 
 /**
  * Public base URL of this OpenFamily instance, used to build links sent OUTSIDE
@@ -17,8 +18,22 @@ import { Request } from 'express';
  * back to some other host: a wrong origin would send your family's invitees to
  * somebody else's server.
  */
+const LOOPBACK_HOST = /^(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?$/i;
+
+const isTrustedHost = (host: string): boolean => {
+    if (LOOPBACK_HOST.test(host)) return true;
+    const origins = process.env.CORS_ORIGINS?.split(',').map((o) => o.trim()).filter(Boolean) ?? [];
+    return origins.some((origin) => {
+        try {
+            return new URL(origin).host.toLowerCase() === host.toLowerCase();
+        } catch {
+            return false;
+        }
+    });
+};
+
 export const resolveAppBaseUrl = (req?: Request): string => {
-    const strip = (u: string) => u.trim().replace(/\/+$/, '');
+    const strip = (u: string) => stripTrailingSlashes(u.trim());
 
     const configured = process.env.APP_PUBLIC_URL?.trim();
     if (configured) {
@@ -26,8 +41,12 @@ export const resolveAppBaseUrl = (req?: Request): string => {
     }
 
     if (req) {
+        // Without APP_PUBLIC_URL, the Host header is only trusted when it names
+        // an origin this server is configured to serve (CORS_ORIGINS) or a
+        // loopback development address. Any other value is chosen by the client
+        // and would send reset or invite links, and their tokens, elsewhere.
         const host = req.get('host');
-        if (host) {
+        if (host && isTrustedHost(host)) {
             return `${req.protocol}://${host}`;
         }
     }

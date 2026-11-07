@@ -122,19 +122,42 @@
   },
   "signIn": {
     "title": "Sign-in",
-    "subtitle": "How you sign in to Family Hub, on this device and others.",
-    "ssoLinked": "Your account is linked to {{name}}.",
-    "ssoNotLinked": "Link your {{name}} account to sign in with it.",
-    "link": "Link {{name}}",
-    "unlink": "Unlink",
-    "confirmUnlink": "Unlink {{name}}? You will sign in with your password, and your other devices will be signed out.",
-    "unlinkNeedsPassword": "Your account has no password yet. Set one with “Forgot your password?” on the sign-in page to be able to unlink.",
-    "unlinkPasswordOff": "Password sign-in is turned off on this server, so single sign-on cannot be unlinked.",
-    "relinkNote": "Once unlinked, signing in with {{name}} no longer opens this account. You can link it again here.",
-    "linked": "Single sign-on is now linked.",
-    "unlinked": "Single sign-on is unlinked. Your other devices were signed out.",
+    "subtitle": "Sign out of this device or of every device. Family Hub signs in with your email and password.",
+    "logout": "Sign out",
+    "logoutDesc": "Sign out of this device. Your other devices stay signed in.",
     "logoutEverywhere": "Sign out of all devices",
     "logoutEverywhereDesc": "Lost a phone, or signed in on a shared computer? This signs you out everywhere, including here.",
     "confirmLogoutEverywhere": "Sign out of all devices, including this one?"
+  },
+  "groups": {
+    "you": {
+      "title": "You",
+      "summary": "Name, menu order, language, notifications, sign-in",
+      "intro": "Only affects your account and this device."
+    },
+    "household": {
+      "title": "Household",
+      "summary": "Members, modules, AI assistant",
+      "intro": "Changes here apply to everyone in the family.",
+      "members": "Manage family members",
+      "membersTitle": "Family members",
+      "membersHelp": "Parents manage settings and approve chores.",
+      "invite": "Invite or manage"
+    },
+    "display": {
+      "title": "Display",
+      "summary": "Layout, weather, night mode, frames, photos",
+      "intro": "What the kitchen frame shows. The frame itself stays read-only."
+    },
+    "data": {
+      "title": "Data",
+      "summary": "Export and import",
+      "intro": "Portable JSON. Passwords and secrets are never included."
+    },
+    "advanced": {
+      "title": "Advanced",
+      "summary": "Server credentials, updates",
+      "intro": "Server administrator only."
+    }
   }
 }

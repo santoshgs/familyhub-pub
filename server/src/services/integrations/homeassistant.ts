@@ -1,4 +1,5 @@
 import WebSocket from 'ws';
+import { blockPrivateFor, guardedLookup } from '../../utils/urlGuard';
 import { query } from '../../db';
 import { decryptCredentials } from '../../utils/crypto';
 import { safeFetch } from '../../lib/safeFetch';
@@ -25,7 +26,8 @@ function getTodoItemsViaWebSocket(baseUrl: string, token: string, entityId: stri
         const wsUrl = baseUrl.replace(/^https?/, (p) => (p === 'https' ? 'wss' : 'ws')) + '/api/websocket';
         // TLS certificates are verified (no rejectUnauthorized bypass) — consistent
         // with the REST calls to the same server, which also verify certificates.
-        const ws = new WebSocket(wsUrl);
+        // Connect through the guarded lookup so the vetted address is the one used.
+        const ws = new WebSocket(wsUrl, { lookup: guardedLookup(blockPrivateFor()) as never, maxRedirects: 0 });
         const msgId = 1;
         let authenticated = false;
 

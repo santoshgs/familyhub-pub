@@ -33,7 +33,8 @@ const sanitizePoints = (value: unknown): number => {
  * The note is the task title so the history stays readable on its own.
  */
 const awardTaskPoints = async (task: { id: string; title: string; points: number; assigned_to: string[] }, userId: string) => {
-    for (const memberId of task.assigned_to) {
+    // A member listed twice earns once.
+    for (const memberId of uniqueIds(task.assigned_to)) {
         await query(
             `INSERT INTO reward_transactions (user_id, member_id, task_id, points, type, note)
              VALUES ($1, $2, $3, $4, 'earn', $5)`,
@@ -41,6 +42,11 @@ const awardTaskPoints = async (task: { id: string; title: string; points: number
         );
     }
 };
+
+/** Distinct, non-empty member ids (an assignment lists each member once). */
+const uniqueIds = (value: unknown): string[] => Array.isArray(value)
+    ? [...new Set(value.filter((id): id is string => typeof id === 'string' && id.trim() !== ''))]
+    : [];
 
 const ensureMembersBelongToUser = async (memberIds: string[], userId: string) => {
     for (const memberId of memberIds) {
@@ -101,9 +107,7 @@ router.post('/', async (req: AuthRequest, res) => {
             return res.status(400).json({ success: false, error: 'Unknown category' });
         }
 
-        const assignedTo: string[] = Array.isArray(assigned_to)
-            ? assigned_to.filter((id: any) => typeof id === 'string' && id.trim())
-            : [];
+        const assignedTo: string[] = uniqueIds(assigned_to);
         await ensureMembersBelongToUser(assignedTo, req.userId!);
 
         // Only parents may put points on a chore — silently ignore the field otherwise.
@@ -198,9 +202,7 @@ router.put('/:id', async (req: AuthRequest, res) => {
         }
 
         if (assigned_to !== undefined) {
-            const assignedTo: string[] = Array.isArray(assigned_to)
-                ? assigned_to.filter((mid: any) => typeof mid === 'string' && mid.trim())
-                : [];
+            const assignedTo: string[] = uniqueIds(assigned_to);
             await ensureMembersBelongToUser(assignedTo, req.userId!);
             values.push(JSON.stringify(assignedTo));
             updates.push(`assigned_to = $${values.length}::jsonb`);
@@ -234,8 +236,8 @@ router.put('/:id', async (req: AuthRequest, res) => {
                     ? sanitizePoints(points)
                     : sanitizePoints(existing.points);
                 const effectiveAssigned: string[] = assigned_to !== undefined && Array.isArray(assigned_to)
-                    ? assigned_to.filter((mid: any) => typeof mid === 'string' && mid.trim())
-                    : (Array.isArray(existing.assigned_to) ? existing.assigned_to : []);
+                    ? uniqueIds(assigned_to)
+                    : uniqueIds(existing.assigned_to);
 
                 if (effectivePoints > 0 && effectiveAssigned.length > 0) {
                     if (isParent) {
@@ -249,6 +251,11 @@ router.put('/:id', async (req: AuthRequest, res) => {
                     }
                 }
             } else if (!isCompleted && wasCompleted) {
+                // Reversing points a parent already awarded is a parent decision;
+                // a child may only take back a completion still awaiting approval.
+                if (!isParent && !existing.pending_approval && sanitizePoints(existing.points) > 0) {
+                    return res.status(403).json({ success: false, error: 'Only a parent can undo a rewarded chore.' });
+                }
                 // Un-completing reverses the CURRENT completion only: earn
                 // transactions created at-or-after completed_at belong to this
                 // cycle (recurring chores are re-completed later, producing new

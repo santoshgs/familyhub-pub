@@ -21,7 +21,7 @@ photo frame, and a Raspberry Pi deployment with versioned, self-updating
 releases. Since v1.0 it is its own product: OpenFamily modules it doesn't use
 (recipes, meal planning, family posts, the kiosk) are gone, every remaining
 module can be switched off per household (enforced by the server), it speaks
-English and French, it can sign in with Google, and the Pi sends ntfy alerts
+English and French, and the Pi sends ntfy alerts
 for renewals and updates.
 
 **Contents:** [What it does](#what-it-does) · [The photo frame hack](#the-photo-frame-hack) ·
@@ -37,7 +37,6 @@ for renewals and updates.
 | **Daycare updates** | Lillio/HiMama emails from the family Gmail account, summarised. |
 | **Chores and pocket money** | OpenFamily chores (with optional points), approvals and balances. |
 | **Modules you choose** | To-dos, Chores, Pocket money, Daycare, School, Notes, Budget, Shopping, Weekly routines, Integrations (Home Assistant, Nextcloud, Immich) and an AI assistant, each on or off for the household. |
-| **Sign in with Google** | Optional, alongside or instead of passwords; new accounts still need an invitation. |
 | **Alerts on your phone** | ntfy pushes for expiring credentials, installed releases and failed updates. |
 | **Ambient display** | A read-only, glanceable dashboard for a wall or counter screen, with detail panels, night dimming and a news reader. |
 | **Private by default** | Management works only over the household's Tailscale network. The photo frame reaches a separate, display-only listener on the home network. |
@@ -122,7 +121,7 @@ under the same name use different boards and firmware.
    returns 404. An nftables table accepts HTTPS only from the frame's reserved
    address (plus SSH from the home network). Management stays on Tailscale.
 6. **Pairing, not passwords.** The frame shows a pairing screen. A parent
-   creates an 8-digit, 5-minute code in Display setup; the frame gets a
+   creates an 8-digit, 5-minute code in Settings → Display; the frame gets a
    read-only token tied to its own revocable session.
 
 | The frame's pairing screen | Tap a card for details |

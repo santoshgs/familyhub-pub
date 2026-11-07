@@ -23,11 +23,18 @@ export interface PushPayload {
     tag?: string;
 }
 
-export async function sendPushToUser(userId: string, payload: PushPayload): Promise<void> {
+/**
+ * Sends to every device of a family (`audience: 'family'`, the default, used for
+ * shared appointment reminders: userId is the family) or only to the devices the
+ * account itself registered (`'account'`, for personal notifications).
+ */
+export async function sendPushToUser(userId: string, payload: PushPayload, audience: 'family' | 'account' = 'family'): Promise<void> {
     if (!vapidPublicKey || !vapidPrivateKey) return;
 
     const { rows } = await query(
-        'SELECT endpoint, keys FROM push_subscriptions WHERE user_id = $1',
+        audience === 'account'
+            ? 'SELECT endpoint, keys FROM push_subscriptions WHERE account_id = $1'
+            : 'SELECT endpoint, keys FROM push_subscriptions WHERE user_id = $1',
         [userId]
     );
     const subs = rows as Array<{ endpoint: string; keys: { auth: string; p256dh: string } }>;

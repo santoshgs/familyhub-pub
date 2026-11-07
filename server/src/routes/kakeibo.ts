@@ -38,6 +38,14 @@ const DEFAULT_PILLAR_BY_CATEGORY: Record<string, Pillar> = {
     'Maison': 'wants',
     'Autre': 'extra',
     'Prélèvements': 'survival',
+    // Family Hub v1.5 categories (lib/budgetCategories).
+    restaurants: 'wants', groceries: 'survival', drinks: 'wants', coffee: 'wants', 'fast-food': 'wants', bar: 'wants',
+    movies: 'culture', sports: 'culture', games: 'culture', music: 'culture', books: 'culture', 'active-arts': 'culture',
+    rent: 'survival', mortgage: 'survival', electricity: 'survival', 'home-gas': 'survival', water: 'survival', internet: 'survival',
+    phone: 'survival', television: 'wants', maintenance: 'survival', housekeeping: 'wants', furniture: 'wants',
+    car: 'survival', fuel: 'survival', parking: 'survival', rideshare: 'wants', transit: 'survival', flight: 'wants', bicycle: 'wants',
+    medical: 'survival', pets: 'survival', insurance: 'survival', taxes: 'survival', childcare: 'survival', clothing: 'survival',
+    gifts: 'extra', electronics: 'wants', general: 'extra',
 };
 
 const parsePillars = (raw: unknown): Record<string, Pillar> => {

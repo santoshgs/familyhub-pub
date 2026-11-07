@@ -1,3 +1,4 @@
+import { stripTrailingSlashes } from '../lib/asyncRoutes';
 import { Router, Response } from 'express';
 import { query } from '../db';
 import { authMiddleware, AuthRequest, requireParent } from '../middleware/auth';
@@ -111,7 +112,7 @@ router.put('/settings', requireParent, async (req: AuthRequest, res) => {
         // Anthropic and Gemini use their official endpoints — no base URL to store.
         let cleanedBaseUrl: string | null = null;
         if (provider !== 'anthropic' && provider !== 'gemini') {
-            const rawUrl = typeof base_url === 'string' ? base_url.trim().replace(/\/+$/, '') : '';
+            const rawUrl = typeof base_url === 'string' ? stripTrailingSlashes(base_url.trim()) : '';
             if (rawUrl) {
                 try {
                     await assertSafeIntegrationUrl(rawUrl);
@@ -133,6 +134,15 @@ router.put('/settings', requireParent, async (req: AuthRequest, res) => {
             encryptedKeyExpr = encryptCredentials({ api_key: api_key.trim() });
         } else {
             encryptedKeyExpr = undefined; // keep
+        }
+
+        // A kept key is only ever sent where it was saved for: changing the
+        // provider or the server address clears it unless a new key comes along.
+        if (encryptedKeyExpr === undefined) {
+            const current = await loadSettingsRow(req.userId!);
+            if (current && !sameKeyDestination(current.provider, current.base_url, provider as AiProvider, cleanedBaseUrl)) {
+                encryptedKeyExpr = null;
+            }
         }
 
         const result = await query(
@@ -178,6 +188,19 @@ router.put('/settings', requireParent, async (req: AuthRequest, res) => {
 // POST /api/ai/test — parents only: trivial completion through the abstraction.
 // Body fields override the saved settings so "Tester" works before saving;
 // an empty api_key falls back to the stored (decrypted) one.
+const originOf = (provider: AiProvider, baseUrl: string | null | undefined): string => {
+    const effective = baseUrl || DEFAULT_BASE_URLS[provider];
+    if (!effective) return `provider:${provider}`; // official endpoint, no address to change
+    try {
+        return new URL(effective).origin;
+    } catch {
+        return '';
+    }
+};
+const sameKeyDestination = (savedProvider: string | null | undefined, savedBaseUrl: string | null | undefined,
+    provider: AiProvider, baseUrl: string | null | undefined): boolean =>
+    savedProvider === provider && originOf(provider, savedBaseUrl) === originOf(provider, baseUrl);
+
 router.post('/test', requireParent, async (req: AuthRequest, res) => {
     try {
         const row = await loadSettingsRow(req.userId!);
@@ -194,15 +217,19 @@ router.post('/test', requireParent, async (req: AuthRequest, res) => {
         const settings: AiSettings = {
             provider,
             base_url:
-                (typeof body.base_url === 'string' && body.base_url.trim().replace(/\/+$/, '')) ||
+                (typeof body.base_url === 'string' && stripTrailingSlashes(body.base_url.trim())) ||
                 row?.base_url ||
                 DEFAULT_BASE_URLS[provider],
-            api_key:
-                (typeof body.api_key === 'string' && body.api_key.trim()) ||
-                decryptApiKey(row?.encrypted_api_key ?? null),
+            api_key: '',
             model: model.trim().slice(0, 100),
         };
-
+        const suppliedKey = typeof body.api_key === 'string' ? body.api_key.trim() : '';
+        if (suppliedKey) {
+            settings.api_key = suppliedKey;
+        } else if (row && sameKeyDestination(row.provider, row.base_url, provider, settings.base_url)) {
+            // The stored key is used only against the provider and address it was saved for.
+            settings.api_key = decryptApiKey(row.encrypted_api_key ?? null);
+        }
         const result = await aiComplete(settings, {
             system: 'Tu es un test de connexion. Réponds uniquement en JSON.',
             user: 'Réponds avec {"ok":true}',

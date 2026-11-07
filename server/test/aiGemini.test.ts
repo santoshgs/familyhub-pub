@@ -1,7 +1,10 @@
-import { afterEach, expect, it, vi } from 'vitest';
+import dns from 'node:dns/promises';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { geminiComplete } from '../src/services/ai/gemini';
 const settings = { provider: 'gemini' as const, model: 'fictional-model', api_key: 'fictional-private-key', base_url: null };
 const request = { system: 'Connection test', user: 'Return ok', jsonSchema: { type: 'object', properties: { ok: { type: 'boolean' } } } };
+// The SSRF guard resolves the provider's host and fails closed; keep these tests offline.
+beforeEach(() => { vi.spyOn(dns, 'lookup').mockResolvedValue([{ address: '203.0.113.10', family: 4 }] as never); });
 afterEach(() => vi.restoreAllMocks());
 it('preserves the Google permission diagnostic while redacting the submitted key', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(Response.json({ error: { status: 'PERMISSION_DENIED', message: 'Generative Language API is disabled. Key: fictional-private-key' } }, { status: 403 }));

@@ -1,10 +1,14 @@
 import type { ReactNode } from 'react';
 import { Suspense } from 'react';
-import { Link } from 'react-router-dom';
-import { FamilyHubNav } from './FamilyHubNav';
-import { familyHubVersionLabel } from './version';
+import { useLocation } from 'react-router-dom';
+import { AppShell, useNavItems } from './FamilyHubNav';
 import './familyhub.css';
 
-export function ModulePage({ children }: { children: ReactNode }) {
-    return <div className="fh-scope fh-app"><header className="fh-header"><Link className="fh-brand" to="/">familyhub <small>A LITTLE MORE TOGETHER</small></Link></header><FamilyHubNav /><main className="fh-main"><Suspense fallback={<p role="status">Opening module…</p>}>{children}</Suspense><footer className="fh-page-footer"><span>A little more together.</span><span>{familyHubVersionLabel} · Built on OpenFamily</span></footer></main></div>;
+const EXTRA_TITLES: Record<string, string> = { '/family': 'Family members', '/join': 'Join a family' };
+
+export function ModulePage({ children, title }: { children: ReactNode; title?: string }) {
+    const path = useLocation().pathname;
+    const items = useNavItems();
+    const label = title ?? items.find((item) => item.to === path)?.label ?? EXTRA_TITLES[path] ?? 'Family Hub';
+    return <AppShell title={label}><Suspense fallback={<p role="status">Opening module…</p>}>{children}</Suspense></AppShell>;
 }

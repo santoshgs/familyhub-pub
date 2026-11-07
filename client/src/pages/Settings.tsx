@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { api } from '../lib/api';
 import { FAMILYHUB_MODULES } from '../familyhub/modules';
 import { Download, Upload, CheckCircle, AlertCircle, Loader2, Bell, BellOff, Globe, Languages, Camera, Trash2, Sparkles, LayoutGrid, Tags, ArrowUp, ArrowDown, Plus } from 'lucide-react';
-import { Card, CardContent, Button, Input, Select } from '../components/ui';
+import { Button, Input, Select } from '../components/ui';
 import { LanguageSwitcher } from '../components/ui/LanguageSwitcher';
 import RegionalPreferences from '../components/app/RegionalPreferences';
 import SignInCard from '../components/app/SignInCard';
@@ -12,6 +12,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useCategories, CATEGORY_MODULES, type CategoryModule } from '../hooks/useCategories';
 import { refreshAiStatus } from '../lib/aiStatus';
 import { aiErrorKey } from '../components/app/MagicInput';
+import { SettingsSection } from '../components/app/SettingsSection';
 
 interface ImportCounts {
     family_settings?: number;
@@ -186,15 +187,7 @@ export const AiAssistantCard: React.FC<{ isParent: boolean }> = ({ isParent }) =
     ];
 
     return (
-        <Card>
-            <CardContent className="p-6">
-                <div className="flex items-start gap-4">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-card bg-primary-soft text-primary">
-                        <Sparkles className="h-5 w-5" />
-                    </div>
-                    <div className="flex-1">
-                        <h3 className="text-caption font-semibold text-foreground">{t('ai:settings.title')}</h3>
-                        <p className="mt-1 text-micro text-muted-foreground">{t('ai:settings.subtitle')}</p>
+        <SettingsSection id="ai" icon={<Sparkles className="h-5 w-5" />} title={t('ai:settings.title')} subtitle={t('ai:settings.subtitle')}>
 
                         {loading ? (
                             <div className="mt-4 flex items-center gap-2 text-micro text-muted-foreground">
@@ -350,10 +343,7 @@ export const AiAssistantCard: React.FC<{ isParent: boolean }> = ({ isParent }) =
                                 )}
                             </div>
                         )}
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
+                    </SettingsSection>
     );
 };
 
@@ -408,15 +398,7 @@ const ModulesCard: React.FC<{ isParent: boolean }> = ({ isParent }) => {
     };
 
     return (
-        <Card>
-            <CardContent className="p-6">
-                <div className="flex items-start gap-4">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-card bg-primary-soft text-primary">
-                        <LayoutGrid className="h-5 w-5" />
-                    </div>
-                    <div className="flex-1">
-                        <h3 className="text-caption font-semibold text-foreground">{t('settings:modules.title')}</h3>
-                        <p className="mt-1 text-micro text-muted-foreground">{t('settings:modules.subtitle')}</p>
+        <SettingsSection id="modules" icon={<LayoutGrid className="h-5 w-5" />} title={t('settings:modules.title')} subtitle={t('settings:modules.subtitle')}>
 
                         {!isParent && (
                             <p className="mt-3 flex items-center gap-1 text-micro text-muted-foreground">
@@ -505,10 +487,7 @@ const ModulesCard: React.FC<{ isParent: boolean }> = ({ isParent }) => {
                             })}
                         </div>
                         )}
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
+                    </SettingsSection>
     );
 };
 
@@ -612,15 +591,7 @@ const CategoriesCard: React.FC<{ isParent: boolean }> = ({ isParent }) => {
     const fallback = fallbackRow?.value.trim() || '';
 
     return (
-        <Card>
-            <CardContent className="p-6">
-                <div className="flex items-start gap-4">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-card bg-primary-soft text-primary">
-                        <Tags className="h-5 w-5" />
-                    </div>
-                    <div className="flex-1">
-                        <h3 className="text-caption font-semibold text-foreground">{t('categories:title')}</h3>
-                        <p className="mt-1 text-micro text-muted-foreground">{t('categories:subtitle')}</p>
+        <SettingsSection id="categories" icon={<Tags className="h-5 w-5" />} title={t('categories:title')} subtitle={t('categories:subtitle')}>
 
                         {!isParent && (
                             <p className="mt-3 flex items-center gap-1 text-micro text-muted-foreground">
@@ -630,7 +601,8 @@ const CategoriesCard: React.FC<{ isParent: boolean }> = ({ isParent }) => {
                         )}
 
                         <div className="mt-4 flex gap-1 rounded-input border border-border bg-surface-2 p-1">
-                            {CATEGORY_MODULES.map((key) => (
+                            {/* Budget categories are fixed in Family Hub (v1.5). */}
+                            {CATEGORY_MODULES.filter((key) => key !== 'budget').map((key) => (
                                 <button
                                     key={key}
                                     type="button"
@@ -719,14 +691,13 @@ const CategoriesCard: React.FC<{ isParent: boolean }> = ({ isParent }) => {
                                 )}
                             </div>
                         )}
-                    </div>
-                </div>
-            </CardContent>
-        </Card>
+                    </SettingsSection>
     );
 };
 
-const Settings: React.FC = () => {
+/** `only` renders just those sections (Family Hub groups them in its own Settings page). */
+const Settings: React.FC<{ only?: string[] }> = ({ only }) => {
+    const show = (key: string) => !only || only.includes(key);
     const { t } = useTranslation(['settings', 'common', 'server']);
     const entityLabel = (key: string) => t(`settings:entities.${key}`, { defaultValue: key });
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -890,34 +861,22 @@ const Settings: React.FC = () => {
 
     return (
         <div className="space-y-6">
-            <div>
+            {!only && <div>
                 <h2 className="text-title font-bold text-foreground">{t('settings:title')}</h2>
                 <p className="text-caption text-muted-foreground">{t('settings:subtitle')}</p>
-            </div>
+            </div>}
 
             {/* Language */}
-            <Card>
-                <CardContent className="p-6">
-                    <div className="flex items-start gap-4">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-card bg-primary-soft text-primary">
-                            <Languages className="h-5 w-5" />
-                        </div>
-                        <div className="flex-1">
-                            <h3 className="text-caption font-semibold text-foreground">{t('settings:language.title')}</h3>
-                            <p className="mt-1 text-micro text-muted-foreground">{t('settings:language.subtitle')}</p>
+            {show('language') && <SettingsSection id="language" icon={<Languages className="h-5 w-5" />} title={t('settings:language.title')} subtitle={t('settings:language.subtitle')}>
                             <LanguageSwitcher className="mt-4" />
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+                        </SettingsSection>}
 
             {/* First day of the week */}
-            <RegionalPreferences />
+            {show('week') && <RegionalPreferences />}
 
             {/* Profile photo */}
-            <Card>
-                <CardContent className="p-6">
-                    <div className="flex items-start gap-4">
+            {show('profile') && <SettingsSection id="profile" icon={<Camera className="h-5 w-5" />} title={t('settings:profile.title')} subtitle={t('settings:profile.subtitle')}>
+                <div className="flex items-start gap-4">
                         <div className="relative shrink-0">
                             {user?.avatar_url ? (
                                 <img
@@ -937,10 +896,6 @@ const Settings: React.FC = () => {
                             )}
                         </div>
                         <div className="flex-1">
-                            <h3 className="text-caption font-semibold text-foreground">{t('settings:profile.title')}</h3>
-                            <p className="mt-1 text-micro text-muted-foreground">
-                                {t('settings:profile.subtitle')}
-                            </p>
                             <div className="mt-3 flex flex-wrap gap-2">
                                 <input
                                     ref={avatarInputRef}
@@ -977,23 +932,13 @@ const Settings: React.FC = () => {
                                     {avatarError}
                                 </p>
                             )}
+                        
                         </div>
-                    </div>
-                </CardContent>
-            </Card>
+                </div>
+            </SettingsSection>}
 
             {/* Push Notifications */}
-            <Card>
-                <CardContent className="p-6">
-                    <div className="flex items-start gap-4">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-card bg-primary-soft text-primary">
-                            {isSubscribed ? <Bell className="h-5 w-5" /> : <BellOff className="h-5 w-5" />}
-                        </div>
-                        <div className="flex-1">
-                            <h3 className="text-caption font-semibold text-foreground">{t('settings:notif.title')}</h3>
-                            <p className="mt-1 text-micro text-muted-foreground">
-                                {t('settings:notif.subtitle')}
-                            </p>
+            {show('notif') && <SettingsSection id="notif" icon={isSubscribed ? <Bell className="h-5 w-5" /> : <BellOff className="h-5 w-5" />} title={t('settings:notif.title')} subtitle={t('settings:notif.subtitle')}>
 
                             {!isSupported && (
                                 <p className="mt-2 flex items-center gap-1 text-micro text-muted-foreground">
@@ -1044,26 +989,13 @@ const Settings: React.FC = () => {
                                     {t('settings:notif.active')}
                                 </p>
                             )}
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+                        </SettingsSection>}
 
-            {/* Sign-in: SSO link, sign out everywhere */}
-            <SignInCard />
+            {/* Sign-in: sign out here or everywhere */}
+            {show('signin') && <SignInCard />}
 
             {/* Currency */}
-            <Card>
-                <CardContent className="p-6">
-                    <div className="flex items-start gap-4">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-card bg-primary-soft text-primary">
-                            <Globe className="h-5 w-5" />
-                        </div>
-                        <div className="flex-1">
-                            <h3 className="text-caption font-semibold text-foreground">{t('settings:currency.title')}</h3>
-                            <p className="mt-1 text-micro text-muted-foreground">
-                                {t('settings:currency.subtitle')}
-                            </p>
+            {show('currency') && <SettingsSection id="currency" icon={<Globe className="h-5 w-5" />} title={t('settings:currency.title')} subtitle={t('settings:currency.subtitle')}>
 
                             {currencyError && (
                                 <p className="mt-2 flex items-center gap-1 text-micro text-destructive">
@@ -1088,32 +1020,19 @@ const Settings: React.FC = () => {
                                     </button>
                                 ))}
                             </div>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+                        </SettingsSection>}
 
             {/* AI assistant */}
-            <AiAssistantCard isParent={isParent} />
+            {show('ai') && <AiAssistantCard isParent={isParent} />}
 
             {/* Optional modules */}
-            <ModulesCard isParent={isParent} />
+            {show('modules') && <ModulesCard isParent={isParent} />}
 
             {/* Custom categories */}
-            <CategoriesCard isParent={isParent} />
+            {show('categories') && <CategoriesCard isParent={isParent} />}
 
             {/* Export */}
-            <Card>
-                <CardContent className="p-6">
-                    <div className="flex items-start gap-4">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-card bg-primary-soft text-primary">
-                            <Download className="h-5 w-5" />
-                        </div>
-                        <div className="flex-1">
-                            <h3 className="text-caption font-semibold text-foreground">{t('settings:export.title')}</h3>
-                            <p className="mt-1 text-micro text-muted-foreground">
-                                {t('settings:export.subtitle')}
-                            </p>
+            {show('export') && <SettingsSection id="export" icon={<Download className="h-5 w-5" />} title={t('settings:export.title')} subtitle={t('settings:export.subtitle')}>
                             {exportError && (
                                 <p className="mt-2 flex items-center gap-1 text-micro text-destructive">
                                     <AlertCircle className="h-4 w-4" />
@@ -1132,23 +1051,10 @@ const Settings: React.FC = () => {
                                 )}
                                 {exportLoading ? t('settings:export.inProgress') : t('settings:export.button')}
                             </Button>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+                        </SettingsSection>}
 
             {/* Import */}
-            <Card>
-                <CardContent className="p-6">
-                    <div className="flex items-start gap-4">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-card bg-primary-soft text-primary">
-                            <Upload className="h-5 w-5" />
-                        </div>
-                        <div className="flex-1">
-                            <h3 className="text-caption font-semibold text-foreground">{t('settings:import.title')}</h3>
-                            <p className="mt-1 text-micro text-muted-foreground">
-                                {t('settings:import.subtitle')}
-                            </p>
+            {show('import') && <SettingsSection id="import" icon={<Upload className="h-5 w-5" />} title={t('settings:import.title')} subtitle={t('settings:import.subtitle')}>
 
                             {importSuccess && (
                                 <div className="mt-3 rounded-input border border-border bg-surface-2 p-3">
@@ -1198,10 +1104,7 @@ const Settings: React.FC = () => {
                                     </Button>
                                 )}
                             </div>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
+                        </SettingsSection>}
 
         </div>
     );

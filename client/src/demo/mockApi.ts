@@ -2,6 +2,7 @@
 // persistence: the store is recreated on every page load. It mirrors the shape
 // of the real API responses ({ success, data }).
 import { createSeed, type DemoStore } from './seed';
+import { BUDGET_CATEGORY_KEYS } from '../familyhub/budgetCategories';
 
 let store: DemoStore = createSeed();
 
@@ -9,10 +10,7 @@ let store: DemoStore = createSeed();
 // like everything else in the demo. Keep in sync with hooks/useCategories.ts.
 let demoCategories: Record<'shopping' | 'budget' | 'task', string[]> = {
     shopping: ['Alimentation', 'Bebe', 'Menage', 'Sante', 'Autre'],
-    budget: [
-        'Logement', 'Alimentation', 'Transport', 'Santé', 'Loisirs',
-        'Abonnements', 'Assurance', 'Enfants', 'Maison', 'Autre',
-    ],
+    budget: [...BUDGET_CATEGORY_KEYS],
     task: ['Cuisine', 'Chambre', 'Salle de bain', 'Salon', 'Extérieur', 'École', 'Administratif', 'Autre'],
 };
 
@@ -313,7 +311,7 @@ async function route(method: string, path: string, q: Record<string, string>, bo
     if (path === '/api/auth/me') return ok({ user: store.user });
     // The demo has no identity provider: password sign-in only.
     if (path === '/api/auth/config') {
-        return ok({ passwordLogin: true, passwordSignup: true, passwordReset: false, oidc: { enabled: false, name: null, signup: false } });
+        return ok({ passwordLogin: true, passwordSignup: true, passwordReset: false });
     }
     if (path === '/api/auth/logout-all') return ok({});
     if (path === '/api/auth/login' || path === '/api/auth/register' || path === '/api/auth/refresh' || path === '/api/invites/join' || path === '/api/invites/leave')
@@ -568,6 +566,8 @@ async function route(method: string, path: string, q: Record<string, string>, bo
     }
 
     // ── Budget ──────────────────────────────────────────────────────────────────
+    // Shared expenses are not simulated in the demo (Family Hub v1.5).
+    if (path === '/api/budget/sharing') return ok({ members: [], defaultSharers: [], groups: [], ungrouped: { owes: [] }, month: { month: String((q as Record<string, unknown>).month ?? ''), total: 0, members: [], owes: [] }, balance: { total: 0, members: [], owes: [] }, settlements: [], history: [] });
     if (path === '/api/budget/forecast') { const { month, year } = monthYearOf(q); return ok(budgetForecast(month, year)); }
     if (path === '/api/budget/statistics') { const { month, year } = monthYearOf(q); return ok(budgetStatistics(month, year)); }
     if (path === '/api/budget/statistics/monthly') return ok(budgetMonthly(monthYearOf(q).year));

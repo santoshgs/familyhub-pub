@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { Router } from 'express';
 import { query } from '../db';
-import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { authMiddleware, AuthRequest, requireParent } from '../middleware/auth';
 
 const router = Router();
 
@@ -80,7 +80,7 @@ const buildICS = (appointments: any[]): string => {
 // ─── Authenticated token management ──────────────────────────────────────────
 
 // GET /api/calendar/token — returns the current user's feed token (creating one if needed)
-router.get('/token', authMiddleware, async (req: AuthRequest, res) => {
+router.get('/token', authMiddleware, requireParent, async (req: AuthRequest, res) => {
     try {
         const existing = await query('SELECT calendar_token FROM users WHERE id = $1', [req.userId]);
         let token: string | null = existing.rows[0]?.calendar_token ?? null;
@@ -96,7 +96,7 @@ router.get('/token', authMiddleware, async (req: AuthRequest, res) => {
 });
 
 // POST /api/calendar/token/reset — regenerates the feed token (invalidates the old URL)
-router.post('/token/reset', authMiddleware, async (req: AuthRequest, res) => {
+router.post('/token/reset', authMiddleware, requireParent, async (req: AuthRequest, res) => {
     try {
         const token = crypto.randomBytes(24).toString('hex');
         await query('UPDATE users SET calendar_token = $1 WHERE id = $2', [token, req.userId]);

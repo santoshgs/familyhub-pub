@@ -16,16 +16,16 @@ beforeEach(async () => {
 afterAll(async () => { await pool.end(); });
 
 it('defaults night dimming to off with a 22:00–07:00 window', async () => {
-    expect((await readAmbientSettings(familyId)).night).toEqual({ enabled: false, start: '22:00', end: '07:00', brightness: 15 });
+    expect((await readAmbientSettings(familyId)).night).toEqual({ enabled: false, start: '22:00', end: '07:00', brightness: 15, mode: 'dim' });
 });
 
 it('stores a parent-chosen night dimming schedule and keeps it when an older client saves', async () => {
     await saveAmbientSettings(familyId, { location: null, widgets: ['calendar'], night: { enabled: true, start: '21:30', end: '06:45', brightness: 0 } });
-    expect((await readAmbientSettings(familyId)).night).toEqual({ enabled: true, start: '21:30', end: '06:45', brightness: 0 });
+    expect((await readAmbientSettings(familyId)).night).toEqual({ enabled: true, start: '21:30', end: '06:45', brightness: 0, mode: 'dim' });
     await saveAmbientSettings(familyId, { location: null, widgets: ['calendar', 'weather'] });
     const saved = await readAmbientSettings(familyId);
     expect(saved.widgets).toEqual(['calendar', 'weather']);
-    expect(saved.night).toEqual({ enabled: true, start: '21:30', end: '06:45', brightness: 0 });
+    expect(saved.night).toEqual({ enabled: true, start: '21:30', end: '06:45', brightness: 0, mode: 'dim' });
 });
 
 it('rejects invalid night dimming values', async () => {

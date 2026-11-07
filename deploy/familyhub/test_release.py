@@ -136,6 +136,50 @@ class ReleaseTests(unittest.TestCase):
         self.assertEqual(release.newest_release(releases, ['familyhub-v0.10.0']), 'familyhub-v0.3.0')
         self.assertGreater(release.version_key('familyhub-v0.10.0'), release.version_key('familyhub-v0.9.0'))
 
+    def stable(self, *names):
+        return [{'tagName': name, 'isDraft': False, 'isPrerelease': False} for name in names]
+
+    def test_check_records_and_publishes_whether_an_update_is_available(self):
+        exchange = self.root / 'exchange'
+        exchange.mkdir()
+        with patch.object(self.deployment, 'compose'), patch.object(self.deployment, 'backup'), patch.object(self.deployment, 'promote'):
+            self.deployment.apply(self.package())
+        with patch.object(release, 'list_releases', return_value=self.stable('familyhub-v0.1.0', 'familyhub-v0.2.0')), \
+                patch.object(release, 'timer_enabled', return_value=True):
+            self.deployment.check(exchange)
+        published = json.loads((exchange / release.STATUS_FILE).read_text())
+        self.assertEqual(published, json.loads((self.deployment.state / release.STATUS_FILE).read_text()))
+        self.assertEqual({k: published[k] for k in ('current', 'latest', 'updateAvailable', 'state', 'autoUpdates')},
+                         {'current': 'familyhub-v0.1.0', 'latest': 'familyhub-v0.2.0', 'updateAvailable': True, 'state': 'checked', 'autoUpdates': True})
+        self.assertEqual((exchange / release.STATUS_FILE).stat().st_mode & 0o777, 0o644)
+        self.assertEqual((self.deployment.state / release.STATUS_FILE).stat().st_mode & 0o777, 0o600)
+        with patch.object(release, 'list_releases', return_value=self.stable('familyhub-v0.1.0')), patch.object(release, 'timer_enabled', return_value=False):
+            self.deployment.check(exchange)
+        self.assertFalse(json.loads((exchange / release.STATUS_FILE).read_text())['updateAvailable'])
+
+    def test_published_status_replaces_a_planted_symlink_without_following_it(self):
+        exchange = self.root / 'exchange'
+        exchange.mkdir()
+        victim = self.root / 'victim.txt'
+        victim.write_text('keep me')
+        (exchange / release.STATUS_FILE).symlink_to(victim)
+        self.deployment.write_status(exchange, state='checked', latest=None)
+        self.assertEqual(victim.read_text(), 'keep me')
+        self.assertFalse((exchange / release.STATUS_FILE).is_symlink())
+        self.assertFalse(json.loads((exchange / release.STATUS_FILE).read_text())['updateAvailable'])
+
+    def test_start_update_only_starts_the_updater_unit(self):
+        with patch.object(release.subprocess, 'run') as run, patch.object(release, 'timer_enabled', return_value=True):
+            self.deployment.start_update()
+        run.assert_called_once()
+        self.assertEqual(run.call_args.args[0], ['systemctl', 'start', '--no-block', release.UPDATE_UNIT])
+        self.assertEqual(self.deployment.status()['state'], 'installing')
+
+    def test_status_never_raises_and_ignores_a_bad_latest_value(self):
+        data = self.deployment.write_status(None, latest='../../etc/passwd')
+        self.assertFalse(data['updateAvailable'])
+        self.assertIsNone(self.deployment.write_status(self.root / 'missing-dir', state='checked'))
+
 
 if __name__ == '__main__':
     unittest.main()

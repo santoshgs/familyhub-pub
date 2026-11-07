@@ -1,10 +1,13 @@
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
-const oauth = vi.hoisted(() => ({ start: vi.fn(), finish: vi.fn() }));
+const oauth = vi.hoisted(() => ({ start: vi.fn(), finish: vi.fn(), lapsed: false }));
 vi.mock('../../src/services/familyhub/google/connection', async (original) => {
     const real = await original<typeof import('../../src/services/familyhub/google/connection')>();
     return { ...real, startGoogleConnection: oauth.start, finishGoogleConnection: oauth.finish,
-        getGoogleAccessToken: async () => 'fictional-access',
+        getGoogleAccessToken: async () => {
+            if (oauth.lapsed) throw new real.GoogleConnectionError(401, 'Google authorization needs reconnecting.');
+            return 'fictional-access';
+        },
         googleStatus: async (family: string) => {
             const { query } = await import('../../src/db');
             const row = (await query('SELECT email, scopes FROM familyhub_google_connections WHERE family_id=$1', [family])).rows[0];
@@ -52,6 +55,7 @@ beforeEach(async () => {
     send = vi.spyOn(globalThis, 'fetch').mockImplementation(transport);
     oauth.start.mockReset().mockResolvedValue({ authorizationUrl: 'https://accounts.google.com/fictional-consent' });
     oauth.finish.mockReset().mockResolvedValue(undefined);
+    oauth.lapsed = false;
 });
 afterAll(async () => { vi.restoreAllMocks(); await pool.end(); });
 
@@ -122,6 +126,20 @@ it('writes only to the saved Google sources and never creates local tasks or app
     expect((await query('SELECT id FROM tasks')).rows).toEqual([]);
     expect((await query('SELECT id FROM appointments')).rows).toEqual([]);
 });
+it('edits and deletes events on the saved calendar only', async () => {
+    await connect();
+    const body = { title: 'Fictional pickup', colorId: '5', start: event.start, end: event.end };
+    const edited = await request(app).patch('/api/familyhub/google/events/demo1').set('Authorization', `Bearer ${owner.token}`).send(body);
+    expect(edited.status).toBe(200);
+    expect(edited.body.data).toMatchObject({ id: 'demo1', colorId: '5' });
+    expect((await request(app).delete('/api/familyhub/google/events/demo1').set('Authorization', `Bearer ${owner.token}`)).status).toBe(200);
+    expect(send.mock.calls.map(([url, options]) => [String(url).replace(/^.*calendar\/v3\//, ''), (options as RequestInit).method])).toEqual([
+        ['calendars/shared%2Ffamily/events/demo1', 'PATCH'], ['calendars/shared%2Ffamily/events/demo1', 'DELETE'],
+    ]);
+    send.mockClear();
+    expect((await request(app).patch('/api/familyhub/google/events/demo1').set('Authorization', `Bearer ${owner.token}`).send({ ...body, colorId: 'red' })).status).toBe(400);
+    expect(send).not.toHaveBeenCalled();
+});
 it('permits another parent in the family and refuses children and display tokens', async () => {
     await connect();
     const join = async (role: string, email: string) => {
@@ -139,6 +157,8 @@ it('permits another parent in the family and refuses children and display tokens
         for (const path of ['/api/familyhub/google/tasks', '/api/familyhub/google/events', '/api/familyhub/google/connect']) expect((await post(path, { title: 'Denied' }, token)).status).toBe(403);
         expect((await request(app).put('/api/familyhub/google/sources').set('Authorization', `Bearer ${token}`).send(config)).status).toBe(403);
         expect((await request(app).patch('/api/familyhub/google/tasks/demo-task').set('Authorization', `Bearer ${token}`).send({ completed: true })).status).toBe(403);
+        expect((await request(app).patch('/api/familyhub/google/events/demo1').set('Authorization', `Bearer ${token}`).send({ title: 'Denied' })).status).toBe(403);
+        expect((await request(app).delete('/api/familyhub/google/events/demo1').set('Authorization', `Bearer ${token}`)).status).toBe(403);
         expect((await request(app).delete('/api/familyhub/google/connection').set('Authorization', `Bearer ${token}`)).status).toBe(403);
     }
     expect((await get('/api/familyhub', display)).body.data).toMatchObject({ readOnly: true, connected: true });
@@ -230,4 +250,16 @@ it('uses a public callback with a fixed safe redirect on success or denial', asy
     const failure = await request(app).get('/api/familyhub/google/callback?state=fictional&redirect=https://evil.test');
     expect(failure.headers.location).toBe('http://127.0.0.1:5174/?google=connection-failed');
     expect(JSON.stringify(failure.body)).not.toContain('private provider details');
+});
+
+it('reports a lapsed Google grant as 409 GOOGLE_RECONNECT, never 401, so the app keeps the session', async () => {
+    await connect();
+    oauth.lapsed = true;
+    const range = `start=${encodeURIComponent('2026-11-01T00:00:00Z')}&end=${encodeURIComponent('2026-11-08T00:00:00Z')}`;
+    for (const response of [await get(`/api/familyhub/google/calendar?${range}`), await post('/api/familyhub/google/tasks', { title: 'Fictional chore' }),
+        await request(app).patch('/api/familyhub/google/tasks/demo-task').set('Authorization', `Bearer ${owner.token}`).send({ completed: true })]) {
+        expect(response.status).toBe(409);
+        expect(response.body).toMatchObject({ code: 'GOOGLE_RECONNECT', error: 'Google authorization needs reconnecting.' });
+    }
+    expect((await get('/api/auth/me')).status).toBe(200);
 });

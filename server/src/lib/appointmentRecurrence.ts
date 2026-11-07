@@ -273,12 +273,7 @@ export const expandRecurringAppointments = (
                 continue;
             }
 
-            const overrideData =
-                exception?.override_data &&
-                typeof exception.override_data === 'object' &&
-                !Array.isArray(exception.override_data)
-                    ? exception.override_data
-                    : {};
+            const overrideData = pickOverrideFields(exception?.override_data);
 
             expanded.push({
                 ...appointment,
@@ -311,3 +306,23 @@ export const expandRecurringAppointments = (
         String(a.start_time).localeCompare(String(b.start_time))
     );
 };
+
+/**
+ * Fields an occurrence override may change (PUT /appointments/:id/occurrences).
+ * Identity and ownership (id, user_id, subscription_id…) never come from
+ * override data, whatever an imported file contains.
+ */
+export const OVERRIDE_FIELDS = [
+    'title', 'description', 'start_time', 'end_time', 'location', 'family_member_ids',
+    'reminder_30min', 'reminder_1hour', 'reminder_minutes', 'notes', 'color', 'is_all_day',
+] as const;
+
+export function pickOverrideFields(value: unknown): Record<string, any> {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    const source = value as Record<string, unknown>;
+    const picked: Record<string, any> = {};
+    for (const field of OVERRIDE_FIELDS) {
+        if (source[field] !== undefined) picked[field] = source[field];
+    }
+    return picked;
+}

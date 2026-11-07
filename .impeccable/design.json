@@ -1,0 +1,567 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-06T00:00:00Z",
+  "title": "Design System: Family Hub",
+  "extensions": {
+    "colorMeta": {
+      "cobalt": {
+        "role": "primary",
+        "displayName": "Shell Cobalt",
+        "canonical": "#1F4FD8",
+        "tonalRamp": [
+          "#151E38",
+          "#1D2F62",
+          "#224096",
+          "#214ECF",
+          "#4B71DD",
+          "#869DDF",
+          "#BBC6E7",
+          "#EDF0F7"
+        ]
+      },
+      "cobalt-deep": {
+        "role": "primary",
+        "displayName": "Deep Cobalt",
+        "canonical": "#173DA8",
+        "tonalRamp": [
+          "#141E38",
+          "#1D2F63",
+          "#214097",
+          "#204ED0",
+          "#4A71DE",
+          "#859DE0",
+          "#BBC6E8",
+          "#EDF0F7"
+        ]
+      },
+      "cobalt-pressed": {
+        "role": "primary",
+        "displayName": "Pressed Cobalt",
+        "canonical": "#12318A",
+        "tonalRamp": [
+          "#141E38",
+          "#1C2F63",
+          "#203F98",
+          "#1F4DD1",
+          "#4970DF",
+          "#859CE0",
+          "#BAC6E8",
+          "#EDF0F7"
+        ]
+      },
+      "cobalt-tint": {
+        "role": "primary",
+        "displayName": "Cobalt Tint",
+        "canonical": "#DCE5FF",
+        "tonalRamp": [
+          "#0F1B3E",
+          "#12296E",
+          "#0E36A9",
+          "#0440EC",
+          "#3264F6",
+          "#7796EE",
+          "#B3C3EF",
+          "#ECEFF9"
+        ]
+      },
+      "tomato": {
+        "role": "secondary",
+        "displayName": "Tomato",
+        "canonical": "#D4381F",
+        "tonalRamp": [
+          "#381A15",
+          "#62271D",
+          "#963222",
+          "#CE3922",
+          "#DD5F4B",
+          "#DF9286",
+          "#E7C1BB",
+          "#F7EFED"
+        ]
+      },
+      "sunflower": {
+        "role": "secondary",
+        "displayName": "Sunflower",
+        "canonical": "#F7C21B",
+        "tonalRamp": [
+          "#3C3210",
+          "#6B5615",
+          "#A48113",
+          "#E4B00C",
+          "#EFC339",
+          "#EACF7B",
+          "#EDDFB5",
+          "#F8F5EC"
+        ]
+      },
+      "sun-ink": {
+        "role": "secondary",
+        "displayName": "Sun Ink",
+        "canonical": "#3D3000",
+        "tonalRamp": [
+          "#3E340F",
+          "#6E5A12",
+          "#A9880E",
+          "#ECBA04",
+          "#F6CC32",
+          "#EED577",
+          "#EFE2B3",
+          "#F9F6EC"
+        ]
+      },
+      "grass": {
+        "role": "secondary",
+        "displayName": "Grass",
+        "canonical": "#2E9E4F",
+        "tonalRamp": [
+          "#193321",
+          "#265935",
+          "#31864A",
+          "#38B75E",
+          "#5ECA7E",
+          "#92D3A5",
+          "#C1E1CA",
+          "#EFF6F1"
+        ]
+      },
+      "grass-ink": {
+        "role": "secondary",
+        "displayName": "Grass Ink",
+        "canonical": "#1D6B35",
+        "tonalRamp": [
+          "#193421",
+          "#255A36",
+          "#2F884B",
+          "#35BA5E",
+          "#5CCC7E",
+          "#90D5A5",
+          "#C0E2CB",
+          "#EFF6F1"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#1B1B1F",
+        "tonalRamp": [
+          "#252528",
+          "#3D3D43",
+          "#565661",
+          "#707080",
+          "#8D8D9B",
+          "#AEAEB7",
+          "#CFCFD3",
+          "#F2F2F3"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "#FFFFFF",
+        "tonalRamp": [
+          "#262626",
+          "#404040",
+          "#5C5C5C",
+          "#787878",
+          "#949494",
+          "#B2B2B2",
+          "#D1D1D1",
+          "#F2F2F2"
+        ]
+      },
+      "wash": {
+        "role": "neutral",
+        "displayName": "Wash",
+        "canonical": "#F4F5F8",
+        "tonalRamp": [
+          "#21242B",
+          "#353B4A",
+          "#4B536D",
+          "#5E6B92",
+          "#7E89AA",
+          "#A5ACC0",
+          "#CACED8",
+          "#F1F2F4"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "Line",
+        "canonical": "#E4E5EA",
+        "tonalRamp": [
+          "#232429",
+          "#3A3C46",
+          "#525566",
+          "#696E86",
+          "#888CA0",
+          "#ABAEBA",
+          "#CDCFD5",
+          "#F1F2F3"
+        ]
+      },
+      "line-strong": {
+        "role": "neutral",
+        "displayName": "Line Strong",
+        "canonical": "#C9CAD2",
+        "tonalRamp": [
+          "#242528",
+          "#3C3C44",
+          "#555663",
+          "#6D7082",
+          "#8B8D9D",
+          "#ADAEB8",
+          "#CECFD4",
+          "#F2F2F3"
+        ]
+      },
+      "soft": {
+        "role": "neutral",
+        "displayName": "Soft",
+        "canonical": "#5A5A66",
+        "tonalRamp": [
+          "#252528",
+          "#3D3D43",
+          "#575761",
+          "#71717F",
+          "#8E8E9A",
+          "#AFAFB6",
+          "#CFCFD3",
+          "#F2F2F3"
+        ]
+      },
+      "dark-ink": {
+        "role": "neutral",
+        "displayName": "Dark Ink",
+        "canonical": "#F2F2F5",
+        "tonalRamp": [
+          "#232329",
+          "#3A3A46",
+          "#525266",
+          "#696987",
+          "#8787A1",
+          "#ABABBA",
+          "#CDCDD5",
+          "#F1F1F3"
+        ]
+      },
+      "dark-paper": {
+        "role": "neutral",
+        "displayName": "Dark Paper",
+        "canonical": "#121317",
+        "tonalRamp": [
+          "#232529",
+          "#3A3C45",
+          "#525665",
+          "#6A6F86",
+          "#888DA0",
+          "#ABAEBA",
+          "#CDCFD5",
+          "#F1F2F3"
+        ]
+      },
+      "dark-wash": {
+        "role": "neutral",
+        "displayName": "Dark Wash",
+        "canonical": "#1D1E24",
+        "tonalRamp": [
+          "#242429",
+          "#3B3C45",
+          "#535664",
+          "#6B6F84",
+          "#898C9E",
+          "#ACAEB9",
+          "#CECFD4",
+          "#F2F2F3"
+        ]
+      },
+      "dark-line": {
+        "role": "neutral",
+        "displayName": "Dark Line",
+        "canonical": "#2D2E37",
+        "tonalRamp": [
+          "#242429",
+          "#3B3C44",
+          "#545664",
+          "#6C6F83",
+          "#8A8C9E",
+          "#ADAEB8",
+          "#CECFD4",
+          "#F2F2F3"
+        ]
+      },
+      "dark-soft": {
+        "role": "neutral",
+        "displayName": "Dark Soft",
+        "canonical": "#A9AAB5",
+        "tonalRamp": [
+          "#242528",
+          "#3C3D43",
+          "#565762",
+          "#6F7181",
+          "#8D8E9B",
+          "#AEAFB7",
+          "#CFCFD3",
+          "#F2F2F3"
+        ]
+      },
+      "dark-cobalt": {
+        "role": "primary",
+        "displayName": "Dark Cobalt",
+        "canonical": "#2B5BE6",
+        "tonalRamp": [
+          "#141D39",
+          "#1B2E64",
+          "#1F3E99",
+          "#1C4BD3",
+          "#476EE1",
+          "#839CE2",
+          "#BAC6E9",
+          "#EDF0F7"
+        ]
+      },
+      "dark-grass-ink": {
+        "role": "secondary",
+        "displayName": "Dark Grass Ink",
+        "canonical": "#6FD08F",
+        "tonalRamp": [
+          "#1A3222",
+          "#285738",
+          "#34834E",
+          "#3DB364",
+          "#62C683",
+          "#94D1A8",
+          "#C2E0CC",
+          "#EFF6F1"
+        ]
+      },
+      "dark-focus": {
+        "role": "primary",
+        "displayName": "Dark Focus Blue",
+        "canonical": "#8FB0FF",
+        "tonalRamp": [
+          "#0F1D3E",
+          "#122D6E",
+          "#0E3CA9",
+          "#0448EC",
+          "#326CF6",
+          "#779AEE",
+          "#B3C5EF",
+          "#ECF0F9"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "The next-event time only (84px desktop, 60px phone)."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Page title in the main column; 26px in the phone header."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Section heads, card heads, More sheet."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Rows, to-dos, member names."
+      },
+      "body-small": {
+        "displayName": "Body Small",
+        "purpose": "Shell base size, button labels, quieter copy."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Times, captions, legends; sentence case, no tracking."
+      }
+    },
+    "shadows": [
+      {
+        "name": "none",
+        "value": "none",
+        "purpose": "Every card, dialog, button and OpenFamily surface inside the shell is flat."
+      },
+      {
+        "name": "scrim",
+        "value": "rgba(17, 18, 23, .45)",
+        "purpose": "Overlay behind dialogs and the More sheet (a fill, not a shadow)."
+      },
+      {
+        "name": "focus-ring",
+        "value": "outline: 3px solid #1F4FD8; outline-offset: 2px",
+        "purpose": "Every button, link, field and summary; #8FB0FF in dark."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-sheet",
+        "value": "cubic-bezier(.2, .8, .2, 1)",
+        "purpose": "More sheet slide-up (.24s, from 24px and 0 opacity) and switch thumb (.2s)."
+      },
+      {
+        "name": "switch-fill",
+        "value": "background .16s",
+        "purpose": "Household module switch track."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "animation: none",
+        "purpose": "The sheet does not animate under prefers-reduced-motion."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "desktop",
+        "value": "900px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Ink-filled pill for the one main action in a view.",
+      "html": "<button class=\"ds-btn-primary\">Add to-do</button>",
+      "css": ".ds-btn-primary { font-family: 'Lexend', -apple-system, BlinkMacSystemFont, sans-serif; display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 20px; border-radius: 999px; border: 2.5px solid #1B1B1F; background: #1B1B1F; color: #FFFFFF; font-weight: 700; font-size: 15px; cursor: pointer; } .ds-btn-primary:hover { opacity: .9; } .ds-btn-primary:focus-visible { outline: 3px solid #1F4FD8; outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Paper pill with a 2.5px ink outline; quick-add and most actions.",
+      "html": "<button class=\"ds-btn-secondary\">+ Event</button>",
+      "css": ".ds-btn-secondary { font-family: 'Lexend', -apple-system, BlinkMacSystemFont, sans-serif; display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 20px; border-radius: 999px; border: 2.5px solid #1B1B1F; background: #FFFFFF; color: #1B1B1F; font-weight: 700; font-size: 15px; cursor: pointer; } .ds-btn-secondary:hover { background: #F4F5F8; } .ds-btn-secondary:focus-visible { outline: 3px solid #1F4FD8; outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Button",
+      "kind": "button",
+      "refersTo": "text-button",
+      "description": "Cobalt words with no box for section links and secondary options.",
+      "html": "<button class=\"ds-text-btn\">See calendar</button>",
+      "css": ".ds-text-btn { font-family: 'Lexend', -apple-system, BlinkMacSystemFont, sans-serif; min-height: 44px; padding: 0; border: 0; background: none; color: #1F4FD8; font-size: 14px; font-weight: 600; cursor: pointer; } .ds-text-btn:hover { text-decoration: underline; text-underline-offset: 3px; } .ds-text-btn:focus-visible { outline: 3px solid #1F4FD8; outline-offset: 2px; }"
+    },
+    {
+      "name": "Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Paper field with a 2px Line border that turns cobalt on focus.",
+      "html": "<label class=\"ds-field\"><span>To-do</span><input placeholder=\"Buy milk\" /></label>",
+      "css": ".ds-field { font-family: 'Lexend', -apple-system, BlinkMacSystemFont, sans-serif; display: grid; gap: 6px; color: #1B1B1F; font-size: 14px; font-weight: 600; } .ds-field input { font: inherit; font-weight: 400; font-size: 15px; min-height: 44px; padding: 0 14px; background: #FFFFFF; color: #1B1B1F; border: 2px solid #E4E5EA; border-radius: 14px; } .ds-field input::placeholder { color: #5A5A66; } .ds-field input:focus { border-color: #1F4FD8; } .ds-field input:focus-visible { outline: 3px solid #1F4FD8; outline-offset: 2px; }"
+    },
+    {
+      "name": "Phone Tab Bar",
+      "kind": "nav",
+      "refersTo": "tab-bar-item",
+      "description": "White bottom bar: four destinations and More; current is cobalt.",
+      "html": "<nav class=\"ds-tabs\"><a class=\"is-current\" href=\"#\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8\"/><path d=\"M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\"/></svg>Home</a><a href=\"#\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8\"/><path d=\"M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\"/></svg>Calendar</a><a href=\"#\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8\"/><path d=\"M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\"/></svg>To-dos</a><a href=\"#\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8\"/><path d=\"M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\"/></svg>More</a></nav>",
+      "css": ".ds-tabs { font-family: 'Lexend', -apple-system, BlinkMacSystemFont, sans-serif; display: flex; justify-content: space-around; background: #FFFFFF; border-top: 1.5px solid #E4E5EA; padding: 6px 4px; } .ds-tabs a { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 52px; font-size: 11px; font-weight: 600; color: #5A5A66; text-decoration: none; } .ds-tabs a.is-current { color: #1F4FD8; } .ds-tabs a:hover { color: #1B1B1F; } .ds-tabs a:focus-visible { outline: 3px solid #1F4FD8; outline-offset: 2px; }"
+    },
+    {
+      "name": "Desktop Rail",
+      "kind": "nav",
+      "refersTo": "rail-item-current",
+      "description": "Cobalt rail with pill items; current page is a white pill.",
+      "html": "<nav class=\"ds-rail\"><div class=\"ds-brand\"><span><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8\"/><path d=\"M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z\"/></svg></span>family hub</div><a class=\"is-current\" href=\"#\">Home</a><a href=\"#\">Calendar</a><a href=\"#\">Settings</a></nav>",
+      "css": ".ds-rail { font-family: 'Lexend', -apple-system, BlinkMacSystemFont, sans-serif; display: flex; flex-direction: column; gap: 2px; width: 248px; background: #1F4FD8; color: #fff; padding: 24px 16px; } .ds-brand { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 800; letter-spacing: -.02em; padding: 0 8px 24px; } .ds-brand span { width: 36px; height: 36px; border-radius: 12px; background: #F7C21B; color: #1B1B1F; display: grid; place-items: center; } .ds-rail a { display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-radius: 999px; font-weight: 500; color: #DCE5FF; text-decoration: none; } .ds-rail a:hover { background: #173DA8; color: #fff; } .ds-rail a.is-current { background: #fff; color: #1F4FD8; font-weight: 700; } .ds-rail a:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }"
+    },
+    {
+      "name": "Next-event Block",
+      "kind": "card",
+      "refersTo": "next-event",
+      "description": "Signature block in the event hue with the time at display size.",
+      "html": "<button class=\"ds-next\"><span class=\"t\">8:30<small>AM</small></span><span class=\"when\">In 40 min</span><h3>Swim lesson</h3><p>Maya · Leisure centre</p></button>",
+      "css": ".ds-next { font-family: 'Lexend', -apple-system, BlinkMacSystemFont, sans-serif; font-variant-numeric: tabular-nums; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; width: 100%; text-align: left; background: #F7C21B; color: #1B1B1F; border: 0; border-radius: 24px; padding: 18px 20px 20px; cursor: pointer; } .ds-next .t { font-size: 60px; font-weight: 800; line-height: 1; letter-spacing: -.03em; } .ds-next .t small { font-size: 22px; font-weight: 700; margin-left: 4px; } .ds-next .when { align-self: start; background: #1B1B1F; color: #F7C21B; font-weight: 700; font-size: 14px; padding: 8px 12px; border-radius: 999px; } .ds-next h3 { grid-column: 1 / -1; margin: 6px 0 0; font-size: 22px; font-weight: 700; } .ds-next p { grid-column: 1 / -1; margin: 0; font-size: 15px; font-weight: 500; color: #3D3000; } .ds-next:hover h3 { text-decoration: underline; text-underline-offset: 3px; } .ds-next:focus-visible { outline: 3px solid #1F4FD8; outline-offset: 2px; }"
+    },
+    {
+      "name": "Day Strip",
+      "kind": "custom",
+      "refersTo": "",
+      "description": "Discs on a 3px track sized 40/26/14 by order: next, later, tomorrow.",
+      "html": "<div class=\"ds-strip\"><i class=\"n\" style=\"background:#F7C21B\"></i><i class=\"l\" style=\"background:#1F4FD8\"></i><i class=\"l\" style=\"background:#2E9E4F\"></i><i class=\"m\"></i></div>",
+      "css": ".ds-strip { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; align-items: center; justify-items: center; height: 44px; } .ds-strip::before { content: ''; position: absolute; left: 6%; right: 6%; top: 50%; height: 3px; border-radius: 3px; background: #E4E5EA; } .ds-strip i { position: relative; border-radius: 50%; } .ds-strip .n { width: 40px; height: 40px; border: 4px solid #1B1B1F; box-sizing: border-box; } .ds-strip .l { width: 26px; height: 26px; } .ds-strip .m { width: 14px; height: 14px; background: #E4E5EA; }"
+    },
+    {
+      "name": "To-do Row",
+      "kind": "custom",
+      "refersTo": "round-check",
+      "description": "Round ink-outlined check; done today fills grass and strikes the name.",
+      "html": "<div class=\"ds-task\"><button class=\"ds-check\" aria-label=\"Done\"></button><span>Pack swim bag<small>Today</small></span></div><div class=\"ds-task is-done\"><button class=\"ds-check\" aria-label=\"Undo\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 6 9 17l-5-5\"/></svg></button><span><s>Book dentist</s><small>Done today</small></span></div>",
+      "css": ".ds-task { font-family: 'Lexend', -apple-system, BlinkMacSystemFont, sans-serif; display: flex; align-items: center; gap: 12px; min-height: 48px; color: #1B1B1F; font-size: 16px; font-weight: 500; } .ds-task small { display: block; font-size: 13px; font-weight: 400; color: #5A5A66; } .ds-check { width: 26px; height: 26px; border-radius: 50%; border: 2.5px solid #1B1B1F; background: transparent; display: grid; place-items: center; padding: 0; color: #fff; cursor: pointer; } .ds-check:hover { background: #F4F5F8; } .ds-check:focus-visible { outline: 3px solid #1F4FD8; outline-offset: 2px; } .ds-task.is-done span { color: #5A5A66; } .ds-task.is-done s { text-decoration-thickness: 2px; } .ds-task.is-done small { color: #1D6B35; font-weight: 600; } .ds-task.is-done .ds-check { background: #2E9E4F; border-color: #2E9E4F; } .ds-task.is-done .ds-check:hover { background: #2E9E4F; }"
+    },
+    {
+      "name": "Settings Group Head",
+      "kind": "card",
+      "refersTo": "",
+      "description": "Group panel head filled with its hue; text by the ink-or-white test.",
+      "html": "<div class=\"ds-group\"><a href=\"#\" class=\"ds-gitem\">Household<small>Members, modules</small></a><header class=\"ds-ghead\"><h2>Household</h2><p>Who is in the family and what they use.</p></header></div>",
+      "css": ".ds-group { font-family: 'Lexend', -apple-system, BlinkMacSystemFont, sans-serif; display: grid; gap: 8px; } .ds-gitem { display: block; padding: 12px 14px; border-radius: 18px; background: #D4381F; color: #fff; font-weight: 600; font-size: 17px; text-decoration: none; } .ds-gitem small { display: block; font-weight: 400; font-size: 13px; } .ds-gitem:focus-visible { outline: 3px solid #1F4FD8; outline-offset: 2px; } .ds-ghead { background: #D4381F; color: #fff; border-radius: 24px; padding: 20px; } .ds-ghead h2 { margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -.02em; } .ds-ghead p { margin: 2px 0 0; font-size: 15px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Board Book",
+    "overview": "The management app is drawn like a children's board book: a white page, black ink, and a few big flat shapes in four primary hues. Each shape carries one fact (the next event, whose it is, when), sized so a tired parent reads it in one look on a phone. Colour is information, not decoration: a block is in a hue because the event or member is.\n\nDensity is low and the hierarchy is steep. One huge time figure, then a size-ramped strip of discs, then plain ruled rows. Everything is flat; depth comes from fills against white and hairline rules, never from shadow. The world rejects the cozy cream-and-serif family-app card grid and the grey SaaS dashboard.\n\nBoard Book applies only while its shell is mounted (`body.bb-on` on `.fh-scope`, which also covers portalled dialogs). It remaps OpenFamily's Tailwind tokens inside the shell so inherited pages (Settings sections, Budget, Chores) speak the same palette. Board Book is on trial behind a per-browser Look switch; the original Classic look (the default during the trial) is not governed by this file, nor are the ambient photo-frame display and the fictional prototype.",
+    "keyCharacteristics": [
+      "White ground, ink text, cobalt shell; tomato, sunflower and grass as member and group hues.",
+      "One family, Lexend, with tabular figures and no italics.",
+      "Chunky 24px blocks, pill controls, 2.5px ink outlines on controls, 1.5px hairline rules everywhere else.",
+      "No shadows. Depth is fill against white.",
+      "Size carries order: 84/60px time, then a 40/26/14 disc ramp."
+    ],
+    "rules": [
+      {
+        "name": "The Four Hues Rule",
+        "body": "Event colours are mapped onto the four world hues (cobalt, tomato, sunflower, grass) by hue angle; greys stay Soft. No fifth hue appears in a block or disc.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ink-Or-White Rule",
+        "body": "Text on any hue is chosen by contrast, ink or white, never hand-picked. Sunflower and grass take ink; cobalt and tomato take white.",
+        "section": "colors"
+      },
+      {
+        "name": "The Cobalt Shell Rule",
+        "body": "Cobalt fills the shell (header, rail) and marks the current place; content blocks get cobalt only when the event or group is cobalt.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Family Rule",
+        "body": "Every heading, including OpenFamily's Fraunces headings inside the shell, is set in Lexend. `em` stays upright.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Rule",
+        "body": "Figures are tabular across the shell so times line up in rows.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Page Rule",
+        "body": "No box-shadow at rest or on hover. If something needs to stand apart, fill it or rule it.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Disc Ramp Rule",
+        "body": "The day strip sizes discs by order, not by duration: next 40px with a 4px ink ring, later 26px, tomorrow 14px in Line.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do pick every hue from the four world hues and every on-hue text colour with the ink-or-white contrast test.",
+      "Do keep white text off sunflower and grass; use ink.",
+      "Do give every control a 3px cobalt focus ring with 2px offset (dark-focus in dark).",
+      "Do give every drag a keyboard and touch alternative, as Arrange Home does for card order.",
+      "Do keep touch targets at 44px or more.",
+      "Do set figures tabular and keep times large and words small.",
+      "Do honour reduced motion; the only motion is the sheet slide and the switch thumb."
+    ],
+    "donts": [
+      "Don't add shadows to cards, dialogs, buttons or blocks.",
+      "Don't use a second typeface, Fraunces headings, or italics inside the shell.",
+      "Don't bring back cream grounds, serif headings or a grid of identical cards.",
+      "Don't use grey SaaS chrome: grey toolbars, grey panels, many small muted widgets.",
+      "Don't introduce a fifth content hue or tint the primaries for decoration.",
+      "Don't put uppercase tracked labels above headings."
+    ]
+  }
+}

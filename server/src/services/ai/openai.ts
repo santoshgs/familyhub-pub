@@ -1,3 +1,4 @@
+import { stripTrailingSlashes } from '../../lib/asyncRoutes';
 // OpenAI-compatible provider — works with OpenAI, LM Studio, vLLM, Mistral,
 // OpenRouter… anything that speaks POST {base_url}/v1/chat/completions.
 // JSON is requested via response_format json_object (the schema itself is
@@ -19,8 +20,7 @@ export async function openaiComplete(
     request: AiCompletionRequest
 ): Promise<{ data: Record<string, unknown>; usage: TokenUsage | null }> {
     // Accept both "https://host" and "https://host/v1" forms.
-    const baseUrl = (settings.base_url || DEFAULT_BASE_URLS.openai!)
-        .replace(/\/+$/, '')
+    const baseUrl = stripTrailingSlashes(settings.base_url || DEFAULT_BASE_URLS.openai!)
         .replace(/\/v1$/, '');
 
     try {

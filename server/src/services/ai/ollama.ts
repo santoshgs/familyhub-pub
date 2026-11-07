@@ -1,3 +1,4 @@
+import { stripTrailingSlashes } from '../../lib/asyncRoutes';
 // Ollama provider — fully local, no API key, the privacy-first default.
 // POST {base_url}/api/chat with `format` set to the JSON schema (Ollama accepts a
 // JSON schema object in `format`; we fall back to the plain 'json' mode if the
@@ -18,7 +19,7 @@ export async function ollamaComplete(
     settings: AiSettings,
     request: AiCompletionRequest
 ): Promise<{ data: Record<string, unknown>; usage: TokenUsage | null }> {
-    const baseUrl = (settings.base_url || DEFAULT_BASE_URLS.ollama!).replace(/\/+$/, '');
+    const baseUrl = stripTrailingSlashes(settings.base_url || DEFAULT_BASE_URLS.ollama!);
 
     try {
         // Private LAN targets are legitimate here (local Ollama is the whole point);

@@ -66,8 +66,8 @@ class ApiClient {
 
         if (!response.ok) {
             // A 401 only ends the session it was sent with: a request still in
-            // flight when a fresh token arrives (leaving a family, unlinking
-            // SSO...) must not sign out the new session.
+            // flight when a fresh token arrives (leaving a family, for
+            // instance) must not sign out the new session.
             if (response.status === 401 && sentToken === this.token) {
                 this.setToken(null);
                 localStorage.removeItem('user');
@@ -200,9 +200,8 @@ class ApiClient {
             const response = await this.get<{ success: boolean; data: AuthServerConfig }>('/api/auth/config');
             if (response?.data) return response.data;
         } catch (error) {
-            // Only a server without this endpoint falls back. Any other failure
-            // (rate limit, outage) must not pass off an SSO-only server as a
-            // password one.
+            // Only a server without this endpoint falls back; other failures
+            // (rate limit, outage) are reported.
             if (!(error instanceof ApiError && error.status === 404)) throw error;
         }
         const legacy = await this.get<{ success: boolean; data?: { open?: boolean } }>('/api/auth/registration');
@@ -210,26 +209,7 @@ class ApiClient {
             passwordLogin: true,
             passwordSignup: legacy?.data?.open !== false,
             passwordReset: true,
-            oidc: { enabled: false, name: null, signup: false },
         };
-    }
-
-    /** Redeems the one-time code from the SSO callback. Login mode stores the new session. */
-    async exchangeSso(code: string, clientVerifier: string) {
-        const response = await this.post<{ success: boolean; data: SsoExchangeResult }>(
-            '/api/auth/oidc/exchange',
-            { code, clientVerifier }
-        );
-        if (response.data.mode === 'login') {
-            this.setToken(response.data.token);
-        }
-        return response.data;
-    }
-
-    /** Unlinks SSO. Other devices are signed out; this one continues with a fresh token. */
-    async unlinkSso() {
-        const response = await this.delete<{ success: boolean; data: { token: string } }>('/api/auth/oidc/link');
-        this.setToken(response.data.token);
     }
 
     /** Signs this account out of every device, this one included. */
@@ -247,11 +227,6 @@ export interface AuthServerConfig {
     passwordLogin: boolean;
     passwordSignup: boolean;
     passwordReset: boolean;
-    oidc: { enabled: boolean; name: string | null; signup: boolean };
 }
-
-export type SsoExchangeResult =
-    | { mode: 'login'; created: boolean; token: string; user: any }
-    | { mode: 'link'; email: string | null };
 
 export const api = new ApiClient();
