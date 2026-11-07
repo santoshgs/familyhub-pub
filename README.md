@@ -58,6 +58,16 @@ Every card opens a detail panel in place: the frame never navigates away.
 | --- | --- | --- |
 | <img src="docs/familyhub/images/panel-calendar.jpg" alt="Calendar detail panel grouped by day" width="280"> | <img src="docs/familyhub/images/panel-news.jpg" alt="Ten headlines with one-line summaries" width="280"> | <img src="docs/familyhub/images/news-reader.jpg" alt="A story in plain-text reader view" width="280"> |
 
+The same display works on a phone, so you can check it from the couch:
+
+| Home | Weather & sky | Formula 1 |
+| --- | --- | --- |
+| <img src="docs/familyhub/images/phone-home.jpg" alt="The phone layout: to-dos, news and the family photos card" width="200"> | <img src="docs/familyhub/images/phone-weather.jpg" alt="Weather and sky panel: temperature, wind, air quality, sun, moon and a seven-day forecast" width="200"> | <img src="docs/familyhub/images/phone-f1.jpg" alt="Formula 1 panel: weekend schedule and driver standings" width="200"> |
+
+| Stocks and crypto | Photo slideshow |
+| --- | --- |
+| <img src="docs/familyhub/images/phone-markets.jpg" alt="Stocks and crypto prices with daily changes" width="200"> | <img src="docs/familyhub/images/phone-slideshow.jpg" alt="Family photo slideshow with previous, pause, next and full-screen controls" width="200"> |
+
 * **Choose your cards.** Settings → Display → Layout puts up to six cards on the main grid and the rest in a **quick-cards** bar, in the order you pick.
 * **Up next** shows the next events with their Google Calendar colour and day labels; To-dos and News show "+N more".
 * **Weather** (Open-Meteo) adds a detail panel with a seven-day forecast, sunrise and sunset, air quality and the moon phase. **Formula 1** (Jolpica) shows the next session in your time zone, with driver and constructor standings and a favourite team.
