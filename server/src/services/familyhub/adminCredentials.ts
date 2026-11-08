@@ -17,6 +17,20 @@ async function readJson(file: string): Promise<any> {
     try { return JSON.parse(await fs.readFile(file, 'utf8')); } catch { return null; }
 }
 
+/** Last nightly off-site backup, written by deploy/familyhub/admin/offsite-backup.sh (no secrets). */
+export function parseBackupStatus(raw: any) {
+    if (!raw || typeof raw !== 'object') return null;
+    const iso = (v: unknown) => typeof v === 'string' && !Number.isNaN(Date.parse(v)) ? v : null;
+    const num = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null;
+    return {
+        destination: String(raw.destination ?? 'Off-site').slice(0, 60),
+        state: raw.state === 'ok' ? 'ok' as const : 'failed' as const,
+        message: String(raw.message ?? '').slice(0, 300),
+        attemptedAt: iso(raw.attemptedAt), lastSuccessAt: iso(raw.lastSuccessAt),
+        sizeBytes: num(raw.sizeBytes), snapshots: num(raw.snapshots),
+    };
+}
+
 export async function credentialStatus() {
     const dir = exchangeDir();
     if (!dir) return { available: false as const };
@@ -36,7 +50,8 @@ export async function credentialStatus() {
         const r = value as any;
         if (r && typeof r === 'object') lastResults[kind] = { ok: Boolean(r.ok), message: String(r.message ?? '').slice(0, 300), at: String(r.at ?? '') };
     }
-    return { available: true as const, checkedAt: typeof status?.checkedAt === 'string' ? status.checkedAt : null, warnDays: Number(status?.warnDays) || 30, items, results: lastResults, pending };
+    const backup = parseBackupStatus(await readJson(path.join(dir, 'backup-status.json')));
+    return { available: true as const, backup, checkedAt: typeof status?.checkedAt === 'string' ? status.checkedAt : null, warnDays: Number(status?.warnDays) || 30, items, results: lastResults, pending };
 }
 
 async function writeSubmission(name: string, body: object) {

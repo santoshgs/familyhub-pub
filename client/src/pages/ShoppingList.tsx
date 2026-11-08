@@ -12,6 +12,9 @@ import { Input } from '../components/ui/Input';
 import { Dialog } from '../components/ui';
 import { useCategories } from '../hooks/useCategories';
 import { SHOPPING_CATALOG } from '../lib/shoppingCatalog';
+import { GoogleShopping } from '../familyhub/shopping/GoogleShopping';
+import { shoppingApi, type ShopList, type ShoppingData } from '../familyhub/shopping/model';
+import { Link } from 'react-router-dom';
 
 // Quantities come back from the database as "2.00": show 2, 1,5, 0,25.
 const formatQty = (q: number | string) =>
@@ -51,7 +54,7 @@ const parseOptionalPositiveNumber = (value: string): number | undefined => {
     return Number.isFinite(parsed) ? parsed : Number.NaN;
 };
 
-const ShoppingList: React.FC = () => {
+const LocalShoppingList: React.FC<{ banner?: React.ReactNode }> = ({ banner }) => {
     const { t } = useTranslation(['shopping', 'common']);
     const categoryLabel = (value: string) => t(`shopping:categories.${value}`, { defaultValue: value });
     const { user } = useAuth();
@@ -523,6 +526,8 @@ const ShoppingList: React.FC = () => {
                 )}
             </div>
 
+            {banner}
+
             <Card>
                 <CardHeader>
                     <CardTitle>{t('shopping:add.title')}</CardTitle>
@@ -896,4 +901,63 @@ const ShoppingList: React.FC = () => {
     );
 };
 
-export default ShoppingList;
+/**
+ * The Shopping page. With the family Google account connected and shopping
+ * lists chosen (Settings → Household → Shopping lists), the lists live in
+ * Google Tasks; otherwise Family Hub's own single list is used, as before.
+ */
+const ShoppingPage: React.FC = () => {
+    const { t } = useTranslation(['shopping', 'common']);
+    const { user } = useAuth();
+    const isParent = Boolean(user?.is_owner || user?.role === 'parent');
+    const { categories: familyCategories } = useCategories();
+    const aisles = useMemo(() => familyCategories.shopping.map((key) => ({ key, label: t(`shopping:categories.${key}`, { defaultValue: key }) })), [familyCategories.shopping, t]);
+    const [data, setData] = useState<ShoppingData | null>(null);
+    const [failed, setFailed] = useState(false);
+    const [migrateTo, setMigrateTo] = useState('');
+    const [migrating, setMigrating] = useState(false);
+    const [notice, setNotice] = useState('');
+    const load = async () => {
+        try { setData(await shoppingApi.load()); setFailed(false); }
+        catch { setFailed(true); }
+    };
+    useEffect(() => { void load(); }, []);
+    useWebSocketUpdates('shopping', () => { void load(); });
+
+    if (!data && !failed) {
+        return <div className="flex h-full min-h-[50vh] items-center justify-center"><div className="spinner-brand" /></div>;
+    }
+    // Google unreachable or not set up: the local list keeps working.
+    if (failed || !data || data.mode === 'local') {
+        const hint = data?.connected && isParent ? <p className="rounded-input border border-border bg-muted/40 px-4 py-3 text-caption text-muted-foreground">
+            {t('shopping:google.offer', { defaultValue: 'Keep several shopping lists (one per store) in Google Tasks:' })} <Link className="font-semibold text-primary underline" to="/settings#household">{t('shopping:google.offerLink', { defaultValue: 'choose them in Settings → Household' })}</Link>.
+        </p> : failed ? <p className="rounded-input border border-border bg-muted/40 px-4 py-3 text-caption text-muted-foreground">{t('shopping:google.unavailable', { defaultValue: 'Google shopping lists are unavailable right now; showing the list kept in Family Hub.' })}</p> : null;
+        return <LocalShoppingList banner={hint} />;
+    }
+    const google = data;
+    const onListChange = (list: ShopList) => setData({ ...google, lists: google.lists.map((l) => (l.id === list.id ? list : l)) });
+    const { migration } = google;
+    const migrate = async () => {
+        const target = migrateTo || google.lists[0]?.id;
+        if (!target) return;
+        setMigrating(true); setNotice('');
+        try {
+            const { copied } = await shoppingApi.migrate(target, Object.fromEntries(aisles.map((a) => [a.key, a.label])));
+            setNotice(t('shopping:google.migrated', { count: copied, defaultValue: 'Copied {{count}} items to Google Tasks.' }));
+            await load();
+        } catch (cause) { setNotice(cause instanceof Error ? cause.message : 'Not copied.'); }
+        finally { setMigrating(false); }
+    };
+    const banner = isParent && migration.localItems > 0 && !migration.migratedAt && google.lists.length > 0
+        ? <div className="flex flex-wrap items-center gap-2 rounded-input border border-primary/30 bg-primary-soft px-4 py-3 text-caption text-foreground">
+            <span className="flex-1">{t('shopping:google.migrateIntro', { count: migration.localItems, defaultValue: 'The old Family Hub list still has {{count}} items. Copy them to:' })}</span>
+            <select className="min-h-9 rounded-input border border-input bg-background px-2" value={migrateTo || google.lists[0].id} onChange={(e) => setMigrateTo(e.target.value)}>
+                {google.lists.map((list) => <option key={list.id} value={list.id}>{list.title}</option>)}
+            </select>
+            <Button size="sm" disabled={migrating} onClick={() => void migrate()}>{t('shopping:google.migrate', { defaultValue: 'Copy' })}</Button>
+          </div>
+        : notice ? <p role="status" className="rounded-input border border-border bg-muted/40 px-4 py-3 text-caption text-foreground">{notice}</p> : null;
+    return <GoogleShopping lists={google.lists} missing={google.missing} aisles={aisles} isParent={isParent} onListChange={onListChange} reload={load} banner={banner} />;
+};
+
+export default ShoppingPage;

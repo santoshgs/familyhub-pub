@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import { KeyRound, RefreshCw } from 'lucide-react';
+import { CloudUpload, KeyRound, RefreshCw } from 'lucide-react';
 import { api } from '../lib/api';
 
 type Item = { kind: string; name: string; expiresAt: string | null; state: 'ok' | 'warn' | 'unknown'; note: string; updatable: boolean };
-type Status = { available: false } | { available: true; checkedAt: string | null; warnDays: number; items: Item[]; results: Record<string, { ok: boolean; message: string; at: string }>; pending: string[] };
+type Backup = { destination: string; state: 'ok' | 'failed'; message: string; attemptedAt: string | null; lastSuccessAt: string | null; sizeBytes: number | null; snapshots: number | null };
+type Status = { available: false } | { available: true; backup?: Backup | null; checkedAt: string | null; warnDays: number; items: Item[]; results: Record<string, { ok: boolean; message: string; at: string }>; pending: string[] };
 
 const HOW_TO: Record<string, { label: string; link: string; help: string }> = {
     'github-release': { label: 'Create a fine-grained token', link: 'https://github.com/settings/personal-access-tokens/new',
@@ -16,6 +17,23 @@ const HOW_TO: Record<string, { label: string; link: string; help: string }> = {
         help: 'Machines → raspbian → ⋯ → Disable key expiry, so it never needs renewing.' },
 };
 const daysLeft = (iso: string | null) => iso ? Math.floor((Date.parse(iso) - Date.now()) / 86_400_000) : null;
+const formatWhen = (iso: string | null) => iso ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso)) : 'never';
+const formatSize = (bytes: number | null) => bytes === null ? '' : bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.max(0.1, bytes / 1e6).toFixed(1)} MB`;
+/** Stale after 50 hours: one missed night is tolerated, two are not. */
+const isStale = (iso: string | null) => !iso || Date.now() - Date.parse(iso) > 50 * 3_600_000;
+
+/** The nightly encrypted off-site backup (deploy/familyhub/admin/offsite-backup.sh). */
+export function OffsiteBackupRow({ backup }: { backup: Backup | null | undefined }) {
+    if (!backup) return <li className="is-unknown"><div className="fh-credential-row">
+        <div><strong><CloudUpload size={15} /> Off-site backup</strong><small>Not set up. Run <code>sudo bash setup-offsite-backup.sh</code> on the Pi.</small></div>
+        <div className="fh-credential-expiry"><span>None</span><small>Budget and notes exist only on the Pi</small></div></div></li>;
+    const healthy = backup.state === 'ok' && !isStale(backup.lastSuccessAt);
+    const detail = [formatSize(backup.sizeBytes), backup.snapshots ? `${backup.snapshots} copies kept` : ''].filter(Boolean).join(' · ');
+    return <li className={healthy ? 'is-ok' : 'is-warn'}><div className="fh-credential-row">
+        <div><strong><CloudUpload size={15} /> Off-site backup ({backup.destination})</strong>
+            <small>{healthy ? `Encrypted nightly copy of the database, budget CSVs, photos and settings${detail ? ` · ${detail}` : ''}` : backup.state === 'failed' ? `Last attempt failed: ${backup.message}` : 'No successful backup in the last two nights.'}</small></div>
+        <div className="fh-credential-expiry"><span>{formatWhen(backup.lastSuccessAt)}</span><small>Last successful backup</small></div></div></li>;
+}
 const formatDate = (iso: string | null) => iso ? new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric' }).format(new Date(iso)) : 'No expiry';
 
 /** Settings → Advanced → Server credentials (household owner only). */
@@ -64,7 +82,7 @@ export function ServerCredentials() {
                 {(editing === item.kind || (!item.updatable && (item.state !== 'ok' || item.expiresAt))) && howTo && <p className="fh-credential-help"><a href={howTo.link} target="_blank" rel="noreferrer">{howTo.label}</a> — {howTo.help}</p>}
                 {editing === item.kind && <form onSubmit={(event) => void submit(event, item.kind)}><input type="password" autoComplete="off" spellCheck={false} placeholder="Paste the new token" value={token} onChange={(event) => setToken(event.target.value)} aria-label={`New token for ${item.name}`} required /><button className="fh-button fh-primary" disabled={busy || token.trim().length < 20}>{busy ? 'Sending…' : 'Test and save'}</button></form>}
             </li>;
-        })}</ul>
+        })}<OffsiteBackupRow backup={status.backup} /></ul>
         <p className="fh-fine-print">Last checked {status.checkedAt ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(status.checkedAt)) : 'never'}. The Pi rechecks daily.</p>
     </section>;
 }

@@ -704,7 +704,15 @@ async function route(method: string, path: string, q: Record<string, string>, bo
     return ok([]);
 }
 
+let shoppingMock: ((method: string, path: string, raw: unknown) => unknown) | null = null;
+
 export async function mockRequest<T>(method: string, endpoint: string, body?: unknown): Promise<T> {
+    // Google Tasks shopping lists (v1.6) have a fictional stand-in in every demo.
+    if (endpoint.startsWith('/api/familyhub/shopping')) {
+        const { createShoppingMock } = await import('../familyhub/shopping/mockShopping');
+        shoppingMock ??= createShoppingMock();
+        return { success: true, data: shoppingMock(method.toUpperCase(), endpoint.split('?')[0].replace(/^\/api\/familyhub/, ''), body) } as T;
+    }
     if (import.meta.env.VITE_FAMILYHUB === 'true' && endpoint.startsWith('/api/familyhub')) {
         const { familyHubMockRequest } = await import('../familyhub/mockService');
         return familyHubMockRequest(method, endpoint, body) as T;

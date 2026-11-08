@@ -42,7 +42,11 @@ const IMPORT_COLUMNS: Record<string, ReadonlySet<string>> = {
     ]),
     budget_entries: new Set([
         'id', 'category', 'amount', 'description', 'date', 'is_expense',
-        'assigned_to', 'created_at', 'updated_at',
+        'assigned_to', 'paid_by', 'split_with', 'group_id', 'created_at', 'updated_at',
+    ]),
+    budget_groups: new Set(['id', 'name', 'members', 'archived', 'created_at']),
+    budget_settlements: new Set([
+        'id', 'group_id', 'from_member', 'to_member', 'amount', 'date', 'note', 'created_at',
     ]),
     budget_limits: new Set([
         'id', 'category', 'monthly_limit', 'month', 'year',
@@ -82,7 +86,7 @@ const IMPORT_COLUMNS: Record<string, ReadonlySet<string>> = {
     recurring_expenses: new Set([
         'id', 'label', 'amount', 'category', 'debit_day', 'is_active',
         'is_expense', 'start_date', 'recurrence_frequency', 'recurrence_interval',
-        'recurrence_until', 'created_at', 'updated_at',
+        'recurrence_until', 'paid_by', 'split_with', 'group_id', 'created_at', 'updated_at',
     ]),
     recurring_expense_logs: new Set([
         'id', 'recurring_expense_id', 'month', 'year', 'occurrence_date',
@@ -97,6 +101,9 @@ const IMPORT_COLUMNS: Record<string, ReadonlySet<string>> = {
 // are JSONB, so explicitly JSON-encode them before binding.
 const JSONB_COLUMNS: Record<string, ReadonlySet<string>> = {
     tasks: new Set(['assigned_to']),
+    budget_entries: new Set(['split_with']),
+    recurring_expenses: new Set(['split_with']),
+    budget_groups: new Set(['members']),
     shopping_list_templates: new Set(['items']),
     appointments: new Set(['family_member_ids']),
 };
@@ -158,7 +165,7 @@ const validDebitDay = (value: unknown): number | null => {
 
 const loadOwnedIds = async (
     client: PoolClient,
-    table: 'family_members' | 'tasks' | 'recurring_expenses',
+    table: 'family_members' | 'tasks' | 'recurring_expenses' | 'budget_groups',
     ownerId: string
 ): Promise<Set<string>> => {
     const result = await client.query(
@@ -242,6 +249,9 @@ router.get('/export', requireParent, async (req: AuthRequest, res) => {
             recurringExpenses,
             recurringExpenseLogs,
             kakeiboMonths,
+            budgetGroups,
+            budgetSettlements,
+            budgetSharing,
         ] = await Promise.all([
             query(
                 `SELECT currency, disabled_modules, custom_categories, kakeibo_pillars
@@ -298,6 +308,10 @@ router.get('/export', requireParent, async (req: AuthRequest, res) => {
             query('SELECT * FROM recurring_expenses WHERE user_id = $1', [userId]),
             query('SELECT * FROM recurring_expense_logs WHERE user_id = $1', [userId]),
             query('SELECT * FROM kakeibo_months WHERE user_id = $1', [userId]),
+            query('SELECT * FROM budget_groups WHERE user_id = $1', [userId]),
+            query(`SELECT id, group_id, from_member, to_member, amount, to_char(date, 'YYYY-MM-DD') AS date, note, created_at
+                   FROM budget_settlements WHERE user_id = $1`, [userId]),
+            query('SELECT members FROM budget_sharing_settings WHERE user_id = $1', [userId]),
         ]);
 
         const exportData = {
@@ -327,6 +341,9 @@ router.get('/export', requireParent, async (req: AuthRequest, res) => {
             recurring_expenses: recurringExpenses.rows,
             recurring_expense_logs: recurringExpenseLogs.rows,
             kakeibo_months: kakeiboMonths.rows,
+            budget_groups: budgetGroups.rows,
+            budget_settlements: budgetSettlements.rows,
+            budget_sharing: budgetSharing.rows[0] ?? null,
         };
 
         return res.json({ success: true, data: exportData });
@@ -629,13 +646,53 @@ router.post('/import', requireParent, importBodyParser, async (req: AuthRequest,
         });
         const taskIds = await loadOwnedIds(client, 'tasks', userId);
 
+        // Expense groups first: expenses, recurring items and settle-up
+        // payments point at them. Members must belong to this family.
+        await importRows('budget_groups', importData.budget_groups, (row) => {
+            if (typeof row.name !== 'string' || !row.name.trim()) return null;
+            row.name = row.name.trim().slice(0, 60);
+            row.members = sanitizeMemberArray(row.members, familyMemberIds);
+            row.archived = row.archived === true;
+            return row;
+        });
+        const budgetGroupIds = await loadOwnedIds(client, 'budget_groups', userId);
+        const withSharing = (row: PortableRow) => {
+            const paidBy = sourceId(row.paid_by);
+            row.paid_by = paidBy && familyMemberIds.has(paidBy) ? paidBy : null;
+            row.split_with = sanitizeMemberArray(row.split_with, familyMemberIds);
+            const groupId = sourceId(row.group_id);
+            row.group_id = groupId && budgetGroupIds.has(groupId) ? groupId : null;
+            return row;
+        };
+
         await importRows('budget_entries', importData.budget_entries, (row) => {
             const assignedTo = sourceId(row.assigned_to);
             row.assigned_to = assignedTo && familyMemberIds.has(assignedTo)
                 ? assignedTo
                 : null;
+            return withSharing(row);
+        });
+        await importRows('budget_settlements', importData.budget_settlements, (row) => {
+            const from = sourceId(row.from_member), to = sourceId(row.to_member);
+            if (!from || !to || from === to || !familyMemberIds.has(from) || !familyMemberIds.has(to)) return null;
+            const amount = Number(row.amount);
+            if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000) return null;
+            if (typeof row.date !== 'string' || !DATE_ONLY.test(row.date.slice(0, 10))) return null;
+            const groupId = sourceId(row.group_id);
+            row.group_id = groupId && budgetGroupIds.has(groupId) ? groupId : null;
+            row.note = typeof row.note === 'string' ? row.note.slice(0, 200) : null;
             return row;
         });
+        const sharing = asRecord(importData.budget_sharing);
+        if (sharing) {
+            const members = sanitizeMemberArray(sharing.members, familyMemberIds);
+            const result = await client.query(
+                `INSERT INTO budget_sharing_settings (user_id, members) VALUES ($1, $2::jsonb)
+                 ON CONFLICT (user_id) DO NOTHING`,
+                [userId, JSON.stringify(members)]
+            );
+            counts.budget_sharing = result.rowCount ?? 0;
+        }
         await importRows('budget_limits', importData.budget_limits);
 
         await importRows('shopping_items', importData.shopping_items);
@@ -703,7 +760,7 @@ router.post('/import', requireParent, importBodyParser, async (req: AuthRequest,
             }
             const id = sourceId(row.id);
             if (id) debitDays.set(id, debitDay);
-            return row;
+            return withSharing(row);
         });
         const recurringExpenseIds = await loadOwnedIds(
             client,

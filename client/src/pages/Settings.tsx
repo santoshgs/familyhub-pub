@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { ShoppingListsSettings } from '../familyhub/shopping/ShoppingListsSettings';
 import { useTranslation } from 'react-i18next';
 import { api } from '../lib/api';
 import { FAMILYHUB_MODULES } from '../familyhub/modules';
@@ -1026,6 +1027,7 @@ const Settings: React.FC<{ only?: string[] }> = ({ only }) => {
             {show('ai') && <AiAssistantCard isParent={isParent} />}
 
             {/* Optional modules */}
+            {show('shopping-lists') && isParent && <ShoppingListsSettings />}
             {show('modules') && <ModulesCard isParent={isParent} />}
 
             {/* Custom categories */}

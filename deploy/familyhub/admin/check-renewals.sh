@@ -90,6 +90,18 @@ if command -v tailscale >/dev/null; then
 		*) row tailscale "Tailscale node key" "$(date -d "$KE" +%s)" "renew by re-authenticating, or disable key expiry" ;; esac
 fi
 
+# 6. Off-site backup freshness (setup-offsite-backup.sh). The backup reports its
+# own failures; this catches a timer that silently stopped running.
+if [[ -r /etc/familyhub-backup.env ]]; then
+	BK=/opt/familyhub/admin-exchange/backup-status.json
+	LAST=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("lastSuccessAt") or "")' "$BK" 2>/dev/null)
+	if [[ -n $LAST ]] && (( (NOW - $(date -d "$LAST" +%s)) / 3600 > 50 )); then
+		ALERTS+=("Off-site backup has not succeeded since $(date -d "$LAST" '+%Y-%m-%d %H:%M')")
+	elif [[ -z $LAST ]]; then
+		ALERTS+=("Off-site backup is set up but has never succeeded")
+	fi
+fi
+
 if [[ -n ${STATUS_JSON:-} ]]; then
 	# Written through one descriptor and renamed into place: nothing is reopened
 	# or chmodded by path, so a symlink planted in a shared directory is never

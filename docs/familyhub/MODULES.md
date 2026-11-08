@@ -27,9 +27,9 @@ household-wide, stored in `familyhub_module_preferences`, and defined once in
 | Daycare, School | Gmail-based updates | on |
 | Budget | Classic, analytics/limits and Kakeibo views; shared expenses, groups and settle up (v1.5) | on |
 | Pocket money | Points, parent approvals, balances and goals from reward chores | on |
-| Notes | Notes from home, also on the display | on |
+| Notes | Notes from home, also on the display. Kept in Family Hub: Google Keep's API is Workspace-only | on |
 | AI assistant | Provider settings and proposed actions (parents) | on |
-| Shopping | Shared shopping lists | off |
+| Shopping | Shopping lists: one or more Google Tasks lists chosen in Settings → Household (v1.6), or Family Hub's own list without Google | off |
 | Weekly routines | Recurring weekly schedule | off |
 | Integrations | Home Assistant, Nextcloud, Immich | off |
 
