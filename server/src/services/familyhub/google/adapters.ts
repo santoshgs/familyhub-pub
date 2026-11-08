@@ -19,7 +19,9 @@ export interface CalendarEvent {
     start: NonNullable<GoogleEvent['start']>; end: NonNullable<GoogleEvent['end']>;
     allDay: boolean; recurringEventId?: string; originalStartTime?: GoogleEvent['originalStartTime'];
 }
-export interface GoogleTask { id: string; title: string; status: 'needsAction' | 'completed'; due?: string; completed?: string; deleted?: boolean; etag?: string }
+export interface GoogleTask { id: string; title: string; status: 'needsAction' | 'completed'; due?: string; completed?: string; deleted?: boolean; etag?: string; notes?: string; position?: string; updated?: string }
+/** A Google Task as a shopping item: raw title and notes; parsing lives in services/familyhub/shopping. */
+export interface RawListItem { id: string; title: string; notes: string; completed: boolean; position: string; updated: string | null }
 export interface Task { source: 'google-tasks'; listId: string; id: string; title: string; completed: boolean; dueDate: string | null; completedAt: string | null; etag?: string }
 export interface CalendarList { id: string; summary: string; accessRole: string }
 export interface TaskList { id: string; title: string }
@@ -302,5 +304,45 @@ export class GoogleAdapters {
     }
     async deleteTask(listId: string, id: string): Promise<void> {
         await this.request('tasks', this.path(listId, id), undefined, 'DELETE');
+    }
+
+    // ── Shopping lists (v1.6): any task list the household picked, read with notes.
+    async createTaskList(title: string): Promise<TaskList> {
+        const clean = typeof title === 'string' ? title.replace(/\s+/g, ' ').trim() : '';
+        if (!clean || clean.length > 100) throw new Error('A list name must contain 1–100 characters.');
+        const value = await this.request<{ id?: string; title?: string }>('tasks', 'users/@me/lists', undefined, 'POST', { title: clean });
+        if (!value?.id || typeof value.title !== 'string') throw new Error('Invalid Google task list response.');
+        return { id: value.id, title: value.title };
+    }
+    async renameTaskList(listId: string, title: string): Promise<TaskList> {
+        const clean = typeof title === 'string' ? title.replace(/\s+/g, ' ').trim() : '';
+        if (!listId || !clean || clean.length > 100) throw new Error('A list name must contain 1–100 characters.');
+        const value = await this.request<{ id?: string; title?: string }>('tasks', `users/@me/lists/${encodeURIComponent(listId)}`, undefined, 'PATCH', { title: clean });
+        if (!value?.id || typeof value.title !== 'string') throw new Error('Invalid Google task list response.');
+        return { id: value.id, title: value.title };
+    }
+    private listItem(value: GoogleTask): RawListItem {
+        if (!value.id || typeof value.title !== 'string' || !['needsAction', 'completed'].includes(value.status)) throw new Error('Invalid Google task response.');
+        return { id: value.id, title: value.title, notes: typeof value.notes === 'string' ? value.notes : '', completed: value.status === 'completed',
+            position: typeof value.position === 'string' ? value.position : '', updated: typeof value.updated === 'string' ? value.updated : null };
+    }
+    /** Items still on the list: unchecked and checked, but not those cleared away (hidden). */
+    async listItems(listId: string): Promise<RawListItem[]> {
+        const values = await this.pages<GoogleTask>('tasks', this.path(listId), new URLSearchParams({ maxResults: '100', showCompleted: 'true', showHidden: 'false', showDeleted: 'false' }));
+        return [...new Map(values.filter((value) => !value.deleted).map((value) => [value.id, this.listItem(value)])).values()];
+    }
+    async createListItem(listId: string, input: { title: string; notes: string }): Promise<RawListItem> {
+        const body = this.fields({ title: input.title, description: input.notes });
+        return this.listItem(await this.request<GoogleTask>('tasks', this.path(listId), undefined, 'POST', body));
+    }
+    async updateListItem(listId: string, id: string, input: { title?: string; notes?: string; completed?: boolean }): Promise<RawListItem> {
+        const body = this.fields({ title: input.title, description: input.notes, completed: input.completed });
+        if (!Object.keys(body).length) throw new Error('No changes provided.');
+        return this.listItem(await this.request<GoogleTask>('tasks', this.path(listId, id), undefined, 'PATCH', body));
+    }
+    /** Google's "clear": hides every completed item on the list (it stays in Google's history). */
+    async clearCompleted(listId: string): Promise<void> {
+        if (!listId) throw new Error('A Google task list is required.');
+        await this.request('tasks', `lists/${encodeURIComponent(listId)}/clear`, undefined, 'POST');
     }
 }

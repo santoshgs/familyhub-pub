@@ -13,6 +13,10 @@ credentials** in FamilyHub, plus a daily expiry check.
 | `notify.sh` | `/opt/familyhub/notify.sh` | Sends one ntfy push. Best effort, never fails its caller, keeps any access token off the command line. |
 | `setup-ntfy.sh` | run once with sudo | Creates `/etc/familyhub-notify.env` (0600) with a long random topic and optional token, installs `notify.sh`, sends a test push. |
 | `../release.py`, `../familyhub-update.service` | `/opt/familyhub/release.py`, `/etc/systemd/system/` | The updater. Writes a secret-free `update-status.json` (running, previous and newest release, last check, result) and, with `--publish-dir`, copies it into the exchange for Settings → Advanced → Software updates. |
+| `setup-offsite-backup.sh` | run once with sudo | Installs restic, asks for the R2 bucket and its bucket-scoped API token, writes `/etc/familyhub-backup.env` and a random encryption key `/etc/familyhub-backup.key` (both 0600), creates the encrypted repository, installs the nightly timer and runs the first backup. Prints the encryption key once for your password manager. |
+| `offsite-backup.sh` | `/opt/familyhub/offsite-backup.sh` | Nightly encrypted backup to R2: database dump, budget/notes/shopping tables as CSV, uploads, `private.env`. Keeps 14 daily, 8 weekly, 12 monthly snapshots; reads back 5% on Sundays. Writes `backup-status.json` for Settings; pushes through `notify.sh` on failure. |
+| `familyhub-offsite-backup.service` / `.timer` | `/etc/systemd/system/` | Runs the backup at about 03:23, with one retry ten minutes after a failure. |
+| `restore-offsite-backup.sh` | `/opt/familyhub/restore-offsite-backup.sh` | `--list`, `--drill` (restores into a throwaway database with no network and counts rows) and `--to DIR` (unpacks a snapshot for a real recovery). Works on a replacement machine from the key alone. |
 | `remove-account.sh` | run with sudo | Removes one account by email (for example a review or test login): reports what would go, refuses an account other accounts have joined as their family, backs up the database, asks you to retype the address. See below. |
 
 Install or update from the Mac with `.familyhub-local/pi/install-admin.sh` (it
@@ -27,6 +31,8 @@ above as the checklist for any install or update:
    (`systemctl enable --now familyhub-renewals.timer familyhub-credentials.path`).
    The update timer is a separate, already enabled unit.
 4. Run `setup-ntfy.sh` once if you want phone alerts.
+5. Run `setup-offsite-backup.sh` once for the nightly R2 backup (it installs its
+   own files and timer; see `docs/familyhub/BACKUP_RESTORE.md`).
 
 Releases can change these files: v1.1.0 changed the applier and renewal check, and
 v1.2.0 changed `release.py`, `familyhub-update.service`, `apply-credentials.sh` and

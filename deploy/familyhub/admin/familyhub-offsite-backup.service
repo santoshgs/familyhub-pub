@@ -1,0 +1,19 @@
+[Unit]
+Description=Encrypted off-site backup of Family Hub to Cloudflare R2
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+Environment=STATUS_JSON=/opt/familyhub/admin-exchange/backup-status.json
+ExecStart=/opt/familyhub/offsite-backup.sh
+TimeoutStartSec=1h
+# One retry after ten minutes, for a backup that met an update or a network blip.
+Restart=on-failure
+RestartSec=10min
+StartLimitIntervalSec=2h
+StartLimitBurst=2
+Nice=10
+IOSchedulingClass=idle

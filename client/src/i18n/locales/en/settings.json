@@ -137,7 +137,7 @@
     },
     "household": {
       "title": "Household",
-      "summary": "Members, modules, AI assistant",
+      "summary": "Members, shopping lists, modules, AI assistant",
       "intro": "Changes here apply to everyone in the family.",
       "members": "Manage family members",
       "membersTitle": "Family members",

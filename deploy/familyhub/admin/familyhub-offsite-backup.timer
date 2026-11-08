@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly encrypted off-site backup of Family Hub
+
+[Timer]
+OnCalendar=*-*-* 03:23
+Persistent=true
+RandomizedDelaySec=15min
+
+[Install]
+WantedBy=timers.target
