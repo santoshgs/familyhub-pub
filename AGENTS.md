@@ -19,6 +19,7 @@ Family Hub is a fork of OpenFamily; since v1.0 it no longer tracks every upstrea
 - Optional modules are closed on the server when switched off (`server/src/lib/modules.ts`); keep the client list in `client/src/familyhub/modules.ts` in step.
 - Display access is server-enforced: ambient display tokens are read-only, limited to an endpoint allowlist, and bound to revocable display sessions. Keep the LAN display listener's allowlist (`deploy/familyhub/lan-display/Caddyfile.lan`) in step with that server allowlist.
 - Google Calendar and Google Tasks remain authoritative when integrations are approved. Local copies must be clearly disposable caches.
+- External clients (MCP servers, messaging bridges, scripts) discover the API through `GET /api/schema` and follow `docs/familyhub/AGENT_API.md`. Authentication stays in `server/src/middleware/auth.ts`: never add a shared-secret or environment-token bypass to a route file.
 - The Raspberry Pi runs production. Change it only through committed scripts under `deploy/familyhub/` that the owner runs with the Pi password; never run sudo unattended or upgrade/reimage its OS without explicit owner approval. Record every host change in `docs/familyhub/DEPLOYMENT.md`.
 - The photo frame is configured over ADB from the owner's Mac (`docs/familyhub/FRAME.md`). Make device changes only with owner approval; never flash or root-install anything. Keep addresses and MACs out of the repository.
 

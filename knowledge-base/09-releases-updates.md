@@ -91,3 +91,7 @@ Real upgrades across many releases (v0.1.0 → v1.2.0) have run on the Pi, each 
 | v1.5.1 | Nov 6, 2026 | Budget → Groups → Import from Splitwise (CSV import with people, categories, currencies and balances) |
 | v1.5.2 | Nov 6, 2026 | Frame display layout chooser (cards, pills or off), faster frame detail panels, per-account menu order, Classic look on phone More menu, Display setup merged into Settings, budget balance card |
 | v1.5.3 | Nov 6, 2026 | Restart Family Hub from Settings → Advanced (server administrator), bounded shutdown, uniform Classic Settings sections, F1 card keeps the last good race calendar |
+| v1.5.4 | Nov 7, 2026 | Same code as v1.5.3 (released before the screensaver reached `familyhub/prototype`) |
+| v1.5.5 | Nov 7, 2026 | Frame screensaver (photos after idle) and night mode "Turn off" with double-tap wake |
+| v1.6.0 | Nov 8, 2026 | Nightly encrypted off-site backup to Cloudflare R2 with restore drill; budget groups, settlements and sharing in the data export; shopping on several Google Tasks lists (collapsible, editable, store mode) |
+| v1.6.1 | not released | Back up now in Settings → Advanced; committed `install-admin.sh`; backup status kept root-only |

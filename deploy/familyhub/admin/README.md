@@ -13,14 +13,15 @@ credentials** in FamilyHub, plus a daily expiry check.
 | `notify.sh` | `/opt/familyhub/notify.sh` | Sends one ntfy push. Best effort, never fails its caller, keeps any access token off the command line. |
 | `setup-ntfy.sh` | run once with sudo | Creates `/etc/familyhub-notify.env` (0600) with a long random topic and optional token, installs `notify.sh`, sends a test push. |
 | `../release.py`, `../familyhub-update.service` | `/opt/familyhub/release.py`, `/etc/systemd/system/` | The updater. Writes a secret-free `update-status.json` (running, previous and newest release, last check, result) and, with `--publish-dir`, copies it into the exchange for Settings → Advanced → Software updates. |
+| `install-admin.sh` | run with sudo after a release | Installs or updates every helper and unit in this table from its own folder, reloads systemd and enables the timers and the credentials watcher; the backup units only once the backup is set up. The comment at its top fetches this folder for a release on the Pi with the updater's read-only token. |
 | `setup-offsite-backup.sh` | run once with sudo | Installs restic, asks for the R2 bucket and its bucket-scoped API token, writes `/etc/familyhub-backup.env` and a random encryption key `/etc/familyhub-backup.key` (both 0600), creates the encrypted repository, installs the nightly timer and runs the first backup. Prints the encryption key once for your password manager. |
-| `offsite-backup.sh` | `/opt/familyhub/offsite-backup.sh` | Nightly encrypted backup to R2: database dump, budget/notes/shopping tables as CSV, uploads, `private.env`. Keeps 14 daily, 8 weekly, 12 monthly snapshots; reads back 5% on Sundays. Writes `backup-status.json` for Settings; pushes through `notify.sh` on failure. |
+| `offsite-backup.sh` | `/opt/familyhub/offsite-backup.sh` | Nightly encrypted backup to R2: database dump, budget/notes/shopping tables as CSV, uploads, `private.env`. Keeps 14 daily, 8 weekly, 12 monthly snapshots; reads back 5% on Sundays. Keeps `backup-status.json` in `/opt/familyhub/admin-state` and publishes it into the exchange for Settings (states `running`, `ok`, `failed`); one run at a time (lock); pushes through `notify.sh` on failure. **Back up now** in Settings asks `apply-credentials.sh` (submission kind `backup-now`) to `systemctl start --no-block` the backup unit. |
 | `familyhub-offsite-backup.service` / `.timer` | `/etc/systemd/system/` | Runs the backup at about 03:23, with one retry ten minutes after a failure. |
 | `restore-offsite-backup.sh` | `/opt/familyhub/restore-offsite-backup.sh` | `--list`, `--drill` (restores into a throwaway database with no network and counts rows) and `--to DIR` (unpacks a snapshot for a real recovery). Works on a replacement machine from the key alone. |
 | `remove-account.sh` | run with sudo | Removes one account by email (for example a review or test login): reports what would go, refuses an account other accounts have joined as their family, backs up the database, asks you to retype the address. See below. |
 
-Install or update from the Mac with `.familyhub-local/pi/install-admin.sh` (it
-copies these files and asks for the Pi password once). That script is local and is
+Install or update on the Pi with `sudo bash install-admin.sh` from this folder
+(committed in v1.6.1; the older Mac-side `.familyhub-local/pi/install-admin.sh` is no longer needed). That script is local and is
 not committed, and earlier instructions here missed several steps. Treat the table
 above as the checklist for any install or update:
 

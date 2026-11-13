@@ -27,6 +27,7 @@ import notesRoutes from './routes/notes';
 import aiRoutes from './routes/ai';
 import categoriesRoutes from './routes/categories';
 import kakeiboRoutes from './routes/kakeibo';
+import { createSchemaRouter } from './routes/schema';
 import { loadEnv } from './config/loadEnv';
 import logger from './lib/logger';
 import pool from './db';
@@ -178,6 +179,8 @@ app.use('/api/familyhub', familyHubRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/categories', categoriesRoutes);
 app.use('/api/kakeibo', kakeiboRoutes);
+// Self-description for external clients (MCP, agents): docs/familyhub/AGENT_API.md.
+app.use('/api/schema', createSchemaRouter(app));
 
 // Static client (native Windows install): serve the built SPA from the same origin
 // as the API, so the app is reachable from any device on the LAN via http://<ip>:3000.

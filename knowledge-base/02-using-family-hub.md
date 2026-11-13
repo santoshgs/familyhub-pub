@@ -50,7 +50,13 @@ Budget has 39 fixed categories in five groups, each with an icon. Categories can
 
 **Import from Splitwise (v1.5.1):** Budget → Groups → **Import from Splitwise** reads a Splitwise CSV export in your browser. You match people, categories and other currencies, and the file never leaves your device except the mapped items. Uneven splits are approximated as equal ones with one balance adjustment, so the balance still matches Splitwise. Importing again adds nothing that is already present. Keep the export out of shared folders and Git.
 
-Budget groups, settlements and sharing fields are not yet in the portable data export (a known gap). Database backups keep them.
+Since v1.6.0 the portable data export (Settings → Data) also carries budget groups, settle-up payments and sharing, and the nightly off-site backup keeps everything; see [backup and recovery](10-backup-recovery.md).
+
+## Shopping lists
+
+With the family Google account connected, parents choose which Google Tasks lists are shopping lists in **Settings → Household → Shopping lists** (v1.6.0), for example one per store, and can create a new one there. The Shopping page shows each list as a collapsible card. Tap an item to change its name, quantity, unit, aisle or notes, move it to another list, or delete it. **Clear ticked** tidies a list, and **Store mode** shows every list collapsible with items grouped by aisle. Items live in Google, so they also appear in the Google Tasks app (quantity and aisle are the `Qty:` and `Aisle:` lines of a task's notes). Without Google, Family Hub keeps one list of its own.
+
+Notes stay in Family Hub: Google Keep's API only works for Google Workspace domains, not a personal Gmail account.
 
 Daycare and AI have their own guides: [daycare](05-daycare-gmail.md) and [AI](06-ai-assistant.md). A read-only display has restricted controls; see [accounts and access](03-accounts-and-access.md).
 

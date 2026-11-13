@@ -14,7 +14,7 @@ import { getNewsArticle, previewFeed } from '../services/familyhub/news';
 import { ExtrasValidationError, feedUrl, publicView, readExtras, saveExtras } from '../services/familyhub/extras/settings';
 import { clearMarketCache } from '../services/familyhub/extras/markets';
 import { addPhoto, deletePhoto, listPhotos, MAX_PHOTOS, MAX_UPLOAD_BYTES, PhotoError, readPhoto } from '../services/familyhub/extras/photos';
-import { credentialStatus, requestCheck, submitCredential } from '../services/familyhub/adminCredentials';
+import { credentialStatus, requestBackup, requestCheck, submitCredential } from '../services/familyhub/adminCredentials';
 import { requestUpdate, updateStatus, type UpdateRequest } from '../services/familyhub/adminUpdates';
 import { cleanModuleList, getDisabledModules, isModuleKey, requireModule, saveDisabledModules } from '../lib/modules';
 const router = Router();
@@ -133,6 +133,14 @@ router.post('/admin/credentials/check', credentialLimiter, requireParent, requir
 // v1.5.3: restart the Family Hub server from Settings → Advanced (server administrator).
 // The process exits cleanly and Docker's restart policy (unless-stopped) starts it
 // again in a few seconds; the database, web and gateway containers keep running.
+router.post('/admin/backup', credentialLimiter, requireParent, requireOwner, async (_req: AuthRequest, res) => {
+    try {
+        const outcome = await requestBackup();
+        if (outcome === 'unavailable') return res.status(503).json({ success: false, error: 'The server helper is not installed on this host.' });
+        if (outcome === 'running') return res.status(409).json({ success: false, error: 'A backup is already running.' });
+        res.json({ success: true });
+    } catch { res.status(503).json({ success: false, error: 'The backup could not be requested.' }); }
+});
 router.post('/admin/restart', credentialLimiter, requireParent, requireOwner, (req: AuthRequest, res) => {
     logger.warn('familyhub.restart_requested', { by: req.actualUserId });
     res.json({ success: true });

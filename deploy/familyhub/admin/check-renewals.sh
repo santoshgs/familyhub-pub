@@ -93,7 +93,7 @@ fi
 # 6. Off-site backup freshness (setup-offsite-backup.sh). The backup reports its
 # own failures; this catches a timer that silently stopped running.
 if [[ -r /etc/familyhub-backup.env ]]; then
-	BK=/opt/familyhub/admin-exchange/backup-status.json
+	BK=/opt/familyhub/admin-state/backup-status.json
 	LAST=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("lastSuccessAt") or "")' "$BK" 2>/dev/null)
 	if [[ -n $LAST ]] && (( (NOW - $(date -d "$LAST" +%s)) / 3600 > 50 )); then
 		ALERTS+=("Off-site backup has not succeeded since $(date -d "$LAST" '+%Y-%m-%d %H:%M')")
