@@ -25,7 +25,7 @@ Added in v1.6. Each night at about 03:23 the Pi runs
 [restic](https://restic.net) encrypts and deduplicates them before upload, so R2 only
 ever holds ciphertext. It keeps 14 daily, 8 weekly and 12 monthly snapshots and,
 on Sundays, downloads 5% of the stored data to prove it is readable. Settings →
-Advanced → Server credentials shows the last successful backup; a failed run
+Advanced → Server credentials shows the last successful backup and, from v1.6.1, a **Back up now** button that starts the same backup at once (the Pi picks the request up within seconds; the row shows "Backing up…" until it finishes, and only one backup runs at a time); a failed run
 sends an ntfy push (if `setup-ntfy.sh` was run), and the daily renewal check
 warns when no backup has succeeded for two nights.
 
@@ -50,6 +50,10 @@ The token can write and delete objects in the bucket because restic prunes old
 snapshots. Someone in control of the Pi could therefore delete the backups.
 That is accepted for a household server. For protection against it, take an
 occasional extra copy elsewhere (`restore-offsite-backup.sh --to` on the Mac).
+
+Verified on the household Pi on November 8, 2026: first backup to R2 and a `--drill` restore (owner).
+
+The status is kept in the root-only `/opt/familyhub/admin-state/backup-status.json` and published into the app's exchange folder the same way as the other helpers' results (v1.6.1; v1.6.0 wrote it into the exchange directly). After installing the v1.6.1 helpers, press **Back up now** once so the new status file exists; until then the daily renewal check reports that no backup has succeeded.
 
 ### Recover on a new Pi
 

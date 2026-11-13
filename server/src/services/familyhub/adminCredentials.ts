@@ -24,9 +24,9 @@ export function parseBackupStatus(raw: any) {
     const num = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null;
     return {
         destination: String(raw.destination ?? 'Off-site').slice(0, 60),
-        state: raw.state === 'ok' ? 'ok' as const : 'failed' as const,
+        state: raw.state === 'ok' ? 'ok' as const : raw.state === 'running' ? 'running' as const : 'failed' as const,
         message: String(raw.message ?? '').slice(0, 300),
-        attemptedAt: iso(raw.attemptedAt), lastSuccessAt: iso(raw.lastSuccessAt),
+        startedAt: iso(raw.startedAt), attemptedAt: iso(raw.attemptedAt), lastSuccessAt: iso(raw.lastSuccessAt),
         sizeBytes: num(raw.sizeBytes), snapshots: num(raw.snapshots),
     };
 }
@@ -67,6 +67,15 @@ export async function submitCredential(kind: string, token: unknown): Promise<'o
     if (!TOKEN.test(value)) return 'invalid-token';
     if (!(await credentialStatus()).available) return 'unavailable';
     await writeSubmission(kind, { kind, token: value, submittedAt: new Date().toISOString() });
+    return 'ok';
+}
+
+/** Settings → Advanced → Back up now: asks the Pi to start the off-site backup unit. */
+export async function requestBackup(): Promise<'ok' | 'unavailable' | 'running'> {
+    const status = await credentialStatus();
+    if (!status.available) return 'unavailable';
+    if (status.backup?.state === 'running' && status.backup.startedAt && Date.now() - Date.parse(status.backup.startedAt) < 3_600_000) return 'running';
+    await writeSubmission('backup-now', { kind: 'backup-now', requestedAt: new Date().toISOString() });
     return 'ok';
 }
 

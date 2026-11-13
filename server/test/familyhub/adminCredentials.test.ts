@@ -71,3 +71,19 @@ it('refuses other parents, children and displays', async () => {
     expect((await call('put', '/api/familyhub/admin/credentials/ghcr', display, { token: GOOD })).status).toBe(403);
     expect(readdirSync(path.join(exchange, 'inbox'))).toEqual([]);
 });
+
+it('asks the host for an off-site backup now, once at a time, server administrator only', async () => {
+    expect((await call('post', '/api/familyhub/admin/backup')).status).toBe(503);
+    mkdirSync(path.join(exchange, 'inbox'));
+    expect((await call('post', '/api/familyhub/admin/backup')).status).toBe(200);
+    expect(JSON.parse(readFileSync(path.join(exchange, 'inbox', 'backup-now.json'), 'utf8'))).toMatchObject({ kind: 'backup-now' });
+    writeFileSync(path.join(exchange, 'backup-status.json'), JSON.stringify({ state: 'running', startedAt: new Date().toISOString(), message: 'Backing up…' }));
+    expect((await call('post', '/api/familyhub/admin/backup')).status).toBe(409);
+    expect((await call('get', '/api/familyhub/admin/credentials')).body.data.backup).toMatchObject({ state: 'running' });
+    // A stuck "running" (older than an hour) does not block a new request.
+    writeFileSync(path.join(exchange, 'backup-status.json'), JSON.stringify({ state: 'running', startedAt: '2026-11-01T00:00:00Z' }));
+    expect((await call('post', '/api/familyhub/admin/backup')).status).toBe(200);
+    const invite = await call('post', '/api/invites', owner.token, { role: 'parent' });
+    const parent = (await request(app).post('/api/auth/register').send({ email: 'creds-parent@example.test', name: 'Fictional parent', password: PASSWORD, inviteToken: invite.body.data.token })).body.data.token;
+    expect((await call('post', '/api/familyhub/admin/backup', parent)).status).toBe(403);
+});

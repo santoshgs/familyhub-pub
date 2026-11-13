@@ -154,10 +154,23 @@ release() {
 		|| logger -t familyhub-credentials "software update $1 did not complete (details in the update status)"
 }
 
+# backup-now: starts the nightly off-site backup unit at once (Settings →
+# Advanced → Back up now). --no-block returns straight away; the backup
+# publishes its own progress and result as backup-status.json.
+backup_now() {
+	if ! systemctl cat familyhub-offsite-backup.service >/dev/null 2>&1; then
+		result backup false "The off-site backup is not set up on this Pi (run setup-offsite-backup.sh)."; return; fi
+	if systemctl start --no-block familyhub-offsite-backup.service; then
+		result backup true "Backup started."
+	else
+		result backup false "The backup could not be started (see journalctl -u familyhub-offsite-backup)."
+	fi
+}
+
 while read -r kind token; do
 	[[ -n ${kind:-} ]] || continue
 	case $kind in
-		check|update-check|update-install) ;;
+		check|update-check|update-install|backup-now) ;;
 		*) if [[ ! ${token:-} =~ ^[A-Za-z0-9_-]{20,255}$ ]]; then result "${kind:-unknown}" false "That does not look like a token. Nothing changed."; continue; fi ;;
 	esac
 	case $kind in
@@ -167,6 +180,7 @@ while read -r kind token; do
 		check) ;;
 		update-check) release check ;;
 		update-install) release start-update ;;
+		backup-now) backup_now ;;
 		*) result unknown false "Unknown credential type." ;;
 	esac
 	unset token

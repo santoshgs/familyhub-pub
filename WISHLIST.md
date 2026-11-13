@@ -16,20 +16,19 @@ that shipped it.
 - [ ] Rotate between two card layouts (e.g. weekday morning vs. evening).
 
 ### Management
-- [ ] Notify a phone when the Pi's updater fails or a credential nears expiry (built in since v1.0; run `setup-ntfy.sh` on the Pi to switch it on).
 - [ ] Classroom integration (currently a placeholder page).
-- [ ] Include budget groups, settlements and sharing fields in the portable data export — a known gap since v1.5.0 (database backups already keep them).
-- [ ] Publish the Google OAuth app out of Testing — grants in Testing expire after seven days (owner action in Google Cloud).
+- [ ] Publish the Google OAuth app out of Testing — still needed although sign-in no longer uses Google: Calendar, Tasks, shopping lists and daycare Gmail use it, and grants in Testing expire after seven days (owner action in Google Cloud, then reconnect once).
+- [ ] Google Keep for Notes — not possible with a personal Gmail account (Keep's API is Workspace-only with domain-wide delegation); revisit only if the household moves to Workspace.
+- [ ] Shopping list templates for Google lists (templates still apply only to Family Hub's own list).
 
 ### Pi and operations
 - [ ] Run the server container as a non-root user (root cause behind the v1.1 admin-helper findings; needs bind-mount ownership changes and a Pi drill).
 - [ ] Least-privilege hardening for containers and host: `nginx-unprivileged` for the client, `cap_drop: ALL` with `no-new-privileges`, a read-only root filesystem, PostgreSQL on an internal-only network, resource limits, and an updater split so only the final compose step runs as root (proposed; pairs with the non-root item above; needs a Pi drill and a rollback path; rootless Docker and userns-remap not recommended for now; see `knowledge-base/13-security-privacy.md`).
 - [ ] Disable Tailscale key expiry for the Pi (one click in the admin console; currently expires 2027-04-27).
-- [ ] Encrypted off-device backups on a schedule.
 - [ ] A real upgrade-then-rollback drill across two releases.
-- [ ] Commit `install-admin.sh` so the Pi helper install is one tested step (today it is a local script that misses `daemon-reload`, enabling the units and `notify.sh`).
 - [ ] Make the release workflow's version check print why it failed.
-- [ ] A security scan of the code the first scan skipped (`client/`, `scripts/`, `shared/`, sign in with Google, ntfy, v1.2), in diff mode from `252e83c`.
+- [ ] A security scan of the code the first scan skipped (`client/`, `scripts/`, `shared/`, ntfy, and everything from v1.2 to v1.6 including the shopping and backup routes), in diff mode from `252e83c`.
+- [ ] A second off-site copy the Pi cannot delete (the R2 token can prune, so a compromised Pi could remove backups); for example an occasional `restore-offsite-backup.sh --to` onto the Mac.
 
 ## In progress
 
@@ -37,6 +36,9 @@ None right now. Owner follow-ups are listed in `docs/familyhub/STATE.md`.
 
 ## Done
 
+- [x] Back up now from Settings → Advanced; committed `install-admin.sh` for the Pi helpers — v1.6.1
+- [x] Nightly encrypted off-site backup to Cloudflare R2 with restore drill; budget groups, settlements and sharing in the data export; shopping on several Google Tasks lists with collapsible, editable lists and store mode — v1.6.0
+- [x] Phone notifications through ntfy (set up on the household Pi November 8) — built in since v1.0
 - [x] Choose which cards show on the photo frame: a display layout (cards, quick pills or off) in Settings → Display — v1.5.2
 - [x] Frame detail panels open faster; menu order per account (Settings → You); Classic look and theme on the phone More menu; Display setup merged into Settings; compact budget balance card — v1.5.2
 - [x] Restart Family Hub from Settings → Advanced (server administrator); uniform Classic Settings sections; F1 card keeps its last good race calendar — v1.5.3

@@ -7,7 +7,6 @@ After=network-online.target docker.service
 Type=oneshot
 User=root
 UMask=0077
-Environment=STATUS_JSON=/opt/familyhub/admin-exchange/backup-status.json
 ExecStart=/opt/familyhub/offsite-backup.sh
 TimeoutStartSec=1h
 # One retry after ten minutes, for a backup that met an update or a network blip.
