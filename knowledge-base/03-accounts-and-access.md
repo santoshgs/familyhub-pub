@@ -29,6 +29,16 @@ Each display gets a read-only token tied to its own session. The server allows i
 
 <img src="../docs/familyhub/images/hold-to-exit.png" alt="Hold to exit button while held" width="270">
 
+## Connected apps (agents)
+
+Not released yet (see [current state](../docs/familyhub/STATE.md)). An outside tool, such as an assistant you message, does not use a person's password or sign-in. A parent connects it in **Settings → Agents**, ticks what it may read and change, and copies its key into the tool. The key is shown once; Family Hub keeps only a fingerprint of it.
+
+- The app acts as the parent who connected it, and only inside what was ticked. Sign-in, export, invites, server administration, frames and the Google connection are never open to it.
+- **Remove** stops it at once. **New key** replaces the key and stops the old one. A key also stops when it expires (90 days unless you choose otherwise) or when the parent who connected it signs out everywhere.
+- **Recent changes** lists every change an app made or tried.
+
+Details for developers: [AGENT_API.md](../docs/familyhub/AGENT_API.md).
+
 ## Change an existing password
 
 For the deployed Docker installation, connect to the Pi over SSH and run the existing interactive recovery tool. Replace the example email with the **actual Family Hub login email**, not necessarily the Google account:

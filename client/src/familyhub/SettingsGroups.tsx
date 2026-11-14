@@ -8,6 +8,7 @@ import Settings from '../pages/Settings';
 import { ProfileName } from './ProfileName';
 import { ServerCredentials } from './ServerCredentials';
 import { ServerRestart, ServerUpdates } from './ServerUpdates';
+import { AgentSessions } from './AgentSessions';
 import { Avatar } from './FamilyHubNav';
 import { FlatSettings } from '../components/app/SettingsSection';
 import { api } from '../lib/api';
@@ -20,7 +21,7 @@ const DisplaySetupPanel = lazy(() => import('./DisplaySettings').then((module) =
 type Group = { id: string; tone: string; title: string; summary: string; body: () => ReactNode };
 
 /**
- * Family Hub's Settings, in five groups. On a phone the page is a list that
+ * Family Hub's Settings, in six groups. On a phone the page is a list that
  * opens one group at a time (the URL hash names it, so links like
  * /settings#display keep working); on a desktop the list sits beside the open
  * group, whose tab joins its panel.
@@ -35,12 +36,14 @@ export function SettingsGroups() {
     const groups: Group[] = [
         { id: 'you', tone: 'g-you', title: t('groups.you.title', { defaultValue: 'You' }), summary: t('groups.you.summary', { defaultValue: 'Name, menu order, language, notifications, sign-in' }),
             body: () => <><ProfileName /><NavOrderSettings board /><Settings only={['language', 'week', 'profile', 'notif', 'signin']} /></> },
-        { id: 'household', tone: 'g-house', title: t('groups.household.title', { defaultValue: 'Household' }), summary: t('groups.household.summary', { defaultValue: 'Members, shopping lists, modules, AI assistant' }),
-            body: () => <><section className="bb-flat"><header><h3>{t('groups.household.membersTitle', { defaultValue: 'Family members' })}</h3><p>{t('groups.household.membersHelp', { defaultValue: 'Parents manage settings and approve chores.' })}</p></header><div className="bb-flat-body bb-chips">{members.map((member) => <span key={member.id} style={{ '--m': worldHue(member.color), '--on': onColour(worldHue(member.color)) } as CSSProperties}><i aria-hidden="true">{member.name.trim()[0]?.toUpperCase()}</i>{member.name}</span>)}<Link className="bb-btn is-small" to="/family">{isParent ? t('groups.household.invite', { defaultValue: 'Invite or manage' }) : t('groups.household.members', { defaultValue: 'Manage family members' })}</Link></div></section><Settings only={['shopping-lists', 'modules', 'ai', 'categories', 'currency']} /></> },
+        { id: 'household', tone: 'g-house', title: t('groups.household.title', { defaultValue: 'Household' }), summary: t('groups.household.summary', { defaultValue: 'Members, calendar events, shopping lists, modules, AI assistant' }),
+            body: () => <><section className="bb-flat"><header><h3>{t('groups.household.membersTitle', { defaultValue: 'Family members' })}</h3><p>{t('groups.household.membersHelp', { defaultValue: 'Parents manage settings and approve chores.' })}</p></header><div className="bb-flat-body bb-chips">{members.map((member) => <span key={member.id} style={{ '--m': worldHue(member.color), '--on': onColour(worldHue(member.color)) } as CSSProperties}><i aria-hidden="true">{member.name.trim()[0]?.toUpperCase()}</i>{member.name}</span>)}<Link className="bb-btn is-small" to="/family">{isParent ? t('groups.household.invite', { defaultValue: 'Invite or manage' }) : t('groups.household.members', { defaultValue: 'Manage family members' })}</Link></div></section><Settings only={['calendar-events', 'shopping-lists', 'modules', 'ai', 'categories', 'currency']} /></> },
         ...(isParent ? [{ id: 'display', tone: 'g-display', title: t('groups.display.title', { defaultValue: 'Display' }), summary: t('groups.display.summary', { defaultValue: 'Layout, weather, night mode, frames, photos' }),
             body: () => <Suspense fallback={<p role="status" className="fh-extras-loading">Loading display options…</p>}><DisplaySetupPanel /><DashboardExtrasSettings /></Suspense> }] : []),
         { id: 'data', tone: 'g-data', title: t('groups.data.title', { defaultValue: 'Data' }), summary: t('groups.data.summary', { defaultValue: 'Export and import' }),
             body: () => <Settings only={['export', 'import']} /> },
+        ...(isParent ? [{ id: 'agents', tone: 'g-agents', title: t('groups.agents.title', { defaultValue: 'Agents' }), summary: t('groups.agents.summary', { defaultValue: 'Connected apps, their keys and recent changes' }),
+            body: () => <AgentSessions /> }] : []),
         ...(user?.is_owner ? [{ id: 'advanced', tone: 'g-adv', title: t('groups.advanced.title', { defaultValue: 'Advanced' }), summary: t('groups.advanced.summary', { defaultValue: 'Updates, restart, server credentials' }),
             body: () => <><ServerUpdates /><ServerRestart /><ServerCredentials /></> }] : []),
     ];
@@ -51,6 +54,7 @@ export function SettingsGroups() {
         household: t('groups.household.intro', { defaultValue: 'Changes here apply to everyone in the family.' }),
         display: t('groups.display.intro', { defaultValue: 'What the kitchen frame shows. The frame itself stays read-only.' }),
         data: t('groups.data.intro', { defaultValue: 'Portable JSON. Passwords and secrets are never included.' }),
+        agents: t('groups.agents.intro', { defaultValue: 'Apps that act for your family. Parents only.' }),
         advanced: t('groups.advanced.intro', { defaultValue: 'Server administrator only.' }),
     };
 

@@ -3,6 +3,7 @@ import { getJwtSecret } from '../config/loadEnv';
 import { query, Transaction } from '../db';
 import { clients } from './broadcaster';
 import logger from './logger';
+import { hashAgentToken, isAgentToken, storedAgentPermissions, type AgentPermissions } from './agentSessions';
 
 /**
  * The only place login tokens are signed and checked. Every sign-in method
@@ -30,6 +31,8 @@ export interface VerifiedToken {
     ambientOnly: boolean;
     /** The revocable display session behind an ambient token, when it has one. */
     displaySessionId?: string;
+    /** Set for a connected app's token: its session and what that session may call. */
+    agent?: { sessionId: string; permissions: AgentPermissions };
 }
 
 export type ReadOnlyTokenScope = 'display' | 'ambient';
@@ -63,6 +66,7 @@ export class InvalidTokenError extends Error {}
  * caller can answer 503 instead of letting the request through.
  */
 export const verifyAccessToken = async (token: string): Promise<VerifiedToken> => {
+    if (isAgentToken(token)) return verifyAgentToken(token);
     let claims: TokenClaims;
     try {
         claims = jwt.verify(token, getJwtSecret()) as TokenClaims;
@@ -88,6 +92,28 @@ export const verifyAccessToken = async (token: string): Promise<VerifiedToken> =
     }
 
     return { userId: claims.userId, ownerId: claims.ownerId ?? claims.userId, readOnly: claims.scope === 'display' || claims.scope === 'ambient', ambientOnly: claims.scope === 'ambient', ...(claims.sid ? { displaySessionId: claims.sid } : {}) };
+};
+
+/**
+ * A connected app's token ("fha_…"). Valid while its session is neither revoked
+ * nor expired, the parent who created it is still in the same family, and that
+ * parent has not signed out everywhere since (which ends their apps too).
+ * The caller must then limit the request to the session's permissions:
+ * authMiddleware does; nothing else may accept one.
+ */
+const verifyAgentToken = async (token: string): Promise<VerifiedToken> => {
+    if (!/^fha_[A-Za-z0-9_-]{43}$/.test(token)) throw new InvalidTokenError('Invalid token');
+    const result = await query(
+        `SELECT s.id, s.user_id, s.family_id, s.permissions, (s.last_used_at IS NULL OR s.last_used_at < now() - interval '1 minute') AS stale
+         FROM familyhub_agent_sessions s JOIN users u ON u.id = s.user_id
+         WHERE s.token_hash = $1 AND s.revoked_at IS NULL AND s.expires_at > now()
+           AND COALESCE(u.family_owner_id, u.id) = s.family_id AND u.token_version = s.creator_token_version`,
+        [hashAgentToken(token)],
+    );
+    const row = result.rows[0] as { id: string; user_id: string; family_id: string; permissions: unknown; stale: boolean } | undefined;
+    if (!row) throw new InvalidTokenError('Invalid token');
+    if (row.stale) await query('UPDATE familyhub_agent_sessions SET last_used_at = now() WHERE id = $1', [row.id]);
+    return { userId: row.user_id, ownerId: row.family_id, readOnly: false, ambientOnly: false, agent: { sessionId: row.id, permissions: storedAgentPermissions(row.permissions) } };
 };
 
 /** WebSocket close code telling the client its session ended. */

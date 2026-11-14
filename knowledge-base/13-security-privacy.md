@@ -20,6 +20,10 @@
 - Splitwise import (v1.5.1): the CSV is read in the browser. Only the mapped items (people, categories, amounts, dates and settle-up payments) are sent to `POST /api/budget/import`; the file itself is not uploaded. Keep the export out of Git and shared folders.
 - Menu order (v1.5.2) is a per-account preference; it grants no access and is not shared.
 
+### Outside tools (connected apps)
+
+Not released yet. An outside tool signs in with its own key (`fha_…`), stored only as a SHA-256 hash, tied to a revocable session. `authMiddleware` checks every request made with one against the session's grants before any route runs: read grants by area, write grants only on endpoints with a published payload contract, and a fixed list of areas no session can reach. The usual parent, module and family checks still run afterwards. Agent keys cannot open the WebSocket. Every write or attempted write is recorded without its body. `GET /api/schema` tells a key only about what it may call. A shared secret compared in a route file is not accepted. Not yet done: a per-session rate limit and a security scan of this code. See [AGENT_API.md](../docs/familyhub/AGENT_API.md).
+
 ## Secrets and private records
 
 Keep `.familyhub-local/`, `.env` files, SSH private keys, Google OAuth secrets/tokens, GitHub tokens, databases, backups, family records and daycare emails out of Git, issue reports, screenshots and chat. Do not put a password or token in a command argument, shell history, build-time frontend variable or public URL.

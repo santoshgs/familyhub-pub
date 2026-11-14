@@ -714,3 +714,32 @@
 @media (max-width:640px) { .ambient-night-mode { grid-template-columns:1fr; } }
 .ambient-selected-location button { flex:0 0 auto; white-space:nowrap; }
 body.bb-on .fh-scope .ambient-night-mode label { flex-direction:row; align-items:flex-start; }
+
+/* Settings → Agents: connected apps (AgentSessions.tsx). Builds on .fh-credentials. */
+.fh-agents code { font-size:11px; color:var(--fh-muted); overflow-wrap:anywhere; }
+.fh-agents .fh-credential-row { grid-template-columns:minmax(0,1fr) auto; }
+.fh-agents .fh-credential-row > .fh-update-confirm { grid-column:1/-1; justify-content:flex-start; }
+.fh-agent-key { padding:14px; border:2px solid var(--fh-green); border-radius:11px; background:var(--fh-bg); display:flex; flex-direction:column; gap:10px; align-items:flex-start; }
+.fh-agent-key strong { display:flex; align-items:center; gap:7px; font-size:13px; color:var(--fh-ink); }
+.fh-agent-key p { margin:0; font-size:12px; line-height:1.5; color:var(--fh-muted); max-width:640px; }
+.fh-agent-key-row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; width:100%; }
+.fh-agent-key-row code { flex:1 1 240px; padding:10px 11px; border:1px solid var(--fh-line); border-radius:9px; background:var(--fh-paper); color:var(--fh-ink); font-size:13px; user-select:all; }
+.fh-agent-confirm { margin:10px 0 0; display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; font-size:12px; color:var(--fh-ink); }
+.fh-agent-reach { margin-top:10px; display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; font-size:12px; color:var(--fh-ink); }
+.fh-agent-reach ul { margin:6px 0 0; gap:4px; }
+.fh-credentials .fh-agent-reach li { padding:0; border:0; border-radius:0; background:none; display:flex; flex-direction:column; }
+.fh-credentials form.fh-agent-form { flex-direction:column; flex-wrap:nowrap; gap:14px; margin:0; padding:14px; border:1px solid var(--fh-line); border-radius:11px; background:var(--fh-bg); }
+.fh-agent-form h4 { margin:0; font-size:14px; color:var(--fh-ink); }
+.fh-agent-fields { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,1fr); gap:12px; }
+.fh-agent-fields label { display:flex; flex-direction:column; gap:5px; font-size:12px; color:var(--fh-muted); }
+.fh-credentials form.fh-agent-form input[type="text"], .fh-agent-form select { flex:none; width:100%; min-height:44px; padding:0 11px; border:1px solid var(--fh-line); border-radius:9px; background:var(--fh-paper); color:var(--fh-ink); font-size:14px; }
+.fh-agent-form fieldset { margin:0; padding:0; border:0; min-width:0; }
+.fh-agent-form legend { padding:0; font-size:13px; font-weight:600; color:var(--fh-ink); }
+.fh-agent-form fieldset > p { margin:3px 0 8px; font-size:12px; color:var(--fh-muted); }
+.fh-agent-checks { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:2px 14px; }
+.fh-agent-check { display:flex; align-items:flex-start; gap:9px; min-height:44px; padding:6px 0; font-size:13px; color:var(--fh-ink); cursor:pointer; }
+.fh-credentials form.fh-agent-form .fh-agent-check input { flex:none; width:18px; height:18px; min-height:0; margin:1px 0 0; padding:0; }
+.fh-agent-check span { display:flex; flex-direction:column; gap:1px; min-width:0; }
+.fh-agent-form details { margin-top:6px; } .fh-agent-form summary { min-height:44px; display:flex; align-items:center; font-size:12px; color:var(--fh-muted); cursor:pointer; }
+.fh-agent-form > .fh-update-confirm { justify-content:flex-start; }
+@media (max-width:640px) { .fh-agent-fields { grid-template-columns:1fr; } }

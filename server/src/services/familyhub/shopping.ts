@@ -208,6 +208,21 @@ export async function editItem(familyId: string, listId: string, id: string, inp
     return decodeItem(await api.updateListItem(listId, id, patch));
 }
 
+/**
+ * Reorders an item within its list (v2.0.1): it goes just after `previous`,
+ * or to the top when `previous` is null. Both must be items on that list.
+ */
+export async function moveItem(familyId: string, listId: string, id: string, previous: unknown): Promise<ShoppingItem> {
+    await assertShoppingList(familyId, listId);
+    if (typeof id !== 'string' || !id || id.length > 200) throw new ShoppingError(404, 'Item not found.');
+    if (previous !== null && (typeof previous !== 'string' || !previous || previous.length > 200 || previous === id)) throw new ShoppingError(400, 'Choose where to move the item.');
+    const api = googleApi(familyId);
+    const items = await api.listItems(listId);
+    if (!items.some((raw) => raw.id === id)) throw new ShoppingError(404, 'Item not found.');
+    if (previous !== null && !items.some((raw) => raw.id === previous)) throw new ShoppingError(404, 'Item not found.');
+    return decodeItem(await api.moveListItem(listId, id, previous as string | null));
+}
+
 export async function removeItem(familyId: string, listId: string, id: string): Promise<void> {
     await assertShoppingList(familyId, listId);
     if (typeof id !== 'string' || !id || id.length > 200) throw new ShoppingError(404, 'Item not found.');

@@ -162,7 +162,13 @@
     "migrated_other": "Copied {{count}} items to Google Tasks.",
     "migrateIntro_one": "The old Family Hub list still has {{count}} item. Copy it to:",
     "migrateIntro_other": "The old Family Hub list still has {{count}} items. Copy them to:",
-    "migrate": "Copy"
+    "migrate": "Copy",
+    "reorder": "Reorder",
+    "reorderDone": "Done",
+    "reorderHelp": "Move items up or down, or drag them. The order is saved in Google Tasks.",
+    "up": "Move {{name}} up",
+    "down": "Move {{name}} down",
+    "edit": "Edit {{name}}"
   },
   "settings": {
     "saved": "Saved.",

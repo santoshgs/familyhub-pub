@@ -15,7 +15,7 @@ never expire.
 | Cloudflare DNS token | Lets certbot renew that certificate | No expiry | — |
 | Tailscale node key | The Pi on the tailnet (management, Serve certificate) | Disable key expiry in the Tailscale admin console | 2027-04-27 |
 | Tailscale Serve certificate | HTTPS for management | Automatic | — |
-| Google OAuth consent | Calendar, Tasks, Gmail | Reconnect in FamilyHub if Google revokes it (Testing-mode apps expire weekly) | — |
+| Google OAuth consent | Calendar, Tasks, Gmail | Reconnect in FamilyHub if Google revokes it (the app has been In production since November 13, 2026, so no weekly expiry) | — |
 
 GitHub tokens cannot be renewed by software: GitHub only creates them in its
 website, and its container registry accepts only classic personal tokens (GitHub

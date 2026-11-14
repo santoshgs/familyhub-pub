@@ -10,6 +10,9 @@ process.env.JWT_SECRET = 'test-only-secret-0123456789-0123456789';
 process.env.APP_PUBLIC_URL = 'http://app.test';
 process.env.AUTH_RATE_LIMIT_MAX = '100000';
 process.env.OIDC_FLOW_RATE_LIMIT_MAX = '100000';
+// The per-session limit for connected apps is exercised on its own in agentRateLimit tests.
+process.env.AGENT_RATE_LIMIT_READS = '100000';
+process.env.AGENT_RATE_LIMIT_WRITES = '100000';
 process.env.LOG_LEVEL = 'error';
 // Docker and CI run PostgreSQL in UTC; a native install often does not. A
 // session far from UTC makes any mix-up between local and UTC times fail loudly.

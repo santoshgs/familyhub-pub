@@ -87,7 +87,7 @@ If typing at the Pi console produces the wrong characters, inspect the keyboard 
 
 Check the Google connection status, displayed dedicated account, selected shared calendar/list, source permissions, freshness label and household time zone. A stale cache may remain visible after a provider error. Verify the exact HTTPS callback in the Google OAuth web client and whether the account remains a permitted test user. Calendar event creation requires write access to the selected calendar. For Google Tasks, switch the native app to the same dedicated account.
 
-Reconnect if consent was revoked or a Testing-mode refresh token expired. If a specific operation fails, record only sanitized error text and verify whether the change reached Google before retrying. See [Google Calendar and Tasks](04-google-calendar-tasks.md).
+Reconnect if consent was revoked, or if a refresh token issued while the app was still in Testing has expired (the app has been In production since November 13, 2026). If a specific operation fails, record only sanitized error text and verify whether the change reached Google before retrying. See [Google Calendar and Tasks](04-google-calendar-tasks.md).
 
 ## Daycare is empty
 

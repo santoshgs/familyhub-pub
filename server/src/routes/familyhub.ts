@@ -9,6 +9,7 @@ import { issueAccessToken } from '../lib/authTokens';
 import { googleStatus, startGoogleConnection, finishGoogleConnection, disconnectGoogle, GoogleConnectionError } from '../services/familyhub/google/connection';
 import { googleApi, selection, configureSources, syncGoogle, invalidate } from '../services/familyhub/google/runtime';
 import { GoogleApiError } from '../services/familyhub/google/adapters';
+import { EventDefaultsError, googleReminderPreview, readEventDefaults, remindersFor, saveEventDefaults, withDefaultEnd } from '../services/familyhub/google/eventDefaults';
 import { loadAmbientSnapshot, readAmbientSettings, saveAmbientSettings, searchWeatherLocations } from '../services/familyhub/ambient';
 import { getNewsArticle, previewFeed } from '../services/familyhub/news';
 import { ExtrasValidationError, feedUrl, publicView, readExtras, saveExtras } from '../services/familyhub/extras/settings';
@@ -23,6 +24,7 @@ const fail = (res: Response, error: unknown) => {
     // A lapsed Google grant is not a lapsed Family Hub session: answering 401 made
     // the app sign the person out. It is a 409 the Home page offers to reconnect.
     if (error instanceof GoogleConnectionError) return res.status(error.status === 401 ? 409 : error.status).json({ success: false, error: error.message, ...(error.status === 401 ? { code: 'GOOGLE_RECONNECT' } : {}) });
+    if (error instanceof EventDefaultsError) return res.status(error.status).json({ success: false, error: error.message });
     if (error instanceof GoogleApiError) return res.status(error.status === 401 ? 409 : 502).json({ success: false, error: error.message, ...(error.status === 401 ? { code: 'GOOGLE_RECONNECT' } : {}) });
     return res.status(400).json({ success: false, error: 'This change could not be completed. Check the fields and Google connection.' });
 };
@@ -414,11 +416,29 @@ router.get('/google/calendar', async (req: AuthRequest, res) => {
 router.post('/google/events', requireParent, async (req: AuthRequest, res) => {
     try {
         const config = await configured(req.userId!);
-        const input = req.body ?? {};
-        const data = await googleApi(req.userId!).createEvent(config.calendarId, input);
+        // An event without an end (the AI assistant, outside apps) gets the
+        // household's default length; a timed event gets its notification.
+        const defaults = await readEventDefaults(req.userId!);
+        const input = withDefaultEnd(req.body ?? {}, defaults.eventMinutes);
+        const api = googleApi(req.userId!);
+        const data = await api.createEvent(config.calendarId, input, await remindersFor(api, config.calendarId, defaults, input));
         await invalidate(req.userId!, 'calendar');
         res.json({ success: true, data });
     } catch (error) { fail(res, error); }
+});
+// How new events are filled in (v2.0.1): default length and notification.
+// Readable by every family account (the event form uses the length); only
+// parents change it. `google` previews what 'google' mode would apply.
+router.get('/google/event-defaults', async (req: AuthRequest, res) => {
+    try {
+        const [defaults, config] = await Promise.all([readEventDefaults(req.userId!), selection(req.userId!)]);
+        const google = req.query.preview === '1' && config && !req.readOnly ? await googleReminderPreview(googleApi(req.userId!), config.calendarId) : undefined;
+        res.set('Cache-Control', 'no-store').json({ success: true, data: { ...defaults, configured: Boolean(config), ...(google !== undefined ? { google } : {}) } });
+    } catch (error) { fail(res, error); }
+});
+router.put('/google/event-defaults', requireParent, async (req: AuthRequest, res) => {
+    try { res.json({ success: true, data: await saveEventDefaults(req.userId!, req.body) }); }
+    catch (error) { fail(res, error); }
 });
 // Edit or delete one Google Calendar event from Family Hub (v1.5).
 router.patch('/google/events/:id', requireParent, async (req: AuthRequest, res) => {

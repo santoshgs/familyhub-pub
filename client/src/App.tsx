@@ -23,8 +23,9 @@ import { SettingsGroups } from './familyhub/SettingsGroups';
 import { ProfileName } from './familyhub/ProfileName';
 import { ServerCredentials } from './familyhub/ServerCredentials';
 import { ServerRestart, ServerUpdates } from './familyhub/ServerUpdates';
+import { AgentSessions } from './familyhub/AgentSessions';
 import { SettingsSection } from './components/app/SettingsSection';
-import { Monitor, ServerCog } from 'lucide-react';
+import { Bot, Monitor, ServerCog } from 'lucide-react';
 import { getLook } from './familyhub/look';
 const Integrations = lazy(() => import('./pages/Integrations'));
 
@@ -85,6 +86,7 @@ function App() {
         if (location.pathname === '/settings' && !user?.is_display) return getLook() === 'board' ? <ModulePage title="Settings"><SettingsGroups /></ModulePage>
             : <ModulePage><div className="mb-6 space-y-6"><ProfileName asSection /><NavOrderSettings asSection /></div><p className="mb-4">Choose which modules your family uses below. Switching one off hides it for everyone and keeps its saved data.</p><a href="/family" className="fh-text-button">Manage family members</a><Settings />
                 {(user?.is_owner || user?.role === 'parent') && <div className="mt-6"><SettingsSection id="display" icon={<Monitor size={20} />} title="Display" subtitle="Frame layout, weather location, night mode, paired frames, and what each card and panel shows."><Suspense fallback={<p role="status" className="fh-extras-loading">Loading display options…</p>}><DisplaySetupPanel /><DashboardExtrasSettings /></Suspense></SettingsSection></div>}
+                {(user?.is_owner || user?.role === 'parent') && <div className="mt-6"><SettingsSection id="agents" icon={<Bot size={20} />} title="Agents" subtitle="Connected apps, their keys and recent changes."><AgentSessions /></SettingsSection></div>}
                 {user?.is_owner && <div className="mt-6"><SettingsSection id="advanced" icon={<ServerCog size={20} />} title="Advanced" subtitle="Software updates, restart and server credentials."><ServerUpdates /><ServerRestart /><ServerCredentials /></SettingsSection></div>}</ModulePage>;
         const optionalPages: Record<string, ReactElement> = {
             '/budget': <Budget />, '/rewards': <><p className="mb-4">Pocket money uses local reward chores and parent approvals. Google to-dos do not earn points automatically. <a className="fh-text-button" href="/chores">Manage reward chores</a></p><Rewards /></>,

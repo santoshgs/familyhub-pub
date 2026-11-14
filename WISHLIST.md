@@ -17,7 +17,7 @@ that shipped it.
 
 ### Management
 - [ ] Classroom integration (currently a placeholder page).
-- [ ] Publish the Google OAuth app out of Testing — still needed although sign-in no longer uses Google: Calendar, Tasks, shopping lists and daycare Gmail use it, and grants in Testing expire after seven days (owner action in Google Cloud, then reconnect once).
+- [x] Publish the Google OAuth app out of Testing — done November 13, 2026 (In production). Calendar, Tasks, shopping lists and daycare Gmail use it; reconnect Google once so a new, non-expiring refresh token is issued.
 - [ ] Google Keep for Notes — not possible with a personal Gmail account (Keep's API is Workspace-only with domain-wide delegation); revisit only if the household moves to Workspace.
 - [ ] Shopping list templates for Google lists (templates still apply only to Family Hub's own list).
 

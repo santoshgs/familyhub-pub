@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Check, Pencil, Trash2 } from 'lucide-react';
 import { api } from '../lib/api';
+import { loadPalette, type Palette } from './colourLabels';
+import { defaultEnd, defaultStart, loadEventDefaults } from './eventDefaults';
 
 /**
  * Add or edit one Google Calendar event from Family Hub (v1.5): title, time,
@@ -11,14 +13,6 @@ export interface EditableEvent {
     id: string; title: string; location?: string; color?: string; colorId?: string; allDay: boolean;
     start: { date?: string; dateTime?: string }; end: { date?: string; dateTime?: string };
 }
-interface Palette { calendar: string | null; colors: Array<{ id: string; color: string }> }
-
-let palette: Promise<Palette> | null = null;
-const loadPalette = () => {
-    palette ??= api.get<{ data: Palette }>('/api/familyhub/google/colors').then((response) => response.data).catch((error) => { palette = null; throw error; });
-    return palette;
-};
-
 /** "2026-11-06T15:00:00-05:00" → "2026-11-06T15:00" in the household timezone. */
 export function localInput(dateTime: string | undefined, timeZone: string) {
     if (!dateTime) return '';
@@ -27,15 +21,27 @@ export function localInput(dateTime: string | undefined, timeZone: string) {
     return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
 }
 
-export function EventForm({ event, timeZone, legend, busy, canWrite, run }: {
+export function EventForm({ event, timeZone, legend, busy, canWrite, run, initialDate }: {
     event: EditableEvent | null; timeZone: string; legend: Record<string, string>; busy: boolean; canWrite: boolean;
     /** The hub's action runner: shows errors, closes the dialog and reloads. */
     run: (task: () => Promise<unknown>) => Promise<void>;
+    /** For a new event: the day the calendar was showing (YYYY-MM-DD). */
+    initialDate?: string;
 }) {
     const [title, setTitle] = useState(event?.title ?? '');
     const [allDay, setAllDay] = useState(event?.allDay ?? false);
-    const [start, setStart] = useState(event ? event.allDay ? event.start.date ?? '' : localInput(event.start.dateTime, timeZone) : '');
-    const [end, setEnd] = useState(event ? event.allDay ? event.end.date ?? '' : localInput(event.end.dateTime, timeZone) : '');
+    const [minutes, setMinutes] = useState(60);
+    const [start, setStart] = useState(() => event ? event.allDay ? event.start.date ?? '' : localInput(event.start.dateTime, timeZone) : defaultStart(initialDate, timeZone));
+    const [end, setEnd] = useState(() => event ? event.allDay ? event.end.date ?? '' : localInput(event.end.dateTime, timeZone) : defaultEnd(start, false, 60));
+    // A new event's end follows its start until someone picks the end by hand.
+    const [endChosen, setEndChosen] = useState(Boolean(event));
+    useEffect(() => {
+        if (event) return;
+        let live = true;
+        loadEventDefaults().then((value) => { if (live && value.eventMinutes) setMinutes(value.eventMinutes); }).catch(() => undefined);
+        return () => { live = false; };
+    }, [event]);
+    useEffect(() => { if (!endChosen) setEnd(defaultEnd(start, allDay, minutes)); }, [start, allDay, minutes, endChosen]);
     const [location, setLocation] = useState(event?.location ?? '');
     const [colorId, setColorId] = useState(event?.colorId ?? '');
     const [colors, setColors] = useState<Palette | null>(null);
@@ -53,10 +59,16 @@ export function EventForm({ event, timeZone, legend, busy, canWrite, run }: {
 
     return <form className="fh-form" onSubmit={(e) => { e.preventDefault(); void save(); }}>
         <label>Event title<input autoFocus required maxLength={500} value={title} onChange={(e) => setTitle(e.target.value)} /></label>
-        <label className="fh-toggle-row">All-day event<input type="checkbox" checked={allDay} onChange={(e) => { setAllDay(e.target.checked); setStart(''); setEnd(''); }} /></label>
+        <label className="fh-toggle-row">All-day event<input type="checkbox" checked={allDay} onChange={(e) => {
+            // Keep the day; the end follows again unless it was picked by hand.
+            const day = start.slice(0, 10);
+            setAllDay(e.target.checked);
+            setStart(day ? e.target.checked ? day : defaultStart(day, timeZone) : '');
+            if (endChosen) { setEnd(''); setEndChosen(false); }
+        }} /></label>
         <div className="fh-form-row fh-event-times">
             <label>Starts<input required type={allDay ? 'date' : 'datetime-local'} value={start} onChange={(e) => setStart(e.target.value)} /></label>
-            <label>{allDay ? 'Ends before (exclusive)' : 'Ends'}<input required type={allDay ? 'date' : 'datetime-local'} value={end} onChange={(e) => setEnd(e.target.value)} /></label>
+            <label>{allDay ? 'Ends before (exclusive)' : 'Ends'}<input required type={allDay ? 'date' : 'datetime-local'} value={end} onChange={(e) => { setEnd(e.target.value); setEndChosen(true); }} /></label>
         </div>
         <label>Location<input maxLength={500} value={location} onChange={(e) => setLocation(e.target.value)} /></label>
         {swatches.length > 0 && <fieldset className="fh-event-colours">

@@ -30,7 +30,7 @@ const transport = async (input: string | URL | Request, options?: RequestInit) =
         if (method === 'POST') { const id = `list-${++seq}`; lists.set(id, { title: body.title, tasks: [] }); return json({ id, title: body.title }); }
         return json({ items: [...lists].map(([id, l]) => ({ id, title: l.title })) });
     }
-    const m = /^lists\/([^/]+)\/(tasks(?:\/([^/]+))?|clear)$/.exec(path);
+    const m = /^lists\/([^/]+)\/(tasks(?:\/([^/]+))?|clear)(\/move)?$/.exec(path);
     const list = m && lists.get(decodeURIComponent(m[1]));
     if (!m || !list) return json({}, 404);
     if (m[2] === 'clear') { list.tasks.forEach((t) => { if (t.status === 'completed') t.hidden = true; }); return new Response(null, { status: 204 }); }
@@ -39,6 +39,14 @@ const transport = async (input: string | URL | Request, options?: RequestInit) =
     if (!id) return json({ items: list.tasks.filter((t) => url.searchParams.get('showHidden') === 'true' || !t.hidden) });
     const task = list.tasks.find((t) => t.id === id);
     if (!task) return json({}, 404);
+    if (m[4] && method === 'POST') {
+        // Google's move: after `previous`, or first; positions follow the new order.
+        list.tasks.splice(list.tasks.indexOf(task), 1);
+        const previous = url.searchParams.get('previous');
+        list.tasks.splice(previous ? list.tasks.findIndex((t) => t.id === previous) + 1 : 0, 0, task);
+        list.tasks.forEach((t, i) => { t.position = String(i).padStart(8, '0'); });
+        return json(task);
+    }
     if (method === 'DELETE') { list.tasks.splice(list.tasks.indexOf(task), 1); return new Response(null, { status: 204 }); }
     if (method === 'PATCH') { Object.assign(task, body); return json(task); }
     return json(task);
@@ -115,6 +123,22 @@ describe('shopping lists on Google Tasks', () => {
 
         await request(app).post('/api/familyhub/shopping/lists/grocer/clear').set(as()).expect(200);
         expect((await page()).lists[0].items).toHaveLength(0);
+    });
+
+    it('reorders items within a list, in Google Tasks order', async () => {
+        await connect();
+        await request(app).put('/api/familyhub/shopping/settings').set(as()).send({ lists: ['grocer'] }).expect(200);
+        const ids: string[] = [];
+        for (const name of ['Apples', 'Bread', 'Cheese']) ids.push((await request(app).post('/api/familyhub/shopping/lists/grocer/items').set(as()).send({ name }).expect(200)).body.data.id);
+        const names = async () => (await page()).lists[0].items.map((i: { name: string }) => i.name);
+        expect(await names()).toEqual(['Apples', 'Bread', 'Cheese']);
+        await request(app).post(`/api/familyhub/shopping/lists/grocer/items/${ids[2]}/move`).set(as()).send({ previous: null }).expect(200);
+        expect(await names()).toEqual(['Cheese', 'Apples', 'Bread']);
+        await request(app).post(`/api/familyhub/shopping/lists/grocer/items/${ids[2]}/move`).set(as()).send({ previous: ids[1] }).expect(200);
+        expect(await names()).toEqual(['Apples', 'Bread', 'Cheese']);
+        expect((await request(app).post(`/api/familyhub/shopping/lists/grocer/items/${ids[0]}/move`).set(as()).send({ previous: ids[0] })).status).toBe(400);
+        expect((await request(app).post(`/api/familyhub/shopping/lists/grocer/items/${ids[0]}/move`).set(as()).send({ previous: 'missing' })).status).toBe(404);
+        expect((await request(app).post('/api/familyhub/shopping/lists/todo/items/x/move').set(as()).send({ previous: null })).status).toBe(404);
     });
 
     it('never touches a task list that is not a shopping list', async () => {

@@ -32,6 +32,8 @@ Private API responses are `no-store`; the service worker no longer provides offl
 | [`.github/workflows/familyhub-release.yml`](../.github/workflows/familyhub-release.yml) | Release validation and packaging |
 | [`docs/familyhub/`](../docs/familyhub/) | Detailed incremental design, setup and the historical QA record |
 | [`client/src/familyhub/version.ts`](../client/src/familyhub/version.ts) | Version label shown in footers (injected by `client/vite.config.ts`) |
+| [`server/src/routes/schema.ts`](../server/src/routes/schema.ts), [`server/src/lib/payloadContracts.ts`](../server/src/lib/payloadContracts.ts) | `GET /api/schema`: the API's description of itself for outside tools (v1.6.2). See [AGENT_API.md](../docs/familyhub/AGENT_API.md) |
+| [`server/src/lib/agentSessions.ts`](../server/src/lib/agentSessions.ts), [`server/src/routes/agentSessions.ts`](../server/src/routes/agentSessions.ts), `client/src/familyhub/AgentSessions.tsx` | Connected apps: keys, permissions and Settings → Agents (unreleased) |
 | [`client/.snyk`](../client/.snyk) | Accepted Snyk dependency findings, with reasons and expiry |
 | [`server/src/services/familyhub/extras/`](../server/src/services/familyhub/extras/) | v1.2 display extras on the Pi: weather panel, astronomy (moon phase), Formula 1, markets, guest Wi-Fi and countdown, photos (`sharp`), validated settings |
 | [`server/src/services/familyhub/adminUpdates.ts`](../server/src/services/familyhub/adminUpdates.ts) | Software updates status and requests, written to the admin exchange |

@@ -5,7 +5,7 @@ import { broadcast } from '../lib/broadcaster';
 import { GoogleConnectionError } from '../services/familyhub/google/connection';
 import { GoogleApiError } from '../services/familyhub/google/adapters';
 import {
-    addItem, clearChecked, createShoppingList, editItem, loadShopping, migrateLocalItems,
+    addItem, clearChecked, createShoppingList, editItem, loadShopping, migrateLocalItems, moveItem,
     removeItem, saveShoppingLists, shoppingSettings, ShoppingError,
 } from '../services/familyhub/shopping';
 import logger from '../lib/logger';
@@ -63,6 +63,13 @@ router.post('/lists/:listId/items', async (req: AuthRequest, res) => {
 router.patch('/lists/:listId/items/:id', async (req: AuthRequest, res) => {
     try { const item = await editItem(req.userId!, req.params.listId, req.params.id, req.body ?? {}); changed(req, 'updated'); res.json({ success: true, data: item }); }
     catch (error) { fail(res, error); }
+});
+// Reorder (v2.0.1): { previous: itemId | null } puts the item after that one, or first.
+router.post('/lists/:listId/items/:id/move', async (req: AuthRequest, res) => {
+    try {
+        const previous = req.body?.previous === undefined ? null : req.body.previous;
+        const item = await moveItem(req.userId!, req.params.listId, req.params.id, previous); changed(req, 'updated'); res.json({ success: true, data: item });
+    } catch (error) { fail(res, error); }
 });
 router.delete('/lists/:listId/items/:id', async (req: AuthRequest, res) => {
     try { await removeItem(req.userId!, req.params.listId, req.params.id); changed(req, 'deleted'); res.json({ success: true }); }

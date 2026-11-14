@@ -28,6 +28,7 @@ import aiRoutes from './routes/ai';
 import categoriesRoutes from './routes/categories';
 import kakeiboRoutes from './routes/kakeibo';
 import { createSchemaRouter } from './routes/schema';
+import { createAgentSessionsRouter } from './routes/agentSessions';
 import { loadEnv } from './config/loadEnv';
 import logger from './lib/logger';
 import pool from './db';
@@ -175,6 +176,8 @@ app.use('/api/integrations', integrationsRoutes);
 app.use('/api/rewards', rewardsRoutes);
 app.use('/api/notes', notesRoutes);
 app.use('/api/familyhub/shopping', familyHubShoppingRoutes);
+// Connected apps (agent sessions), before the general Family Hub router.
+app.use('/api/familyhub/agent-sessions', createAgentSessionsRouter(app));
 app.use('/api/familyhub', familyHubRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/categories', categoriesRoutes);

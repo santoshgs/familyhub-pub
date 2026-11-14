@@ -126,6 +126,59 @@ it('writes only to the saved Google sources and never creates local tasks or app
     expect((await query('SELECT id FROM tasks')).rows).toEqual([]);
     expect((await query('SELECT id FROM appointments')).rows).toEqual([]);
 });
+it('fills in a missing end and the notification from Google or Settings (v2.0.1)', async () => {
+    await connect();
+    const bodies: Array<Record<string, any>> = [];
+    let shared: unknown[] = [], main: unknown[] = [{ method: 'popup', minutes: 15 }];
+    send.mockImplementation(async (url: string | URL | Request, options?: RequestInit) => {
+        const path = String(url);
+        if (path.includes('users/me/calendarList/shared%2Ffamily')) return Response.json({ id: config.calendarId, defaultReminders: shared });
+        if (path.includes('users/me/calendarList/primary')) return Response.json({ id: 'primary', defaultReminders: main });
+        if (path.includes('/events') && options?.method === 'POST') bodies.push(JSON.parse(String(options.body)));
+        return transport(url, options);
+    });
+    const timed = { title: 'Fictional dentist', start: { dateTime: '2026-11-20T15:30', timeZone: config.timeZone } };
+    // The shared calendar has no default of its own: the main calendar's is copied on.
+    expect((await post('/api/familyhub/google/events', timed)).status).toBe(200);
+    expect(bodies.at(-1)).toMatchObject({ end: { dateTime: '2026-11-20T16:30:00', timeZone: config.timeZone }, reminders: { useDefault: false, overrides: [{ method: 'popup', minutes: 15 }] } });
+    shared = [{ method: 'popup', minutes: 30 }];
+    expect((await post('/api/familyhub/google/events', { ...timed, end: { dateTime: '2026-11-20T17:00', timeZone: config.timeZone } })).status).toBe(200);
+    expect(bodies.at(-1)).toMatchObject({ end: { dateTime: '2026-11-20T17:00:00' }, reminders: { useDefault: true } });
+    // All-day events get one day and keep Google's own behaviour.
+    expect((await post('/api/familyhub/google/events', { title: 'Fictional fair', start: { date: '2026-11-30' } })).status).toBe(200);
+    expect(bodies.at(-1)).toMatchObject({ end: { date: '2026-12-01' } }); expect(bodies.at(-1)!.reminders).toBeUndefined();
+
+    expect((await get('/api/familyhub/google/event-defaults')).body.data).toMatchObject({ eventMinutes: 60, reminderMode: 'google', reminderMinutes: 15, configured: true });
+    expect((await get('/api/familyhub/google/event-defaults?preview=1')).body.data.google).toEqual({ source: 'calendar', reminders: [{ method: 'popup', minutes: 30 }] });
+    const put = (body: unknown) => request(app).put('/api/familyhub/google/event-defaults').set('Authorization', `Bearer ${owner.token}`).send(body);
+    expect((await put({ eventMinutes: 3, reminderMode: 'google', reminderMinutes: 15 })).status).toBe(400);
+    expect((await put({ eventMinutes: 30, reminderMode: 'loud', reminderMinutes: 15 })).status).toBe(400);
+    expect((await put({ eventMinutes: 45, reminderMode: 'custom', reminderMinutes: 10 })).status).toBe(200);
+    expect((await post('/api/familyhub/google/events', timed)).status).toBe(200);
+    expect(bodies.at(-1)).toMatchObject({ end: { dateTime: '2026-11-20T16:15:00' }, reminders: { useDefault: false, overrides: [{ method: 'popup', minutes: 10 }] } });
+    expect((await put({ eventMinutes: 45, reminderMode: 'none', reminderMinutes: 10 })).status).toBe(200);
+    expect((await post('/api/familyhub/google/events', timed)).status).toBe(200);
+    expect(bodies.at(-1)!.reminders).toEqual({ useDefault: false, overrides: [] });
+    // An explicit offset is kept; a broken lookup never blocks the event.
+    await put({ eventMinutes: 60, reminderMode: 'google', reminderMinutes: 15 });
+    send.mockImplementation(async (url: string | URL | Request, options?: RequestInit) => {
+        if (String(url).includes('users/me/calendarList/')) return new Response('{}', { status: 500 });
+        if (String(url).includes('/events') && options?.method === 'POST') bodies.push(JSON.parse(String(options.body)));
+        return transport(url, options);
+    });
+    expect((await post('/api/familyhub/google/events', { title: 'Fictional call', start: { dateTime: '2026-11-21T09:00:00-05:00' } })).status).toBe(200);
+    expect(bodies.at(-1)).toMatchObject({ end: { dateTime: '2026-11-21T10:00:00-05:00' } }); expect(bodies.at(-1)!.reminders).toBeUndefined();
+});
+it('keeps event defaults to parents and to a household with a chosen calendar', async () => {
+    const put = (token: string) => request(app).put('/api/familyhub/google/event-defaults').set('Authorization', `Bearer ${token}`).send({ eventMinutes: 30, reminderMode: 'none', reminderMinutes: 0 });
+    expect((await put(owner.token)).status).toBe(409);
+    expect((await get('/api/familyhub/google/event-defaults')).body.data).toMatchObject({ eventMinutes: 60, configured: false });
+    await connect();
+    const invitation = await post('/api/invites', { role: 'enfant' });
+    const child = (await request(app).post('/api/auth/register').send({ email: 'fictional-defaults-child@example.test', name: 'Fictional child', password: 'fictional-password-1', inviteToken: invitation.body.data.token })).body.data.token;
+    expect((await put(child)).status).toBe(403);
+    expect((await get('/api/familyhub/google/event-defaults', child)).status).toBe(200);
+});
 it('edits and deletes events on the saved calendar only', async () => {
     await connect();
     const body = { title: 'Fictional pickup', colorId: '5', start: event.start, end: event.end };

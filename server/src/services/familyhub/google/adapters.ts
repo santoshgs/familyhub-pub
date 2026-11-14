@@ -25,6 +25,9 @@ export interface RawListItem { id: string; title: string; notes: string; complet
 export interface Task { source: 'google-tasks'; listId: string; id: string; title: string; completed: boolean; dueDate: string | null; completedAt: string | null; etag?: string }
 export interface CalendarList { id: string; summary: string; accessRole: string }
 export interface TaskList { id: string; title: string }
+/** A notification on an event: Google allows popup and email, up to five per event. */
+export interface Reminder { method: 'popup' | 'email'; minutes: number }
+export interface EventReminders { useDefault: boolean; overrides?: Reminder[] }
 export interface CreateEventInput {
     title: string; location?: string; id?: string; description?: string; colorId?: string | null;
     start: NonNullable<GoogleEvent['start']>; end: NonNullable<GoogleEvent['end']>;
@@ -129,7 +132,21 @@ export class GoogleAdapters {
             start: value.start, end: value.end, allDay: Boolean(value.start.date) };
     }
 
-    async createEvent(calendarId: string, input: CreateEventInput): Promise<CalendarEvent> {
+    /**
+     * A calendar's default notifications for timed events, as set in Google
+     * Calendar (Settings → the calendar → Event notifications). "primary" is
+     * the account's main calendar.
+     */
+    async defaultReminders(calendarId: string): Promise<Reminder[]> {
+        if (!calendarId) throw new Error('A Google calendar is required.');
+        const entry = await this.request<{ defaultReminders?: Array<{ method?: string; minutes?: number }> }>('calendar', `users/me/calendarList/${encodeURIComponent(calendarId)}`);
+        return (Array.isArray(entry?.defaultReminders) ? entry.defaultReminders : [])
+            .flatMap((value) => (value?.method === 'popup' || value?.method === 'email') && Number.isInteger(value.minutes) && value.minutes! >= 0 && value.minutes! <= 40320
+                ? [{ method: value.method, minutes: value.minutes! } as Reminder] : [])
+            .slice(0, 5);
+    }
+
+    async createEvent(calendarId: string, input: CreateEventInput, reminders?: EventReminders): Promise<CalendarEvent> {
         if (!calendarId) throw new Error('An event title, calendar, start and end are required.');
         const body = this.eventBody(input);
         // Google custom IDs use base32hex (a-v, 0-9), 5–1024 chars. A UUID
@@ -138,6 +155,7 @@ export class GoogleAdapters {
         const value = await this.request<GoogleEvent>('calendar', `calendars/${encodeURIComponent(calendarId)}/events`, undefined, 'POST', {
             summary: body.summary, start: body.start, end: body.end, ...(body.location ? { location: body.location } : {}), ...(input.id ? { id: input.id } : {}),
             ...(input.description ? { description: input.description } : {}), ...(body.colorId ? { colorId: body.colorId } : {}),
+            ...(reminders ? { reminders } : {}),
         });
         return this.event(calendarId, value, body.summary);
     }
@@ -339,6 +357,15 @@ export class GoogleAdapters {
         const body = this.fields({ title: input.title, description: input.notes, completed: input.completed });
         if (!Object.keys(body).length) throw new Error('No changes provided.');
         return this.listItem(await this.request<GoogleTask>('tasks', this.path(listId, id), undefined, 'PATCH', body));
+    }
+    /**
+     * Moves an item to just after `previous` on the same list, or to the top
+     * when `previous` is null (Google Tasks' own order, also used by its app).
+     */
+    async moveListItem(listId: string, id: string, previous: string | null): Promise<RawListItem> {
+        if (!listId || !id) throw new Error('A Google task list and item are required.');
+        const params = new URLSearchParams(previous ? { previous } : {});
+        return this.listItem(await this.request<GoogleTask>('tasks', `${this.path(listId, id)}/move`, params, 'POST'));
     }
     /** Google's "clear": hides every completed item on the list (it stays in Google's history). */
     async clearCompleted(listId: string): Promise<void> {

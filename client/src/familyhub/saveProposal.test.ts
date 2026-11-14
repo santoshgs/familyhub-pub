@@ -21,10 +21,13 @@ it('refuses an unconfigured Google connection instead of creating competing loca
     await expect(postProposal(task)).rejects.toThrow('Connect Google');
     expect(calls.post).not.toHaveBeenCalled();
 });
-it('requires explicit end times and refuses unsupported recurring tasks', async () => {
+it('refuses unsupported recurring tasks', async () => {
     await expect(postProposal({ ...task, frequency: 'Quotidien' }, { timeZone: 'America/New_York' })).rejects.toThrow('Recurring');
-    await expect(postProposal({ ...appointment, end_time: null }, { timeZone: 'America/New_York' })).rejects.toThrow('end time');
     expect(calls.post).not.toHaveBeenCalled();
+});
+it('leaves a missing end time to the server, which applies the default event length', async () => {
+    await postProposal({ ...appointment, end_time: null }, { timeZone: 'America/New_York' });
+    expect(calls.post).toHaveBeenCalledWith('/api/familyhub/google/events', { title: appointment.title, location: undefined, start: { dateTime: appointment.start_time, timeZone: 'America/New_York' } });
 });
 it('preserves original OpenFamily writes outside opt-in Family Hub mode', async () => {
     vi.stubEnv('VITE_FAMILYHUB_LOCAL', 'false');

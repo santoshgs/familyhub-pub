@@ -3,13 +3,18 @@ import { loadCalendarRange } from './calendarApi';
 import { weekStartsOn } from '../i18n/format';
 import { dateInZone, shiftDay, monthDays, eventsOnDay, type HubCalendarEvent } from './calendarDates';
 
-export function FullCalendar({ timeZone, connected, onSelect, refreshKey, loadEvents = loadCalendarRange }: {
+export function FullCalendar({ timeZone, connected, onSelect, refreshKey, loadEvents = loadCalendarRange, initialDate, onDateChange }: {
     timeZone: string; connected: boolean; onSelect: (event: HubCalendarEvent) => void; refreshKey: unknown;
     loadEvents?: typeof loadCalendarRange;
+    /** The day to open on, so the calendar comes back where it was. */
+    initialDate?: string;
+    /** Tells the hub which day is being looked at (Add an event starts there). */
+    onDateChange?: (date: string) => void;
 }) {
     const today = dateInZone(new Date(), timeZone);
     const weekStart = weekStartsOn();
-    const [date, setDate] = useState(today);
+    const [date, setDate] = useState(initialDate || today);
+    useEffect(() => { onDateChange?.(date); }, [date, onDateChange]);
     const [mode, setMode] = useState<'month' | 'week' | 'day'>('month');
     const [events, setEvents] = useState<HubCalendarEvent[]>([]);
     const [busy, setBusy] = useState(false);
