@@ -57,7 +57,7 @@ A client should:
 | Endpoint | Required | Optional |
 | --- | --- | --- |
 | `POST /api/budget/entries` | `category` (a fixed key), `amount`, `date` (`YYYY-MM-DD`) | `description`, `is_expense`, `assigned_to`, `add_to_calendar`, `paid_by`, `split_with`, `group_id` |
-| `POST /api/familyhub/google/events` | `title`, `start` | `end` (since v2.0.1; default: the household's event length, or one day), `description`, `location`, `colorId`, `id` |
+| `POST /api/familyhub/google/events` | `title`, `start` | `end` (since v2.0.1; default: the household's event length, or one day), `description`, `location`, `colorId`, `id`, `recurrence` (since v2.1: one RRULE line) |
 | `POST /api/familyhub/google/tasks` | `title` | `description`, `dueDate` (`YYYY-MM-DD`) |
 
 Things that surprise clients:

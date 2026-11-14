@@ -11,6 +11,9 @@ import {
     AlertCircle,
     MapPin,
     Users,
+    Pencil,
+    Trash2,
+    Check,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { api } from '../../lib/api';
@@ -40,6 +43,11 @@ interface AppointmentProposal {
     location: string | null;
     family_member_ids: string[];
     member_names: string[];
+    /** Family Hub: Google event colour for the people it is for ('' or null = the calendar's colour). */
+    color_id?: string | null;
+    people?: string[];
+    /** Family Hub: one RRULE line. */
+    recurrence?: string | null;
 }
 interface ShoppingProposal {
     type: 'shopping_item';
@@ -47,7 +55,20 @@ interface ShoppingProposal {
     category: string;
     quantity: number | null;
     unit: string | null;
+    /** Family Hub: the Google Tasks shopping list it goes on. */
+    list_id?: string | null;
+    list_title?: string | null;
 }
+type EventPoint = { date?: string; dateTime?: string; timeZone?: string };
+// Changes to existing Google items (Family Hub, v2.1), by the ids the server resolved.
+export interface EventUpdateProposal {
+    type: 'appointment_update'; event_id: string; title: string; location: string; color_id: string | null; people: string[];
+    all_day: boolean; start: EventPoint; end: EventPoint; before: { title: string; start: EventPoint; end: EventPoint; location: string };
+}
+export interface EventDeleteProposal { type: 'appointment_delete'; event_id: string; title: string; all_day: boolean; start: EventPoint }
+export interface TaskUpdateProposal { type: 'task_update'; task_id: string; title: string; due_date: string | null; before: { title: string; due_date: string | null } }
+export interface TaskChangeProposal { type: 'task_complete' | 'task_delete'; task_id: string; title: string }
+export interface ShoppingChangeProposal { type: 'shopping_check' | 'shopping_delete'; list_id: string; item_id: string; name: string; list_title: string }
 interface BudgetProposal {
     type: 'budget_entry';
     category: string;
@@ -56,7 +77,10 @@ interface BudgetProposal {
     date: string;
     is_expense: boolean;
 }
-export type AiProposal = TaskProposal | AppointmentProposal | ShoppingProposal | BudgetProposal;
+export type EditProposal = EventUpdateProposal | EventDeleteProposal | TaskUpdateProposal | TaskChangeProposal | ShoppingChangeProposal;
+export type AiProposal = TaskProposal | AppointmentProposal | ShoppingProposal | BudgetProposal | EditProposal;
+export const isEdit = (proposal: AiProposal): proposal is EditProposal =>
+    ['appointment_update', 'appointment_delete', 'task_update', 'task_complete', 'task_delete', 'shopping_check', 'shopping_delete'].includes(proposal.type);
 
 const AI_ERROR_CODES = [
     'AI_NOT_CONFIGURED',
@@ -79,7 +103,23 @@ const TYPE_META = {
     appointment: { icon: CalendarIcon, color: 'text-blue-600 dark:text-blue-400' },
     shopping_item: { icon: ShoppingCart, color: 'text-emerald-600 dark:text-emerald-400' },
     budget_entry: { icon: Euro, color: 'text-amber-600 dark:text-amber-400' },
+    appointment_update: { icon: Pencil, color: 'text-blue-600 dark:text-blue-400' },
+    appointment_delete: { icon: Trash2, color: 'text-destructive' },
+    task_update: { icon: Pencil, color: 'text-primary' },
+    task_complete: { icon: Check, color: 'text-primary' },
+    task_delete: { icon: Trash2, color: 'text-destructive' },
+    shopping_check: { icon: Check, color: 'text-emerald-600 dark:text-emerald-400' },
+    shopping_delete: { icon: Trash2, color: 'text-destructive' },
 } as const;
+
+/** "Every week on Tue, 10 times" from an RRULE line, in the user's language. */
+function describeRepeat(rule: string, t: (key: string, options?: Record<string, unknown>) => string): string {
+    const fields = Object.fromEntries(rule.replace(/^RRULE:/, '').split(';').map((part) => part.split('=')));
+    const days = fields.BYDAY ? String(fields.BYDAY).split(',').map((code) => t(`ai:magic.days.${code}`, { defaultValue: code })).join(', ') : '';
+    const every = t(`ai:magic.repeat.${String(fields.FREQ).toLowerCase()}`, { defaultValue: String(fields.FREQ).toLowerCase() });
+    const until = fields.UNTIL ? `${String(fields.UNTIL).slice(0, 4)}-${String(fields.UNTIL).slice(4, 6)}-${String(fields.UNTIL).slice(6, 8)}` : '';
+    return [days ? `${every} (${days})` : every, fields.COUNT ? t('ai:magic.repeat.count', { count: Number(fields.COUNT), defaultValue: '{{count}} times' }) : '', until ? t('ai:magic.repeat.until', { date: until, defaultValue: 'until {{date}}' }) : ''].filter(Boolean).join(' · ');
+}
 
 
 const ProposalCard: React.FC<{
@@ -95,17 +135,40 @@ const ProposalCard: React.FC<{
     const formatDay = (iso: string) => format(new Date(`${iso}T12:00:00`), 'EEE dd MMM', { locale });
     const formatDateTime = (iso: string) => `${format(new Date(iso), 'EEE dd MMM', { locale })} ${formatTime(iso)}`;
 
+    // A point of a Google event: its date, or its time in the household's zone.
+    const formatPoint = (point: EventPoint) => point.date ? formatDay(point.date) : formatDateTime(point.dateTime ?? '');
     const details: string[] = [];
-    if (proposal.type === 'task') {
+    let title = '';
+    let change = '';
+    if (proposal.type === 'appointment_update') {
+        title = proposal.before.title;
+        const before = formatPoint(proposal.before.start), after = formatPoint(proposal.start);
+        if (before !== after || formatPoint(proposal.before.end) !== formatPoint(proposal.end)) change = `${before} → ${after}`;
+        if (proposal.title !== proposal.before.title) details.push(`→ “${proposal.title}”`);
+        if (proposal.location !== proposal.before.location) details.push(`→ ${proposal.location || t('ai:magic.noPlace', { defaultValue: 'no place' })}`);
+        if (proposal.people.length) details.push(proposal.people.join(', '));
+    } else if (proposal.type === 'appointment_delete') {
+        title = proposal.title; details.push(formatPoint(proposal.start));
+    } else if (proposal.type === 'task_update') {
+        title = proposal.before.title;
+        if (proposal.title !== proposal.before.title) details.push(`→ “${proposal.title}”`);
+        if (proposal.due_date !== proposal.before.due_date) change = `${proposal.before.due_date ? formatDay(proposal.before.due_date) : '—'} → ${proposal.due_date ? formatDay(proposal.due_date) : '—'}`;
+    } else if (proposal.type === 'task_complete' || proposal.type === 'task_delete') {
+        title = proposal.title;
+    } else if (proposal.type === 'shopping_check' || proposal.type === 'shopping_delete') {
+        title = proposal.name; details.push(proposal.list_title);
+    } else if (proposal.type === 'task') {
         if (proposal.due_date) details.push(formatDay(proposal.due_date));
         if (proposal.priority) details.push(proposal.priority);
         if (proposal.frequency && proposal.frequency !== 'Une fois') details.push(proposal.frequency);
     } else if (proposal.type === 'appointment') {
         details.push(formatDateTime(proposal.start_time));
+        if (proposal.recurrence) details.push(describeRepeat(proposal.recurrence, t));
     } else if (proposal.type === 'shopping_item') {
+        if (proposal.list_title) details.push(proposal.list_title);
         details.push(t(`shopping:categories.${proposal.category}`, { defaultValue: proposal.category }));
         if (proposal.quantity) details.push(`×${proposal.quantity}${proposal.unit ? ` ${proposal.unit}` : ''}`);
-    } else {
+    } else if (proposal.type === 'budget_entry') {
         details.push(proposal.category);
         details.push(
             `${proposal.is_expense ? '−' : '+'}${proposal.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
@@ -113,15 +176,19 @@ const ProposalCard: React.FC<{
         details.push(formatDay(proposal.date));
     }
 
-    const title =
-        proposal.type === 'shopping_item'
+    if (!title) {
+        title = proposal.type === 'shopping_item'
             ? proposal.name
             : proposal.type === 'budget_entry'
                 ? proposal.description || proposal.category
-                : proposal.title;
+                : 'title' in proposal ? proposal.title : '';
+    }
+    if (change) details.unshift(change);
 
     const memberNames =
-        proposal.type === 'task' || proposal.type === 'appointment' ? proposal.member_names : [];
+        proposal.type === 'appointment' && proposal.people?.length ? proposal.people
+            : proposal.type === 'task' || proposal.type === 'appointment' ? proposal.member_names : [];
+    const removing = proposal.type === 'appointment_delete' || proposal.type === 'task_delete' || proposal.type === 'shopping_delete';
 
     return (
         <label className="flex cursor-pointer items-start gap-3 rounded-input border border-border p-3 transition-colors hover:bg-surface-2">
@@ -133,7 +200,7 @@ const ProposalCard: React.FC<{
             />
             <Icon className={`mt-0.5 h-5 w-5 shrink-0 ${meta.color}`} />
             <span className="min-w-0 flex-1">
-                <span className="block text-caption font-medium text-foreground">{title}</span>
+                <span className={`block text-caption font-medium ${removing ? 'text-destructive line-through' : 'text-foreground'}`}>{title}</span>
                 <span className="mt-0.5 block text-micro text-muted-foreground">
                     {t(`ai:magic.types.${proposal.type}`)}
                     {details.length > 0 && ` · ${details.join(' · ')}`}
@@ -378,7 +445,9 @@ export const MagicInputButton: React.FC<{ google?: { timeZone: string }; onSaved
                                 )}
                                 {submitting
                                     ? t('ai:magic.confirming')
-                                    : t('ai:magic.confirm', { count: selected.size })}
+                                    : proposals.some((proposal, index) => selected.has(index) && isEdit(proposal))
+                                        ? t('ai:magic.apply', { count: selected.size, defaultValue: 'Apply ({{count}})' })
+                                        : t('ai:magic.confirm', { count: selected.size })}
                             </Button>
                         </div>
                     </div>

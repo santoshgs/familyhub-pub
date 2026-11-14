@@ -1,6 +1,6 @@
 import type { AiProposal } from '../components/app/MagicInput';
 import { api } from '../lib/api';
-import { googleProposal } from './googleProposal';
+import { googleAction } from './googleProposal';
 
 export const postProposal = async (proposal: AiProposal, google?: { timeZone: string }): Promise<void> => {
     // All launchers, including Settings, use Google in Family Hub mode.
@@ -10,9 +10,12 @@ export const postProposal = async (proposal: AiProposal, google?: { timeZone: st
         if (!response.data.connected || !response.data.selection) throw new Error('Connect Google and choose the family calendar and task list first.');
         google = { timeZone: response.data.selection.timeZone };
     }
-    if (google) {
-        const action = googleProposal(proposal, google.timeZone);
-        if (action) { await api.post(action.endpoint, action.body); return; }
+    const action = googleAction(proposal, google?.timeZone);
+    if (action) {
+        if (action.method === 'delete') await api.delete(action.endpoint);
+        else if (action.method === 'patch') await api.patch(action.endpoint, action.body);
+        else await api.post(action.endpoint, action.body);
+        return;
     }
     switch (proposal.type) {
         case 'task':
@@ -52,6 +55,9 @@ export const postProposal = async (proposal: AiProposal, google?: { timeZone: st
                 is_expense: proposal.is_expense,
             });
             return;
+        default:
+            // Changes to Google items always have an action above.
+            throw new Error('This change needs the Google connection.');
     }
 };
 

@@ -12,6 +12,7 @@ import {
     type FamilyMemberRef,
 } from '../services/ai/assistant';
 import { getFamilyCategories } from './categories';
+import { loadHouseholdContext } from '../services/ai/householdContext';
 import logger from '../lib/logger';
 import { requireModule } from '../lib/modules';
 
@@ -288,13 +289,21 @@ router.post('/parse', async (req: AuthRequest, res) => {
         // Offer the family's own (possibly customized) category lists to the model.
         const familyCategories = await getFamilyCategories(req.userId!);
 
+        // Family Hub (v2.1): the household's Google calendar, to-dos and shopping
+        // lists, so a note can name people and lists and change what exists.
+        // A Google failure only leaves the assistant without that context.
+        const context = await loadHouseholdContext(req.userId!).catch((error) => {
+            logger.warn('ai.household_context_unavailable', { error: error instanceof Error ? error.message : String(error) });
+            return null;
+        });
+
         const raw = await aiComplete(settings, {
-            system: buildParsePrompt(members, familyCategories.shopping, familyCategories.budget),
+            system: buildParsePrompt(members, familyCategories.shopping, familyCategories.budget, context),
             user: text.slice(0, 2000),
             jsonSchema: PARSE_SCHEMA,
         });
 
-        const items = validateParsedItems(raw, members, familyCategories.shopping, familyCategories.budget);
+        const items = validateParsedItems(raw, members, familyCategories.shopping, familyCategories.budget, context);
         res.json({ success: true, data: { items } });
     } catch (error) {
         handleAiError(res, error, 'parse');

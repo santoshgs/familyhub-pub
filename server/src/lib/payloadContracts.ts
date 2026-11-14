@@ -74,6 +74,8 @@ export const PAYLOAD_CONTRACTS = {
                 location: { type: ['string', 'null'], maxLength: 1024 },
                 colorId: { type: ['string', 'null'], pattern: '^([1-9]|1[01])?$', description: 'Google event colour "1" to "11" (GET /api/familyhub/google/colors); empty or null for the calendar\'s own colour.' },
                 id: { type: 'string', pattern: '^[a-v0-9]{5,1024}$', description: 'Optional event id chosen by the client (base32hex, e.g. a UUID without dashes). Send one so a retry cannot create a duplicate.' },
+                recurrence: { type: 'array', maxItems: 1, items: { type: 'string', pattern: '^RRULE:FREQ=(DAILY|WEEKLY|MONTHLY|YEARLY)(;(INTERVAL|COUNT|UNTIL|BYDAY)=[0-9A-Z,]+)*$' },
+                    description: 'Optional repeat rule (since v2.1), one RRULE line: FREQ, and optionally INTERVAL, COUNT, UNTIL (YYYYMMDD or YYYYMMDDTHHMMSSZ) and BYDAY. Example: ["RRULE:FREQ=WEEKLY;BYDAY=TU;COUNT=10"].' },
             },
         },
         notes: [
