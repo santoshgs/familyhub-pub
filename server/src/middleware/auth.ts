@@ -1,7 +1,10 @@
 import { stripTrailingSlashes } from '../lib/asyncRoutes';
 import { Request, Response, NextFunction } from 'express';
 import { query } from '../db';
+import logger from '../lib/logger';
 import { InvalidTokenError, verifyAccessToken } from '../lib/authTokens';
+import { agentMayCall, type AgentPermissions } from '../lib/agentSessions';
+import { agentRateLimiter } from '../lib/agentRateLimit';
 
 export interface AuthRequest extends Request {
     /** Effective family-owner user ID — used by all data queries */
@@ -13,6 +16,9 @@ export interface AuthRequest extends Request {
     readOnly?: boolean;
     ambientOnly?: boolean;
     displaySessionId?: string;
+    /** Set when the request comes from a connected app (agent session). */
+    agentSessionId?: string;
+    agentPermissions?: AgentPermissions;
 }
 
 /** The token in the Authorization header, or '' when there is none. */
@@ -22,6 +28,27 @@ export const bearerToken = (req: Request): string => {
 };
 
 const AMBIENT_PHOTO_PATH = /^\/api\/familyhub\/ambient\/photos\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const AGENT_WRITE_DAYS = 90;
+const AGENT_WRITE_ROWS = 1000;
+
+/**
+ * The agent write record: one row for each change a connected app makes or
+ * attempts, with its session id, the parent it acts as, the call and the
+ * answer. No request body is kept. Rows older than 90 days, or beyond the
+ * newest 1000 of a session, are dropped as new ones arrive.
+ */
+const recordAgentWrite = async (sessionId: string, familyId: string, userId: string, method: string, path: string, status: number): Promise<void> => {
+    await query(
+        'INSERT INTO familyhub_agent_writes (session_id, family_id, user_id, method, path, status) VALUES ($1, $2, $3, $4, $5, $6)',
+        [sessionId, familyId, userId, method.slice(0, 10), path.slice(0, 300), status],
+    );
+    await query(
+        `DELETE FROM familyhub_agent_writes WHERE session_id = $1 AND (created_at < now() - make_interval(days => $2)
+            OR id <= (SELECT id FROM familyhub_agent_writes WHERE session_id = $1 ORDER BY id DESC OFFSET $3 LIMIT 1))`,
+        [sessionId, AGENT_WRITE_DAYS, AGENT_WRITE_ROWS],
+    );
+};
 
 export const authMiddleware = async (req: AuthRequest, res: Response, next: NextFunction) => {
     const token = bearerToken(req);
@@ -48,6 +75,37 @@ export const authMiddleware = async (req: AuthRequest, res: Response, next: Next
             if ((req.method !== 'GET' || !(allowed.includes(path) || isSlideshowPhoto)) && !canRefreshDisplay) {
                 return res.status(403).json({ success: false, error: 'This display session is read-only.' });
             }
+        }
+        if (verified.agent) {
+            // A connected app reaches only what its session grants; the route's
+            // own checks (parent, module, family) still run after this.
+            const path = stripTrailingSlashes(req.originalUrl.split('?')[0]);
+            // Each session has its own allowance, with a tighter one for changes.
+            // Counted before the grants are checked, so refused attempts count too.
+            const rate = agentRateLimiter.check(verified.agent.sessionId, req.method);
+            res.setHeader('RateLimit-Limit', String(rate.limit));
+            res.setHeader('RateLimit-Remaining', String(rate.remaining));
+            res.setHeader('RateLimit-Reset', String(rate.resetSeconds));
+            if (!rate.allowed && rate.firstRefusal) logger.warn('agent.rate_limited', { sessionId: verified.agent.sessionId, method: req.method });
+            // A change is logged when the answer is sent, refused attempts
+            // included. Of the changes refused for rate, only the first in a
+            // window is logged, so a flood cannot become a flood of rows.
+            if (req.method !== 'GET' && req.method !== 'HEAD' && (rate.allowed || rate.firstRefusal)) {
+                const { sessionId } = verified.agent;
+                res.on('finish', () => {
+                    recordAgentWrite(sessionId, verified.ownerId, verified.userId, req.method, path, res.statusCode)
+                        .catch((error) => logger.error('agent.write_record_failed', { sessionId, error: error instanceof Error ? error.message : String(error) }));
+                });
+            }
+            if (!rate.allowed) {
+                res.setHeader('Retry-After', String(rate.resetSeconds));
+                return res.status(429).json({ success: false, error: 'This connected app is making too many requests. Try again shortly.', code: 'AGENT_RATE_LIMITED', retryAfterSeconds: rate.resetSeconds });
+            }
+            if (!agentMayCall(verified.agent.permissions, req.method, path)) {
+                return res.status(403).json({ success: false, error: 'This connected app is not allowed to do that.', code: 'AGENT_FORBIDDEN' });
+            }
+            req.agentSessionId = verified.agent.sessionId;
+            req.agentPermissions = verified.agent.permissions;
         }
         req.actualUserId = verified.userId;
         req.userId = verified.ownerId;

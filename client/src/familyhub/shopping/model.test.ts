@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatQuantity, groupByAisle, splitQuantity, type ShopItem } from './logic';
+import { formatQuantity, groupByAisle, reorderItems, splitQuantity, type ShopItem } from './logic';
 
 const item = (id: string, aisle: string | null, checked = false): ShopItem => ({ id, name: id, quantity: null, unit: null, aisle, notes: '', checked, position: id });
 const aisles = [{ key: 'Alimentation', label: 'Food' }, { key: 'Hygiène', label: 'Hygiene' }];
@@ -21,5 +21,19 @@ describe('quantity box', () => {
         expect(splitQuantity({ quantity: '2 L', unit: 'packs' })).toEqual({ quantity: '2 L', unit: 'packs' });
         expect(formatQuantity({ quantity: 1.5, unit: 'kg' }, 'en')).toBe('1.5 kg');
         expect(formatQuantity({ quantity: null, unit: null }, 'en')).toBe('');
+    });
+});
+
+describe('reordering', () => {
+    const list = [item('a', null), item('b', null), item('c', null), item('x', null, true)];
+    it('moves an item among the unticked ones and names the item it now follows', () => {
+        expect(reorderItems(list, 'c', 0)).toEqual({ items: [list[2], list[0], list[1], list[3]], previous: null });
+        expect(reorderItems(list, 'a', 2)).toEqual({ items: [list[1], list[2], list[0], list[3]], previous: 'c' });
+        expect(reorderItems(list, 'a', 1)?.previous).toBe('b');
+    });
+    it('ignores moves that change nothing or reach outside the unticked items', () => {
+        expect(reorderItems(list, 'a', 0)).toBeNull();
+        expect(reorderItems(list, 'a', 3)).toBeNull();
+        expect(reorderItems(list, 'x', 0)).toBeNull();
     });
 });

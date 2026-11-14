@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ShoppingListsSettings } from '../familyhub/shopping/ShoppingListsSettings';
+import { CalendarEventDefaults } from '../familyhub/CalendarEventDefaults';
 import { useTranslation } from 'react-i18next';
 import { api } from '../lib/api';
 import { FAMILYHUB_MODULES } from '../familyhub/modules';
@@ -1027,6 +1028,7 @@ const Settings: React.FC<{ only?: string[] }> = ({ only }) => {
             {show('ai') && <AiAssistantCard isParent={isParent} />}
 
             {/* Optional modules */}
+            {show('calendar-events') && isParent && <CalendarEventDefaults />}
             {show('shopping-lists') && isParent && <ShoppingListsSettings />}
             {show('modules') && <ModulesCard isParent={isParent} />}
 

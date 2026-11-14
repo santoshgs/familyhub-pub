@@ -23,6 +23,8 @@ export const shoppingApi = {
         (await api.patch<{ data: ShopItem }>(`${listPath(listId)}/items/${encodeURIComponent(id)}`, {
             ...body(draft), ...(draft.checked !== undefined ? { checked: draft.checked } : {}), ...(draft.moveTo ? { moveTo: draft.moveTo } : {}),
         })).data,
+    /** Puts the item just after `previous` (null: first on the list). */
+    move: (listId: string, id: string, previous: string | null) => api.post(`${listPath(listId)}/items/${encodeURIComponent(id)}/move`, { previous }),
     remove: (listId: string, id: string) => api.delete(`${listPath(listId)}/items/${encodeURIComponent(id)}`),
     clearChecked: (listId: string) => api.post(`${listPath(listId)}/clear`, {}),
     migrate: async (listId: string, aisleLabels: Record<string, string>) =>

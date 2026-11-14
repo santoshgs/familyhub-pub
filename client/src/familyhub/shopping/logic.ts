@@ -52,3 +52,18 @@ export function splitQuantity(draft: Partial<ItemDraft>): Partial<ItemDraft> {
     const match = /^\s*(\d+(?:[.,]\d+)?)\s*(\S.*)$/.exec(draft.quantity);
     return match ? { ...draft, quantity: match[1], unit: match[2].trim() } : draft;
 }
+
+/**
+ * Moves one unticked item to a new place among the unticked items. Returns the
+ * list's items in their new order and the item it now follows (null: first),
+ * which is what Google Tasks needs; null when nothing changes.
+ */
+export function reorderItems(items: ShopItem[], id: string, to: number): { items: ShopItem[]; previous: string | null } | null {
+    const open = items.filter((item) => !item.checked);
+    const from = open.findIndex((item) => item.id === id);
+    if (from < 0 || to < 0 || to >= open.length || to === from) return null;
+    const next = [...open];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    return { items: [...next, ...items.filter((item) => item.checked)], previous: to === 0 ? null : next[to - 1].id };
+}

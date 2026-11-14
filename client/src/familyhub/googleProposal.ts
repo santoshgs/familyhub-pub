@@ -7,10 +7,11 @@ export function googleProposal(proposal: AiProposal, timeZone: string): { endpoi
             ...(proposal.description ? { description: proposal.description } : {}) } };
     }
     if (proposal.type === 'appointment') {
-        if (!proposal.end_time) throw new Error('Please provide an end time for the Google Calendar event.');
+        // Without an end time the server uses the household's default event
+        // length (Settings → Household → Calendar events), 60 minutes by default.
         return { endpoint: '/api/familyhub/google/events', body: { title: proposal.title, location: proposal.location || undefined,
             ...(proposal.description ? { description: proposal.description } : {}),
-            start: { dateTime: proposal.start_time, timeZone }, end: { dateTime: proposal.end_time, timeZone } } };
+            start: { dateTime: proposal.start_time, timeZone }, ...(proposal.end_time ? { end: { dateTime: proposal.end_time, timeZone } } : {}) } };
     }
     return null;
 }

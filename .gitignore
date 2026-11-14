@@ -77,3 +77,6 @@ __pycache__/
 .claude/agent-memory/
 .claude/agent-memory-local/
 .claude/settings.local.json
+
+# Files the Claude app saves beside the repository's work (diffs, exports).
+Claude outputs/

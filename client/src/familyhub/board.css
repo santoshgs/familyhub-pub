@@ -260,6 +260,7 @@ html.dark .bb-sec > header a, html.dark .bb-sec > header button { color: #8FB0FF
 .bb-set .g-house { --h: var(--bb-tomato); --on: #fff; --on-soft: #fff; }
 .bb-set .g-display { --h: var(--bb-sun); --on: #1B1B1F; --on-soft: #3D3000; }
 .bb-set .g-data { --h: var(--bb-grass); --on: #1B1B1F; --on-soft: #1B1B1F; }
+.bb-set .g-agents { --h: #6B3FD4; --on: #fff; --on-soft: #E7DEFF; }
 .bb-set .g-adv { --h: #1B1B1F; --on: #fff; --on-soft: #C9C9D1; }
 html.dark .bb-set .g-adv { --h: #F2F2F5; --on: #1B1B1F; --on-soft: #3A3A44; }
 .bb-set-title { display: none; }

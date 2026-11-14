@@ -41,6 +41,9 @@ wss.on('connection', (ws: WebSocket) => {
             if (data.type === 'auth' && typeof data.token === 'string') {
                 try {
                     const verified = await verifyAccessToken(data.token);
+                    // Connected apps (agent sessions) use the HTTP API only:
+                    // the socket has no per-request permission check.
+                    if (verified.agent) throw new Error('Agent tokens cannot open a socket');
                     // The socket may have closed while the session was checked.
                     if (ws.readyState !== WebSocket.OPEN) return;
                     userId = verified.userId;

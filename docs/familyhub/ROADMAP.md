@@ -127,8 +127,9 @@ No daycare/child content is sent to external AI by default.
 Parser/runtime integration and fixture tests are complete for the current Google dashboard increment. Representative real Lillio email formats, mailbox authorization,
 duplicate/malformed behavior against those formats, and actual displayed activity
 versus parent-message content remain unverified. Gmail read access is restricted
-and mailbox-wide; personal-use verification exceptions and Testing's seven-day
-token lifetime must be addressed for the actual deployment. There is no extra
+and mailbox-wide; personal-use verification exceptions must be addressed for the actual deployment
+(Testing's seven-day token lifetime no longer applies: the app has been In production since
+November 13, 2026). There is no extra
 code-development gate before this already-authorized daycare work.
 
 ## Phase 5 — Raspberry Pi production

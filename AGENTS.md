@@ -1,5 +1,18 @@
 # Family Hub project instructions
 
+## Start here
+
+These instructions are for any coding agent or model. Read, in this order:
+
+1. this file;
+2. `docs/familyhub/STATE.md`: where work stands, what is unverified, and the next steps;
+3. the document for the area you will touch (`docs/familyhub/AGENT_API.md` for the API used by
+   outside tools and connected apps; `docs/familyhub/` and `knowledge-base/` for the rest).
+
+Before you stop, bring `docs/familyhub/STATE.md` up to date: the steps are in
+`.claude/skills/handoff/SKILL.md` and need no particular tool. Say plainly what you did not
+run or could not check.
+
 ## Scope and current phase
 
 Family Hub is a fork of OpenFamily; since v1.0 it no longer tracks every upstream module (see `docs/familyhub/MODULES.md`). Extend existing code before replacing it. Phase 1 was accepted by the user on October 29, 2026. Phase 2 is authorized: local notes, authentication, server-enforced display permissions, privacy fixes, and deployment foundations. Phase 3 adapter/integration development was authorized October 29, 2026. Phase 2 prerequisites are complete and the app runs on the household's Raspberry Pi from versioned `familyhub-v*` releases with real household data (see `docs/familyhub/RELEASES.md`). Keep development and test data fictional.
@@ -19,7 +32,7 @@ Family Hub is a fork of OpenFamily; since v1.0 it no longer tracks every upstrea
 - Optional modules are closed on the server when switched off (`server/src/lib/modules.ts`); keep the client list in `client/src/familyhub/modules.ts` in step.
 - Display access is server-enforced: ambient display tokens are read-only, limited to an endpoint allowlist, and bound to revocable display sessions. Keep the LAN display listener's allowlist (`deploy/familyhub/lan-display/Caddyfile.lan`) in step with that server allowlist.
 - Google Calendar and Google Tasks remain authoritative when integrations are approved. Local copies must be clearly disposable caches.
-- External clients (MCP servers, messaging bridges, scripts) discover the API through `GET /api/schema` and follow `docs/familyhub/AGENT_API.md`. Authentication stays in `server/src/middleware/auth.ts`: never add a shared-secret or environment-token bypass to a route file.
+- External clients (MCP servers, messaging bridges, scripts) discover the API through `GET /api/schema` and follow `docs/familyhub/AGENT_API.md`. Authentication stays in `server/src/middleware/auth.ts`: never add a shared-secret or environment-token bypass to a route file. Outside tools sign in as connected apps (agent sessions): the permission model is `server/src/lib/agentSessions.ts`, enforced only in `authMiddleware`. A new router that holds credentials, account settings or administration must be added to `AGENT_DENIED_PREFIXES` in the same commit.
 - The Raspberry Pi runs production. Change it only through committed scripts under `deploy/familyhub/` that the owner runs with the Pi password; never run sudo unattended or upgrade/reimage its OS without explicit owner approval. Record every host change in `docs/familyhub/DEPLOYMENT.md`.
 - The photo frame is configured over ADB from the owner's Mac (`docs/familyhub/FRAME.md`). Make device changes only with owner approval; never flash or root-install anything. Keep addresses and MACs out of the repository.
 

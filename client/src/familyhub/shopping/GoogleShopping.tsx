@@ -1,11 +1,11 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState, type DragEvent, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Check, ChevronDown, ChevronLeft, Eraser, Pencil, Plus, ShoppingBag, Store, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, ChevronDown, ChevronLeft, Eraser, GripVertical, Pencil, Plus, ShoppingBag, Store, Trash2 } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Dialog } from '../../components/ui';
 import { intlLocale } from '../../i18n/format';
-import { formatQuantity, groupByAisle, readCollapsed, shoppingApi, writeCollapsed, type ItemDraft, type ShopItem, type ShopList } from './model';
+import { formatQuantity, groupByAisle, readCollapsed, reorderItems, shoppingApi, writeCollapsed, type ItemDraft, type ShopItem, type ShopList } from './model';
 
 const EMPTY: ItemDraft = { name: '', quantity: '', unit: '', aisle: '', notes: '' };
 const LIST_KEY = 'familyhub.shopping.collapsed';
@@ -35,6 +35,9 @@ export function GoogleShopping({ lists, missing, aisles, isParent, onListChange,
     const [editing, setEditing] = useState<{ listId: string; item: ShopItem; draft: ItemDraft; moveTo: string } | null>(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
+    // Reorder mode (v2.0.1): the list whose items show move buttons, and the item being dragged.
+    const [arranging, setArranging] = useState<string | null>(null);
+    const [dragging, setDragging] = useState<{ listId: string; id: string } | null>(null);
 
     const toggle = (set: Set<string>, id: string, key: string, apply: (next: Set<string>) => void) => {
         const next = new Set(set); if (next.has(id)) next.delete(id); else next.add(id);
@@ -77,6 +80,21 @@ export function GoogleShopping({ lists, missing, aisles, isParent, onListChange,
         if (!editing) return;
         const { listId, item } = editing;
         void run(async () => { await shoppingApi.remove(listId, item.id); setEditing(null); await reload(); });
+    };
+    const openEditor = (list: ShopList, item: ShopItem) => setEditing({ listId: list.id, item, moveTo: list.id,
+        draft: { name: item.name, quantity: item.quantity === null ? '' : String(item.quantity), unit: item.unit ?? '', aisle: item.aisle ?? '', notes: item.notes } });
+    /** Shows the new order at once and saves it in Google; a refusal reloads the list. */
+    const moveTo = (list: ShopList, id: string, to: number) => {
+        const result = reorderItems(list.items, id, to);
+        if (!result) return;
+        onListChange({ ...list, items: result.items });
+        void run(async () => { await shoppingApi.move(list.id, id, result.previous); });
+    };
+    const drop = (event: DragEvent, list: ShopList, target: ShopItem) => {
+        event.preventDefault();
+        if (!dragging || dragging.listId !== list.id || target.checked) { setDragging(null); return; }
+        moveTo(list, dragging.id, list.items.filter((i) => !i.checked).findIndex((i) => i.id === target.id));
+        setDragging(null);
     };
     const clear = (list: ShopList) => void run(async () => {
         await shoppingApi.clearChecked(list.id);
@@ -174,6 +192,10 @@ export function GoogleShopping({ lists, missing, aisles, isParent, onListChange,
                                 <span className="truncate text-h3 font-semibold text-foreground">{list.title}</span>
                                 <span className="flex-shrink-0 rounded-pill bg-primary-soft px-2.5 py-0.5 text-caption font-semibold text-primary">{left}</span>
                             </button>
+                            {open && left > 1 && <Button variant="ghost" size="sm" aria-pressed={arranging === list.id} onClick={() => setArranging(arranging === list.id ? null : list.id)}
+                                title={t('shopping:google.reorderHelp', { defaultValue: 'Move items up or down, or drag them. The order is saved in Google Tasks.' })}>
+                                <ArrowUpDown className="mr-1 h-4 w-4" />{arranging === list.id ? t('shopping:google.reorderDone', { defaultValue: 'Done' }) : t('shopping:google.reorder', { defaultValue: 'Reorder' })}
+                            </Button>}
                             {open && checked > 0 && <Button variant="ghost" size="sm" disabled={busy} onClick={() => clear(list)} title={t('shopping:google.clearHelp', { defaultValue: 'Removes ticked items from the list (Google keeps them in its history).' })}>
                                 <Eraser className="mr-1 h-4 w-4" />{t('shopping:google.clear', { count: checked, defaultValue: 'Clear {{count}} ticked' })}
                             </Button>}
@@ -192,21 +214,37 @@ export function GoogleShopping({ lists, missing, aisles, isParent, onListChange,
                                 <Button type="submit" size="icon" className="col-span-1 h-11 w-full px-0" disabled={busy || !draft.name.trim()} aria-label={t('shopping:google.add', { defaultValue: 'Add' })}><Plus className="h-6 w-6 flex-shrink-0" strokeWidth={2.5} /></Button>
                             </form>
                             {list.items.length === 0 ? <p className="py-2 text-center text-caption text-muted-foreground">{t('shopping:storeMode.emptyList')}</p>
-                                : <ul className="divide-y divide-border">{list.items.map((item) => (
-                                    <li key={item.id} className="flex items-center gap-3 py-2">
+                                : <ul className="divide-y divide-border">{list.items.map((item) => {
+                                    const openItems = list.items.filter((i) => !i.checked);
+                                    const index = openItems.findIndex((i) => i.id === item.id);
+                                    const movable = !item.checked && openItems.length > 1;
+                                    return (
+                                    <li key={item.id} className={`flex items-center gap-3 py-2 ${dragging?.id === item.id ? 'opacity-50' : ''}`}
+                                        draggable={movable && !busy}
+                                        onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', item.id); setDragging({ listId: list.id, id: item.id }); }}
+                                        onDragEnd={() => setDragging(null)}
+                                        onDragOver={(event) => { if (dragging?.listId === list.id && !item.checked) event.preventDefault(); }}
+                                        onDrop={(event) => drop(event, list, item)}>
+                                        {movable && <GripVertical className="hidden h-4 w-4 flex-shrink-0 cursor-grab text-muted-foreground/50 sm:block" aria-hidden="true" />}
                                         <button type="button" onClick={() => check(list, item)} aria-pressed={item.checked}
                                             aria-label={item.checked ? t('shopping:google.untick', { name: item.name, defaultValue: 'Untick {{name}}' }) : t('shopping:google.tick', { name: item.name, defaultValue: 'Tick {{name}}' })}
                                             className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border-2 ${item.checked ? 'border-primary bg-primary' : 'border-input'}`}>
                                             {item.checked && <Check className="h-4 w-4 text-white" strokeWidth={3} />}
                                         </button>
-                                        <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setEditing({ listId: list.id, item, moveTo: list.id,
-                                            draft: { name: item.name, quantity: item.quantity === null ? '' : String(item.quantity), unit: item.unit ?? '', aisle: item.aisle ?? '', notes: item.notes } })}>
+                                        <button type="button" className="min-w-0 flex-1 text-left" onClick={() => openEditor(list, item)}>
                                             <span className={`block truncate text-body font-medium ${item.checked ? 'text-muted-foreground line-through' : 'text-foreground'}`}>{item.name}</span>
                                             {(quantityText(item) || item.aisle || item.notes) && <span className="block truncate text-micro text-muted-foreground">{[quantityText(item), item.aisle, item.notes].filter(Boolean).join(' · ')}</span>}
                                         </button>
-                                        <Pencil className="h-4 w-4 flex-shrink-0 text-muted-foreground/60" aria-hidden="true" />
+                                        {arranging === list.id && movable ? <span className="flex flex-shrink-0 gap-1">
+                                            <button type="button" className="flex h-9 w-9 items-center justify-center rounded-input border border-border text-muted-foreground hover:text-primary disabled:opacity-40" disabled={busy || index === 0}
+                                                aria-label={t('shopping:google.up', { name: item.name, defaultValue: 'Move {{name}} up' })} onClick={() => moveTo(list, item.id, index - 1)}><ArrowUp className="h-4 w-4" /></button>
+                                            <button type="button" className="flex h-9 w-9 items-center justify-center rounded-input border border-border text-muted-foreground hover:text-primary disabled:opacity-40" disabled={busy || index === openItems.length - 1}
+                                                aria-label={t('shopping:google.down', { name: item.name, defaultValue: 'Move {{name}} down' })} onClick={() => moveTo(list, item.id, index + 1)}><ArrowDown className="h-4 w-4" /></button>
+                                        </span>
+                                        : <button type="button" className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-input text-muted-foreground/70 hover:bg-muted hover:text-primary"
+                                            aria-label={t('shopping:google.edit', { name: item.name, defaultValue: 'Edit {{name}}' })} onClick={() => openEditor(list, item)}><Pencil className="h-4 w-4" /></button>}
                                     </li>
-                                ))}</ul>}
+                                ); })}</ul>}
                         </div>}
                     </section>
                 );
