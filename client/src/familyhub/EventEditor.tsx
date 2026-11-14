@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Check, Pencil, Trash2 } from 'lucide-react';
 import { api } from '../lib/api';
+import { loadPalette, type Palette } from './colourLabels';
 import { defaultEnd, defaultStart, loadEventDefaults } from './eventDefaults';
 
 /**
@@ -12,14 +13,6 @@ export interface EditableEvent {
     id: string; title: string; location?: string; color?: string; colorId?: string; allDay: boolean;
     start: { date?: string; dateTime?: string }; end: { date?: string; dateTime?: string };
 }
-interface Palette { calendar: string | null; colors: Array<{ id: string; color: string }> }
-
-let palette: Promise<Palette> | null = null;
-const loadPalette = () => {
-    palette ??= api.get<{ data: Palette }>('/api/familyhub/google/colors').then((response) => response.data).catch((error) => { palette = null; throw error; });
-    return palette;
-};
-
 /** "2026-11-06T15:00:00-05:00" → "2026-11-06T15:00" in the household timezone. */
 export function localInput(dateTime: string | undefined, timeZone: string) {
     if (!dateTime) return '';

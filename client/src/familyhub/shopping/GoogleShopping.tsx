@@ -185,20 +185,23 @@ export function GoogleShopping({ lists, missing, aisles, isParent, onListChange,
                 const setDraft = (patch: Partial<ItemDraft>) => setDrafts((all) => ({ ...all, [list.id]: { ...(all[list.id] ?? EMPTY), ...patch } }));
                 return (
                     <section key={list.id} className="rounded-card border border-border bg-card shadow-surface">
-                        <div className="flex items-center gap-2 pr-2">
+                        {/* On a phone the list name has its own row and the actions sit below it (v2.0.2). */}
+                        <div className="flex flex-wrap items-center gap-x-2 sm:flex-nowrap sm:pr-2">
                             <button type="button" aria-expanded={open} aria-controls={`shop-${list.id}`} onClick={() => toggle(collapsed, list.id, LIST_KEY, setCollapsed)}
-                                className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left">
+                                className="flex min-w-0 flex-1 basis-full items-center gap-3 px-4 py-3 text-left sm:basis-0">
                                 <ChevronDown className={`h-5 w-5 flex-shrink-0 text-muted-foreground transition-transform ${open ? '' : '-rotate-90'}`} />
-                                <span className="truncate text-h3 font-semibold text-foreground">{list.title}</span>
+                                <span className="min-w-0 flex-1 truncate text-h3 font-semibold text-foreground">{list.title}</span>
                                 <span className="flex-shrink-0 rounded-pill bg-primary-soft px-2.5 py-0.5 text-caption font-semibold text-primary">{left}</span>
                             </button>
-                            {open && left > 1 && <Button variant="ghost" size="sm" aria-pressed={arranging === list.id} onClick={() => setArranging(arranging === list.id ? null : list.id)}
-                                title={t('shopping:google.reorderHelp', { defaultValue: 'Move items up or down, or drag them. The order is saved in Google Tasks.' })}>
-                                <ArrowUpDown className="mr-1 h-4 w-4" />{arranging === list.id ? t('shopping:google.reorderDone', { defaultValue: 'Done' }) : t('shopping:google.reorder', { defaultValue: 'Reorder' })}
-                            </Button>}
-                            {open && checked > 0 && <Button variant="ghost" size="sm" disabled={busy} onClick={() => clear(list)} title={t('shopping:google.clearHelp', { defaultValue: 'Removes ticked items from the list (Google keeps them in its history).' })}>
-                                <Eraser className="mr-1 h-4 w-4" />{t('shopping:google.clear', { count: checked, defaultValue: 'Clear {{count}} ticked' })}
-                            </Button>}
+                            {open && (left > 1 || checked > 0) && <div className="flex w-full flex-wrap justify-end gap-1 px-2 pb-2 sm:w-auto sm:flex-nowrap sm:p-0">
+                                {left > 1 && <Button variant="ghost" size="sm" aria-pressed={arranging === list.id} onClick={() => setArranging(arranging === list.id ? null : list.id)}
+                                    title={t('shopping:google.reorderHelp', { defaultValue: 'Move items up or down, or drag them. The order is saved in Google Tasks.' })}>
+                                    <ArrowUpDown className="mr-1 h-4 w-4" />{arranging === list.id ? t('shopping:google.reorderDone', { defaultValue: 'Done' }) : t('shopping:google.reorder', { defaultValue: 'Reorder' })}
+                                </Button>}
+                                {checked > 0 && <Button variant="ghost" size="sm" disabled={busy} onClick={() => clear(list)} title={t('shopping:google.clearHelp', { defaultValue: 'Removes ticked items from the list (Google keeps them in its history).' })}>
+                                    <Eraser className="mr-1 h-4 w-4" />{t('shopping:google.clear', { count: checked, defaultValue: 'Clear {{count}} ticked' })}
+                                </Button>}
+                            </div>}
                         </div>
                         {open && <div id={`shop-${list.id}`} className="space-y-3 border-t border-border px-4 pb-4 pt-3">
                             <form onSubmit={(event) => add(event, list)} className="grid grid-cols-6 gap-2">
