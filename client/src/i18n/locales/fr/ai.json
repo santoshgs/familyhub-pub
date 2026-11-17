@@ -2,7 +2,7 @@
   "magic": {
     "open": "Assistant IA",
     "title": "Assistant IA ✨",
-    "description": "Décrivez ce que vous voulez ajouter, l'assistant s'occupe du reste.",
+    "description": "Décrivez ce qu'il faut ajouter ou modifier, l'assistant s'occupe du reste.",
     "placeholder": "Ajoute des lasagnes jeudi soir et rappelle à Mia son sac de sport…",
     "parse": "Analyser",
     "parsing": "Analyse en cours…",
@@ -20,7 +20,34 @@
       "task": "Tâche",
       "appointment": "Rendez-vous",
       "shopping_item": "Course",
-      "budget_entry": "Budget"
+      "budget_entry": "Budget",
+      "appointment_update": "Modifier l’événement",
+      "appointment_delete": "Supprimer l’événement",
+      "task_update": "Modifier la tâche",
+      "task_complete": "Marquer comme faite",
+      "task_delete": "Supprimer la tâche",
+      "shopping_check": "Marquer comme acheté",
+      "shopping_delete": "Retirer de la liste"
+    },
+    "apply": "Appliquer ({{count}})",
+    "noPlace": "sans lieu",
+    "repeat": {
+      "daily": "Chaque jour",
+      "weekly": "Chaque semaine",
+      "monthly": "Chaque mois",
+      "yearly": "Chaque année",
+      "count_one": "{{count}} fois",
+      "count_other": "{{count}} fois",
+      "until": "jusqu’au {{date}}"
+    },
+    "days": {
+      "MO": "lun",
+      "TU": "mar",
+      "WE": "mer",
+      "TH": "jeu",
+      "FR": "ven",
+      "SA": "sam",
+      "SU": "dim"
     }
   },
   "meals": {

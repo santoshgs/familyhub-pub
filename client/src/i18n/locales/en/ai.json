@@ -2,7 +2,7 @@
   "magic": {
     "open": "AI assistant",
     "title": "AI assistant ✨",
-    "description": "Describe what you want to add — the assistant takes care of the rest.",
+    "description": "Describe what to add or change — the assistant takes care of the rest.",
     "placeholder": "Add lasagna Thursday night and remind Mia about her gym bag…",
     "parse": "Analyze",
     "parsing": "Analyzing…",
@@ -20,7 +20,34 @@
       "task": "Task",
       "appointment": "Appointment",
       "shopping_item": "Shopping",
-      "budget_entry": "Budget"
+      "budget_entry": "Budget",
+      "appointment_update": "Change event",
+      "appointment_delete": "Delete event",
+      "task_update": "Change to-do",
+      "task_complete": "Mark done",
+      "task_delete": "Delete to-do",
+      "shopping_check": "Mark bought",
+      "shopping_delete": "Remove from list"
+    },
+    "apply": "Apply ({{count}})",
+    "noPlace": "no place",
+    "repeat": {
+      "daily": "Every day",
+      "weekly": "Every week",
+      "monthly": "Every month",
+      "yearly": "Every year",
+      "count_one": "{{count}} time",
+      "count_other": "{{count}} times",
+      "until": "until {{date}}"
+    },
+    "days": {
+      "MO": "Mon",
+      "TU": "Tue",
+      "WE": "Wed",
+      "TH": "Thu",
+      "FR": "Fri",
+      "SA": "Sat",
+      "SU": "Sun"
     }
   },
   "meals": {

@@ -30,8 +30,12 @@ export interface Reminder { method: 'popup' | 'email'; minutes: number }
 export interface EventReminders { useDefault: boolean; overrides?: Reminder[] }
 export interface CreateEventInput {
     title: string; location?: string; id?: string; description?: string; colorId?: string | null;
+    /** New events only: one RRULE line, e.g. "RRULE:FREQ=WEEKLY;BYDAY=TU;COUNT=10" (v2.1). */
+    recurrence?: string[];
     start: NonNullable<GoogleEvent['start']>; end: NonNullable<GoogleEvent['end']>;
 }
+/** The repeat rules Family Hub writes: a frequency with an optional interval, count, end date and weekdays. */
+export const RRULE = /^RRULE:FREQ=(?:DAILY|WEEKLY|MONTHLY|YEARLY)(?:;(?:INTERVAL=[1-9]\d?|COUNT=[1-9]\d{0,2}|UNTIL=\d{8}(?:T\d{6}Z)?|BYDAY=(?:MO|TU|WE|TH|FR|SA|SU)(?:,(?:MO|TU|WE|TH|FR|SA|SU)){0,6}))*$/;
 /** Google event colours are "1" to "11"; empty means the calendar's own colour. */
 const EVENT_COLOR = /^(?:[1-9]|1[01])$/;
 /** Google event ids, including a recurring instance's "<id>_<start>" form. */
@@ -152,10 +156,12 @@ export class GoogleAdapters {
         // Google custom IDs use base32hex (a-v, 0-9), 5–1024 chars. A UUID
         // stripped of dashes fits and lets callers reconcile ambiguous failures.
         if (input.id !== undefined && !/^[a-v0-9]{5,1024}$/.test(input.id)) throw new Error('Invalid Google event identifier.');
+        if (input.recurrence !== undefined && (!Array.isArray(input.recurrence) || input.recurrence.length > 1
+            || input.recurrence.some((rule) => typeof rule !== 'string' || !RRULE.test(rule)))) throw new Error('Choose a valid repeat rule.');
         const value = await this.request<GoogleEvent>('calendar', `calendars/${encodeURIComponent(calendarId)}/events`, undefined, 'POST', {
             summary: body.summary, start: body.start, end: body.end, ...(body.location ? { location: body.location } : {}), ...(input.id ? { id: input.id } : {}),
             ...(input.description ? { description: input.description } : {}), ...(body.colorId ? { colorId: body.colorId } : {}),
-            ...(reminders ? { reminders } : {}),
+            ...(reminders ? { reminders } : {}), ...(input.recurrence?.length ? { recurrence: input.recurrence } : {}),
         });
         return this.event(calendarId, value, body.summary);
     }
