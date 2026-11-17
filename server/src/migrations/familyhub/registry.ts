@@ -16,10 +16,11 @@ import { navOrderMigrations } from './navOrder';
 import { shoppingListMigrations } from './shoppingLists';
 import { agentSessionMigrations } from './agentSessions';
 import { calendarDefaultsMigrations } from './calendarDefaults';
+import { familyUpdatesMigrations } from './familyUpdates';
 export const familyHubMigrations: readonly Migration[] = [{
     id: 'familyhub/0001-notes',
     statements: [
         'ALTER TABLE family_notes ADD COLUMN pinned BOOLEAN NOT NULL DEFAULT false',
         'ALTER TABLE family_notes ADD COLUMN author_id UUID REFERENCES users(id) ON DELETE SET NULL',
     ],
-}, ...googleMigrations, ...googleSettingsMigrations, ...moduleMigrations, ...appearanceMigrations, ...ambientMigrations, ...displayPairingMigrations, ...displaySessionMigrations, ...v1CleanupMigrations, ...moduleVisibilityMigrations, ...pushAccountMigrations, ...dashboardExtrasMigrations, ...removeSsoMigrations, ...budgetSharingMigrations, ...ambientLayoutMigrations, ...navOrderMigrations, ...ambientScreensaverMigrations, ...shoppingListMigrations, ...agentSessionMigrations, ...calendarDefaultsMigrations];
+}, ...googleMigrations, ...googleSettingsMigrations, ...moduleMigrations, ...appearanceMigrations, ...ambientMigrations, ...displayPairingMigrations, ...displaySessionMigrations, ...v1CleanupMigrations, ...moduleVisibilityMigrations, ...pushAccountMigrations, ...dashboardExtrasMigrations, ...removeSsoMigrations, ...budgetSharingMigrations, ...ambientLayoutMigrations, ...navOrderMigrations, ...ambientScreensaverMigrations, ...shoppingListMigrations, ...agentSessionMigrations, ...calendarDefaultsMigrations, ...familyUpdatesMigrations];

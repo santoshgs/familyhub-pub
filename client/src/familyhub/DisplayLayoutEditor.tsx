@@ -14,7 +14,7 @@ export const MODULES: Array<[key: string, title: string, description: string]> =
     ['tasks', 'To-dos', 'Open items from the selected Google Tasks list.'],
     ['chores', 'Chores', 'Chores due today.'],
     ['news', 'News', 'Headlines from the feeds chosen in Settings → Display.'],
-    ['daycare', 'Daycare updates', 'Short summaries of recent daycare emails.'],
+    ['daycare', 'Family Updates', 'Recent daycare and school emails. Choose which sources show here in Settings → Household.'],
     ['f1', 'Formula 1', 'The next race weekend in your time zone.'],
     ['photos', 'Family photos', 'A slideshow of photos uploaded in Settings → Display.'],
     ['wifi', 'Guest Wi-Fi', 'Network name, password and a QR code to join.'],

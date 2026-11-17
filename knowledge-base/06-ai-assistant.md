@@ -4,7 +4,15 @@
 
 Family Hub exposes OpenFamily's existing AI assistant and provider settings. Parents can choose a supported provider and model, test the connection, and use the assistant to draft requests. The existing review-before-saving flow remains important: inspect the proposal before applying any task or calendar action.
 
-Provider choices inspected during development included Ollama, OpenAI-compatible providers, Anthropic and Gemini. Availability depends on the provider, model name, credentials, network and service configuration. A model name alone does not install a model or start a server. A hosted provider may receive the prompt and any information deliberately included in it; daycare email content is not automatically sent to the assistant.
+Provider choices inspected during development included Ollama, OpenAI-compatible providers, Anthropic and Gemini. Availability depends on the provider, model name, credentials, network and service configuration. A model name alone does not install a model or start a server. A hosted provider receives the prompt and any information included in it. Family Updates emails are sent only for the sources where a parent switched **AI summaries and suggestions** on (v2.3, see below).
+
+## Where your text goes
+
+The AI provider settings say this too (English and French). With OpenAI, Anthropic or Google Gemini, what the assistant reads is sent to that company. Their paid APIs say they do not use it to train models; Google's free Gemini tier does use it to improve its products; providers may keep requests for a while to check for abuse. For private family information, use a paid API key (for Gemini, a key from a Google Cloud project with billing enabled) or a model you host yourself (Ollama), or leave AI off. The choice is the household's.
+
+## Family Updates (v2.3)
+
+For each Family Updates source with AI on, each new email is sent once to this provider in the background (up to three a minute) for a short summary and suggested events or to-dos. Suggestions are checked by Family Hub and wait for a parent to add or dismiss them; see [Family Updates](05-daycare-gmail.md). A provider failure is retried after 15 and then 30 minutes. Only an error code is logged, never the email or the model's answer.
 
 ## Ollama and Llama
 
@@ -16,6 +24,6 @@ Where a reviewed AI proposal creates or changes Google tasks, Family Hub routes 
 
 ## Gemini status
 
-The owner encountered rejected-key/restriction errors and a provider availability/timeout error. Gemini troubleshooting was explicitly deferred. There is **no confirmed successful Gemini inference** in the project record. A successful settings save or provider connection retry is not proof that generation works.
+Earlier, the owner encountered rejected-key/restriction errors and a provider availability/timeout error. Since November 16, 2026 the Pi uses a paid Gemini key from a billing-enabled Cloud project, and Family Updates suggestions were produced on the Pi (owner's report, November 17), which means Gemini generation worked there. The note-to-proposal assistant itself has not been separately confirmed against Gemini.
 
 To investigate later, verify the key belongs to the intended project/provider, that its API restrictions permit the exact requested service and method, that the model is available to that project, and that the server can reach the provider. Use the provider's current official documentation because service names, model availability and quotas change. Do not paste keys into chat or Git. Retest a harmless prompt and preserve the sanitized error if it fails.

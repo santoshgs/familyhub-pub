@@ -4,7 +4,7 @@
 
 **A self-hosted family dashboard on a Raspberry Pi, shown on an inexpensive photo frame.**
 
-Google Calendar and Tasks, daycare updates, chores, shared budgets, weather,
+Google Calendar and Tasks, family updates from daycare and school emails, chores, shared budgets, weather,
 news and the next Formula 1 weekend: managed from your phone over a private
 network, displayed read-only in the kitchen.
 
@@ -40,10 +40,10 @@ only ever sees a separate, display-only listener.
 | --- | --- |
 | **Family calendar** | One shared Google Calendar is the source of truth. Month/week/day views, event colours with a household colour legend, and creating, editing and deleting events from FamilyHub. |
 | **To-dos** | A shared Google Tasks list, editable from FamilyHub or Google's own apps. |
-| **Daycare updates** | Lillio/HiMama emails from the family Gmail account, summarised. |
+| **Family Updates** | Daycare (Lillio) and school emails from the family Gmail account, chosen by Gmail label, as clean text; optional AI summaries and suggested events to add. |
 | **Chores and pocket money** | OpenFamily chores (with optional points), approvals and balances. |
 | **Shared budgets** | Record who paid and how an expense is split, keep expense groups, settle up, and import a Splitwise CSV export. Fixed, icon-tiled categories; monthly totals and limits. |
-| **Modules you choose** | To-dos, Chores, Pocket money, Daycare, School, Notes, Budget, Shopping, Weekly routines, Integrations (Home Assistant, Nextcloud, Immich) and an AI assistant, each on or off for the household. Members can hide modules from their own menu. |
+| **Modules you choose** | To-dos, Chores, Pocket money, Family Updates, School, Notes, Budget, Shopping, Weekly routines, Integrations (Home Assistant, Nextcloud, Immich) and an AI assistant, each on or off for the household. Members can hide modules from their own menu. |
 | **Two looks** | Classic, or the calmer **Board Book** look for the management app, switchable per person, with a light and dark theme. |
 | **Ambient display** | A read-only, glanceable dashboard for a wall or counter screen: detail panels, a quick-cards bar, a light/dark toggle, night dimming (or off) and a screensaver. |
 | **Alerts on your phone** | ntfy pushes for expiring credentials, installed releases and failed updates. |

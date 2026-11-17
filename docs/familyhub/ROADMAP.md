@@ -132,6 +132,24 @@ and mailbox-wide; personal-use verification exceptions must be addressed for the
 November 13, 2026). There is no extra
 code-development gate before this already-authorized daycare work.
 
+### Family Updates — v2.2 to v2.4, November 16, 2026
+
+Daycare became **Family Updates** (owner's name choice, so it fits households without
+children). Plan agreed November 16 in three steps, all released and on the Pi:
+
+- **v2.2** Gmail labels as sources (Settings → Household → Family Updates), clean text,
+  DMARC-verified senders by default, per-source display switch. A real label email appeared
+  on the Pi.
+- **v2.3** Optional AI per source with the household's provider: summaries and checked
+  suggestions (quoted evidence, real future dates), added or dismissed by a parent. The
+  privacy choice is stated in Settings and is the household's. Suggestions were produced on
+  the Pi with a paid Gemini key.
+- **v2.4** Accept and dismiss as connected-app contracts, with optional changes. ZeroG
+  (v0.3.5–v0.3.6) sends a nightly Telegram digest with Add/Skip buttons and `/digest`.
+
+Open: a browser review of the settings screen and the suggestions list; the scheduled digest's
+first run (07:00) not yet confirmed; edits from Telegram are off by default and untried.
+
 ## Phase 5 — Raspberry Pi production
 
 The Pi was reimaged to Raspberry Pi OS Lite 64-bit (Debian 13). The private

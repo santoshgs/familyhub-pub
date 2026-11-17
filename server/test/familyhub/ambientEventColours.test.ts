@@ -14,7 +14,14 @@ vi.mock('../../src/services/familyhub/google/runtime', async (original) => {
                 { id: 'c', title: 'Odd colour', start: { dateTime: start }, end: { dateTime: start }, color: 'red; background:url(x)' },
                 { id: 'd', title: 'No colour', start: { dateTime: start }, end: { dateTime: start } },
             ],
-            tasks: [], daycare: [], sources: {},
+            tasks: [],
+            // Family Updates (v2.2): one source kept off the display.
+            daycare: [
+                { id: 'k1', title: 'Fictional class trip', text: 'Bring a lunch.', receivedAt: start, kind: 'message', hasDetails: true, source: { id: 'Label_1', name: 'School' }, display: true },
+                { id: 'k2', title: 'Fictional private note', text: 'Not for the kitchen.', receivedAt: start, kind: 'message', hasDetails: true, source: { id: 'Label_2', name: 'Teacher' }, display: false },
+                { id: 'k3', title: 'Fictional nap', text: 'Slept 45 minutes.', receivedAt: start, kind: 'activity', hasDetails: true },
+            ],
+            sources: {},
         }),
     };
 });
@@ -42,4 +49,11 @@ it('sends each event its Google colour and the household legend label, and drops
     expect(byId.b.colorLabel).toBeUndefined();
     expect(byId.c.color).toBeUndefined();
     expect(byId.d.color).toBeUndefined();
+});
+
+it('keeps Family Updates sources marked off the display away from the frame', async () => {
+    const display = (await request(app).post('/api/familyhub/ambient/display-session').set(as(owner.token)).send({})).body.data.token as string;
+    const notifications = (await request(app).get('/api/familyhub/ambient').set(as(display))).body.data.notifications as { id: string; source: string }[];
+    expect(notifications.map((item) => item.id)).toEqual(['k1', 'k3']);
+    expect(notifications[0].source).toBe('School');
 });

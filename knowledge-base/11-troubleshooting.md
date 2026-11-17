@@ -89,13 +89,21 @@ Check the Google connection status, displayed dedicated account, selected shared
 
 Reconnect if consent was revoked, or if a refresh token issued while the app was still in Testing has expired (the app has been In production since November 13, 2026). If a specific operation fails, record only sanitized error text and verify whether the change reached Google before retrying. See [Google Calendar and Tasks](04-google-calendar-tasks.md).
 
-## Daycare is empty
+## Family Updates is empty or an email is missing
 
-Confirm optional Gmail consent, the dedicated mailbox, the actual sender, whether recent messages contain details, and any stale/error indicator. A sender filter is not a mailbox permission restriction. Fictional simulations passed; real Lillio/HiMama messages still require acceptance. Do not share the child's messages while troubleshooting. See [daycare](05-daycare-gmail.md).
+- Check **Settings → Household → Family Updates**: Gmail must be authorized (Home → Google), and Lillio or at least one label chosen. Saving there refreshes within a few minutes.
+- The section's **Last refresh** line shows emails shown and hidden per source. Hidden ones usually failed **Only senders Gmail verified**; that check needs Gmail's DMARC result to pass for the domain in the From address.
+- In Gmail, confirm the filter really applied the label, including to older messages (**Also apply filter to matching conversations**). Only the last 30 days are shown.
+- A source with **Show on the kitchen display** off never appears on the frame.
+- Do not share the child's messages while troubleshooting. See [Family Updates](05-daycare-gmail.md).
+
+## No AI summaries or suggestions
+
+AI must be on for that source, and the AI assistant set up, enabled and its module on. Each email is processed once, a few a minute, so a newly enabled label takes a little while. Emails with nothing dated from today on give a summary but no suggestions. A provider error is retried after 15 and 30 minutes, then that email is left; the server log shows `familyhub.family_updates_ai_failed` with an error code.
 
 ## AI provider fails
 
-Check the provider URL from the server container, model availability, credentials and the sanitized provider error. An Ollama model must actually be installed and running; a name in settings is not an installation. Gemini previously showed blocked-method and provider-availability/timeout errors and was deferred; no successful inference is recorded. See [AI assistant](06-ai-assistant.md).
+Check the provider URL from the server container, model availability, credentials and the sanitized provider error. An Ollama model must actually be installed and running; a name in settings is not an installation. Gemini previously showed blocked-method and provider-availability/timeout errors; with a paid key from a billing-enabled project it produced Family Updates suggestions on the Pi (November 17, 2026). See [AI assistant](06-ai-assistant.md).
 
 ## Local Mac port already in use
 

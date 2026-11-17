@@ -107,7 +107,8 @@ describe('managing connected apps', () => {
         // One grant per area: never both "/api/x" and "/api/x/*".
         expect(grants.filter((grant) => grants.includes(`${grant}/*`))).toEqual([]);
         expect(grants).toEqual(expect.arrayContaining(['/api/familyhub/ambient/*', '/api/familyhub/photos/*']));
-        expect(response.body.data.write.map((entry: { endpoint: string }) => entry.endpoint)).toEqual(['POST /api/budget/entries', 'POST /api/familyhub/google/events', 'POST /api/familyhub/google/tasks']);
+        expect(response.body.data.write.map((entry: { endpoint: string }) => entry.endpoint)).toEqual(['POST /api/budget/entries', 'POST /api/familyhub/google/events', 'POST /api/familyhub/google/tasks',
+            'POST /api/familyhub/family-updates/suggestions/:id/accept', 'POST /api/familyhub/family-updates/suggestions/:id/dismiss']);
         // Every offered grant can be used to create a session.
         expect((await call('post', BASE, owner.token, { name: 'Everything offered', permissions: { read: grants, write: response.body.data.write.map((entry: { endpoint: string }) => entry.endpoint) } })).status).toBe(200);
     });

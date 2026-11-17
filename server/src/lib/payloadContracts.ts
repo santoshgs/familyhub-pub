@@ -102,4 +102,37 @@ export const PAYLOAD_CONTRACTS = {
         notes: ['notes and due are not read: use description and dueDate.'],
         errors: { 400: 'A field is missing or not valid.', 403: 'Not a parent account, or the to-dos module is off.', 409: 'Google is not connected, no task list is chosen, or the grant lapsed (code GOOGLE_RECONNECT).', 502: 'Google refused or failed the request.' },
     },
+    // Family Updates suggestions (v2.4): what the household's AI found in emails. The suggestion
+    // itself (kind, title, date, times) comes from GET /api/familyhub/family-updates/suggestions.
+    'POST /api/familyhub/family-updates/suggestions/:id/accept': {
+        summary: 'Add one Family Updates suggestion to the shared calendar (an event) or the to-dos (a task), as suggested or with the changes given.',
+        access: 'parent',
+        module: 'daycare',
+        contentType: 'application/json',
+        body: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+                title: { type: 'string', minLength: 1, maxLength: 120, description: 'A new title. Leave out to keep the suggested one.' },
+                date: { ...DATE, description: 'A new date, YYYY-MM-DD, from today up to 400 days ahead. For a task, its due date.' },
+                startTime: { type: ['string', 'null'], pattern: '^([01]\\d|2[0-3]):[0-5]\\d$', description: 'Events only: a new start time, 24-hour HH:MM in the household time zone; null makes it all-day.' },
+                endTime: { type: ['string', 'null'], pattern: '^([01]\\d|2[0-3]):[0-5]\\d$', description: 'Events only: a new end time, HH:MM, after the start; null uses the household\'s default event length.' },
+            },
+        },
+        notes: [
+            'An empty body {} adds the suggestion exactly as suggested.',
+            'The kind (event or task) cannot change. Unknown fields are refused with 400.',
+            'Adding twice is refused with 409 SUGGESTION_DECIDED; an event keeps a fixed Google id, so a retry after a timeout cannot duplicate it.',
+        ],
+        errors: { 400: 'A change is not valid.', 403: 'Not a parent account, or the Family Updates module is off.', 404: 'No such suggestion in this family.', 409: 'Already added, dismissed or expired (code SUGGESTION_DECIDED), or Google is not connected.', 502: 'Google refused or failed the request.' },
+    },
+    'POST /api/familyhub/family-updates/suggestions/:id/dismiss': {
+        summary: 'Dismiss one Family Updates suggestion without adding it.',
+        access: 'parent',
+        module: 'daycare',
+        contentType: 'application/json',
+        body: { type: 'object', additionalProperties: false, properties: {} },
+        notes: ['Send an empty body {}.'],
+        errors: { 403: 'Not a parent account, or the Family Updates module is off.', 404: 'No such suggestion in this family.', 409: 'Already added, dismissed or expired (code SUGGESTION_DECIDED).' },
+    },
 } as const;

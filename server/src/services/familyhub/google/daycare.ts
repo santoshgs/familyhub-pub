@@ -11,20 +11,33 @@ export interface DaycareUpdate {
     kind: 'activity' | 'message' | 'notification';
     activityType?: 'feeding' | 'sleep' | 'other';
     hasDetails: boolean; link?: string;
+    /** Which Family Updates source it came from (v2.2): 'lillio' or a Gmail label id, with its display name. */
+    source?: { id: string; name: string };
+    /** The sender's display name, for label sources. Text only. */
+    sender?: string;
+    /** false: kept off the kitchen display (the frame). */
+    display?: boolean;
 }
 export const DAYCARE_SENDER = 'no-reply@himama.com';
 const MAX_BODY = 64 * 1024;
-const clean = (text: string) => text.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim();
+export const clean = (text: string) => text.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim();
 
-function entities(text: string): string {
-    const named: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
-    return text.replace(/&(#x[\da-f]+|#\d+|amp|lt|gt|quot|apos|nbsp);/gi, (whole, value: string) => {
-        if (!value.startsWith('#')) return named[value.toLowerCase()] ?? whole;
+// Named entities school and daycare mail actually uses, French accents included (v2.2).
+const NAMED: Record<string, string> = {
+    amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', ndash: '–', mdash: '—', hellip: '…', bull: '•', middot: '·',
+    lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”', laquo: '«', raquo: '»', copy: '©', reg: '®', trade: '™', deg: '°', euro: '€', cent: '¢', pound: '£',
+    eacute: 'é', Eacute: 'É', egrave: 'è', Egrave: 'È', ecirc: 'ê', Ecirc: 'Ê', euml: 'ë', agrave: 'à', Agrave: 'À', acirc: 'â', Acirc: 'Â',
+    ccedil: 'ç', Ccedil: 'Ç', icirc: 'î', Icirc: 'Î', iuml: 'ï', ocirc: 'ô', Ocirc: 'Ô', ugrave: 'ù', ucirc: 'û', uuml: 'ü', oelig: 'œ', OElig: 'Œ', aelig: 'æ',
+    frac12: '½', frac14: '¼', frac34: '¾', times: '×', shy: '', zwnj: '', zwj: '', ensp: ' ', emsp: ' ', thinsp: ' ',
+};
+export function entities(text: string): string {
+    return text.replace(/&(#x[\da-f]+|#\d+|[a-z][a-z\d]{1,8});/gi, (whole, value: string) => {
+        if (!value.startsWith('#')) return NAMED[value] ?? NAMED[value.toLowerCase()] ?? whole;
         const code = value[1].toLowerCase() === 'x' ? parseInt(value.slice(2), 16) : parseInt(value.slice(1), 10);
         return code > 0 && code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff) ? String.fromCodePoint(code) : '';
     });
 }
-function htmlText(html: string): string {
+export function htmlText(html: string): string {
     // This is text extraction, not an HTML sanitizer. No HTML leaves this parser.
     return entities(html.replace(/<!--[\s\S]*?(?:-->|$)/g, '')
         .replace(/<(script|style|head|svg|iframe)\b[^>]*>[\s\S]*?(?:<\/\1\s*>|$)/gi, '')
@@ -43,14 +56,8 @@ function trustedLink(text: string): string | undefined {
     return undefined;
 }
 
-export function parseDaycareEmail(message: GmailMessage): DaycareUpdate | null {
-    const headers = message.payload?.headers ?? [];
-    const from = headers.filter((header) => header.name.toLowerCase() === 'from');
-    if (from.length !== 1 || !/^(?:[^<>\r\n]*<)?no-reply@himama\.com>?$/i.test(from[0].value.trim())
-        || (from[0].value.includes('<') !== from[0].value.includes('>'))) return null;
-    const received = Number(message.internalDate);
-    if (!message.id || !Number.isFinite(received) || received <= 0 || !Number.isFinite(new Date(received).getTime())) return null;
-    const subject = headers.find((header) => header.name.toLowerCase() === 'subject')?.value ?? 'Daycare update';
+/** The text/plain and text/html bodies of a message, capped at 64 KB in all; attachments are never read. */
+export function messageBodies(payload: GmailPart | undefined): { plain: string[]; html: string[] } {
     const plain: string[] = [], html: string[] = [];
     let remaining = MAX_BODY, visited = 0;
     const walk = (part: GmailPart, depth: number): void => {
@@ -64,7 +71,19 @@ export function parseDaycareEmail(message: GmailMessage): DaycareUpdate | null {
         }
         for (const child of part.parts ?? []) walk(child, depth + 1);
     };
-    if (message.payload) walk(message.payload, 0);
+    if (payload) walk(payload, 0);
+    return { plain, html };
+}
+
+export function parseDaycareEmail(message: GmailMessage): DaycareUpdate | null {
+    const headers = message.payload?.headers ?? [];
+    const from = headers.filter((header) => header.name.toLowerCase() === 'from');
+    if (from.length !== 1 || !/^(?:[^<>\r\n]*<)?no-reply@himama\.com>?$/i.test(from[0].value.trim())
+        || (from[0].value.includes('<') !== from[0].value.includes('>'))) return null;
+    const received = Number(message.internalDate);
+    if (!message.id || !Number.isFinite(received) || received <= 0 || !Number.isFinite(new Date(received).getTime())) return null;
+    const subject = headers.find((header) => header.name.toLowerCase() === 'subject')?.value ?? 'Daycare update';
+    const { plain, html } = messageBodies(message.payload);
     const rawHtml = html.join('\n');
     const body = clean((plain.length ? plain.join('\n') : htmlText(rawHtml)).replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n'));
     const title = clean(subject).slice(0, 300);

@@ -69,8 +69,8 @@ household's private Tailscale network.
 | Calendar | One selected shared Google Calendar |
 | To-dos | Google Tasks list owned by the dedicated Family Hub account |
 | Notes | Family Hub (OpenFamily) PostgreSQL |
-| Daycare notifications | Lillio/HiMama emails in the dedicated Gmail account |
-| Parsed daycare records | Minimal disposable cache in PostgreSQL, keyed by Gmail message ID |
+| Family Updates emails | Lillio emails and Gmail labels the household chose, in the dedicated Gmail account |
+| Parsed Family Updates records | Minimal disposable cache in PostgreSQL, keyed by Gmail message ID; AI summaries and suggestions for AI sources (v2.3) |
 | Classroom/School | Google Classroom, subject to school/account permission |
 | Accounts, family membership, preferences | Family Hub (OpenFamily) |
 
@@ -87,10 +87,12 @@ household's private Tailscale network.
   AI assistant use the same Google task operations. AI never creates a competing
   local task, and AI changes keep the proposal/review step before they run.
   Google Tasks scheduling is date-only, so never promise reminder-time parity.
-- Daycare reads only mail from `no-reply@himama.com`, extracts activities
-  (including milk/feeding) and parent messages, deduplicates by Gmail message ID,
-  never invents missing fields, and turns link-only emails into link entries.
-  Parsing is deterministic, and no email or child data goes to external AI by default.
+- Family Updates (Daycare before v2.2) reads the Lillio sender (`no-reply@himama.com`)
+  and the Gmail labels a parent chose. Lillio activities (including milk/feeding) and
+  messages are recognized; label emails become clean text, shown only when Gmail's
+  DMARC check passed (default). Parsing is deterministic and never invents fields.
+  No email goes to an AI provider unless a parent switches AI on for that source (v2.3);
+  AI suggestions reach Google only when a parent adds them.
 - Google authorization is separate from Family Hub login. Family permissions apply
   to every Google read and write, including AI. Display sessions never write.
 
