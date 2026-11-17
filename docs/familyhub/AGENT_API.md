@@ -68,6 +68,13 @@ Family Updates suggestions (v2.4) are read from `GET /api/familyhub/family-updat
 the quoted `evidence`. Accept and dismiss answer 409 `SUGGESTION_DECIDED` once anyone has decided, so a
 digest and the app can race safely. Decisions by a connected app are recorded with `decided_via = agent`.
 
+The day summary (v2.5) is read from `GET /api/familyhub/day-summary` (read grant
+`/api/familyhub/day-summary/*`). It returns `{ available: true, day, headline, body, model, generatedAt }`,
+or `{ available: false, reason }` where `reason` is `ai-off`, `google` or `error`. The household's AI
+writes it from today's events, to-dos and chores; it is cached per day and asked again only when today
+changes (at most every 30 minutes), so polling it is cheap. ZeroG's morning Telegram message uses it.
+Refreshing (`POST …/day-summary/refresh`) is for signed-in members only.
+
 Things that surprise clients:
 
 - **Budget entries are income unless `is_expense` is `true`.**

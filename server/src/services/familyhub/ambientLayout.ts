@@ -5,7 +5,9 @@
  */
 export const BASE_MODULES = ['calendar', 'weather', 'tasks', 'chores', 'news', 'daycare', 'f1'] as const;
 export const EXTRA_MODULES = ['wifi', 'countdown', 'markets', 'photos'] as const;
-export const DISPLAY_MODULES = [...BASE_MODULES, ...EXTRA_MODULES] as const;
+/** v2.5: written by the household's AI; never in the pre-v1.6 widget list. */
+export const AI_MODULES = ['summary'] as const;
+export const DISPLAY_MODULES = [...BASE_MODULES, ...EXTRA_MODULES, ...AI_MODULES] as const;
 export type DisplayModule = typeof DISPLAY_MODULES[number];
 export const MAX_CARDS = 6;
 

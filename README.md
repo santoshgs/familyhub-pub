@@ -41,6 +41,7 @@ only ever sees a separate, display-only listener.
 | **Family calendar** | One shared Google Calendar is the source of truth. Month/week/day views, event colours with a household colour legend, and creating, editing and deleting events from FamilyHub. |
 | **To-dos** | A shared Google Tasks list, editable from FamilyHub or Google's own apps. |
 | **Family Updates** | Daycare (Lillio) and school emails from the family Gmail account, chosen by Gmail label, as clean text; optional AI summaries and suggested events to add. |
+| **Day summary** | With the AI assistant on, a headline and two sentences about today, from today's events, to-dos and chores. It opens the Board Book home (optional per person), can be a **Your day** card on the photo frame, and is what ZeroG sends on Telegram each morning. |
 | **Chores and pocket money** | OpenFamily chores (with optional points), approvals and balances. |
 | **Shared budgets** | Record who paid and how an expense is split, keep expense groups, settle up, and import a Splitwise CSV export. Fixed, icon-tiled categories; monthly totals and limits. |
 | **Modules you choose** | To-dos, Chores, Pocket money, Family Updates, School, Notes, Budget, Shopping, Weekly routines, Integrations (Home Assistant, Nextcloud, Immich) and an AI assistant, each on or off for the household. Members can hide modules from their own menu. |

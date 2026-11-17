@@ -12,6 +12,7 @@ import { GoogleApiError } from '../services/familyhub/google/adapters';
 import { FamilyUpdatesError, familyStats, readFamilySettings, saveFamilySettings } from '../services/familyhub/google/familyUpdates';
 import { acceptSuggestion, dismissSuggestion, readFamilyUpdatesAi, SuggestionError } from '../services/familyhub/google/familyUpdatesAi';
 import { householdAiSummary } from '../services/ai/settings';
+import { getDaySummary } from '../services/familyhub/daySummary';
 import { EventDefaultsError, googleReminderPreview, readEventDefaults, remindersFor, saveEventDefaults, withDefaultEnd } from '../services/familyhub/google/eventDefaults';
 import { loadAmbientSnapshot, readAmbientSettings, saveAmbientSettings, searchWeatherLocations } from '../services/familyhub/ambient';
 import { getNewsArticle, previewFeed } from '../services/familyhub/news';
@@ -183,12 +184,13 @@ router.delete('/display/sessions/:id', requireParent, async (req: AuthRequest, r
 router.get('/preferences', async (req: AuthRequest, res) => {
     try {
         const [order, legend] = await Promise.all([
-            query('SELECT card_order, hidden_modules FROM familyhub_dashboard_preferences WHERE user_id=$1', [req.actualUserId]),
+            query('SELECT card_order, hidden_modules, show_day_summary FROM familyhub_dashboard_preferences WHERE user_id=$1', [req.actualUserId]),
             query('SELECT labels FROM familyhub_calendar_legend WHERE family_id=$1', [req.userId]),
         ]);
         res.json({ success: true, data: {
             cardOrder: order.rows[0]?.card_order ?? CARDS,
             hiddenModules: cleanModuleList(order.rows[0]?.hidden_modules ?? []),
+            showDaySummary: order.rows[0]?.show_day_summary ?? true,
             legend: legend.rows[0]?.labels ?? {},
         } });
     } catch { res.status(503).json({ success: false, error: 'Dashboard preferences unavailable.' }); }
@@ -327,6 +329,26 @@ router.put('/preferences/hidden', async (req: AuthRequest, res) => {
             ON CONFLICT (user_id) DO UPDATE SET hidden_modules = $3`, [req.actualUserId, JSON.stringify(CARDS), JSON.stringify(values)]);
         res.json({ success: true, data: { hiddenModules: values } });
     } catch { res.status(503).json({ success: false, error: 'Your menu could not be saved.' }); }
+});
+// v2.5: whether this member's home page starts with the day summary.
+router.put('/preferences/day-summary', async (req: AuthRequest, res) => {
+    if (typeof req.body?.showDaySummary !== 'boolean') return res.status(400).json({ success: false, error: 'Choose on or off.' });
+    try {
+        await query(`INSERT INTO familyhub_dashboard_preferences (user_id, card_order, show_day_summary) VALUES ($1, $2, $3)
+            ON CONFLICT (user_id) DO UPDATE SET show_day_summary = $3`, [req.actualUserId, JSON.stringify(CARDS), req.body.showDaySummary]);
+        res.json({ success: true, data: { showDaySummary: req.body.showDaySummary } });
+    } catch { res.status(503).json({ success: false, error: 'Your choice could not be saved.' }); }
+});
+// v2.5: today's summary, written by the household's AI (see services/familyhub/daySummary.ts).
+// Connected apps may read it with the "/api/familyhub/day-summary/*" grant.
+router.get('/day-summary', async (req: AuthRequest, res) => {
+    try { res.json({ success: true, data: await getDaySummary(req.userId!) }); }
+    catch { res.status(503).json({ success: false, error: 'The day summary is unavailable.' }); }
+});
+router.post('/day-summary/refresh', async (req: AuthRequest, res) => {
+    if (req.readOnly) return res.status(403).json({ success: false, error: 'This session is read-only.' });
+    try { res.json({ success: true, data: await getDaySummary(req.userId!, { force: true }) }); }
+    catch { res.status(503).json({ success: false, error: 'The day summary could not be refreshed.' }); }
 });
 router.put('/preferences/legend', requireParent, async (req: AuthRequest, res) => {
     const labels = req.body?.legend;

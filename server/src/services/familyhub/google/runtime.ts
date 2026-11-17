@@ -115,6 +115,8 @@ export function startFamilyHubSyncScheduler(): void {
                 await syncGoogle(row.family_id).catch(() => undefined);
                 // Family Updates AI (v2.3): in the background, so a slow model never delays the next refresh.
                 void import('./familyUpdatesAi').then(({ processFamilyUpdatesAi }) => processFamilyUpdatesAi(row.family_id)).catch(() => undefined);
+                // Day summary (v2.5): ready before anyone opens the app; asks the model only when today changed.
+                void import('../daySummary').then(({ prepareDaySummary }) => prepareDaySummary(row.family_id)).catch(() => undefined);
             }
         }).catch(() => undefined);
     });

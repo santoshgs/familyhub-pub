@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties, type ReactNode, type DragEvent } from 'react';
-import { Plus, Settings2, RefreshCw, ArrowRight, Check, Trash2, Monitor, Pencil, WifiOff, LayoutList } from 'lucide-react';
+import { Plus, Settings2, RefreshCw, ArrowRight, Check, Trash2, Monitor, Pencil, WifiOff, LayoutList, Sparkles } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { AppShell } from './FamilyHubNav';
 import { FullCalendar } from './FullCalendar';
@@ -27,6 +27,12 @@ interface Source { state: string; lastSuccess?: string; message?: string }
 interface Snapshot { notes: Note[]; events: Event[]; tasks: Task[]; daycare: DaycareUpdate[]; readOnly: boolean; connected: boolean; timeZone: string; sources: Record<string, Source> }
 interface GoogleStatus { configured: boolean; connected: boolean; email?: string; gmail: boolean; missingConfiguration?: string[]; selection?: { calendarId: string; taskListId: string; timeZone: string } }
 interface Sources { calendars: { id: string; summary: string; accessRole: string }[]; taskLists: { id: string; title: string }[] }
+/** v2.5: today's summary from the household's AI (GET /api/familyhub/day-summary). */
+type DaySummary = { available: true; headline: string; body: string; model: string; generatedAt: string } | { available: false; reason: string };
+// Remembers that this browser saw a summary, so Home holds its place while it loads instead of jumping.
+const SUMMARY_SEEN = 'familyhub.daySummary.seen';
+const summarySeen = () => { try { return localStorage.getItem(SUMMARY_SEEN) === '1'; } catch { return false; } };
+const rememberSummary = (seen: boolean) => { try { if (seen) localStorage.setItem(SUMMARY_SEEN, '1'); else localStorage.removeItem(SUMMARY_SEEN); } catch { /* private mode */ } };
 type Panel = 'note' | 'google' | 'event' | 'task' | 'daycare' | 'display' | null;
 const FALLBACK_COLOUR = '#7986cb';
 const VIEW_TITLES: Record<string, string> = { calendar: 'Calendar', tasks: 'To-dos', daycare: 'Family Updates', classroom: 'School' };
@@ -70,6 +76,19 @@ export default function ConnectedHub() {
     const canWrite = !readOnly && Boolean(user?.is_owner || user?.role === 'parent');
     // Labels on custom shades follow the nearest Google colour (v2.0.2).
     const legend = useColourLabels(preferences.legend, canWrite);
+    const [summary, setSummary] = useState<DaySummary | null>(null);
+    const [summaryBusy, setSummaryBusy] = useState(false);
+    const wantsSummary = preferences.showDaySummary && isModuleEnabled('ai');
+    const loadSummary = async (refresh = false) => {
+        if (!wantsSummary) return;
+        if (refresh) setSummaryBusy(true);
+        try {
+            const response = refresh ? await api.post<{ data: DaySummary }>('/api/familyhub/day-summary/refresh', {}) : await api.get<{ data: DaySummary }>('/api/familyhub/day-summary');
+            setSummary(response.data); rememberSummary(response.data.available);
+        } catch { setSummary((current) => current ?? { available: false, reason: 'error' }); }
+        finally { setSummaryBusy(false); }
+    };
+    useEffect(() => { if (wantsSummary) void loadSummary(); else setSummary(null); }, [wantsSummary, data?.events, data?.tasks]); // eslint-disable-line react-hooks/exhaustive-deps
     const showApprovals = canWrite && (isModuleEnabled('chores') || isModuleEnabled('rewards'));
     const load = async () => {
         try { const response = await api.get<{ data: Snapshot }>('/api/familyhub'); setData(response.data); setNow(new Date()); }
@@ -149,12 +168,24 @@ export default function ConnectedHub() {
     const nextTone = (event?: Event) => { const colour = hue(event); const on = onColour(colour); return { '--m': colour, '--on': on, '--on-soft': on } as CSSProperties; };
     const row = (event: Event, isTomorrow = false) => { const { time, period } = timeOf(event); const who = legendFor(event.color); return <button type="button" key={event.id} className={`bb-row${isTomorrow ? ' is-tomorrow' : ''}`} style={{ '--m': hue(event) } as CSSProperties} onClick={() => setEventDetail(event)}><b>{isTomorrow ? new Date(`${keyOf(event)}T12:00:00Z`).toLocaleDateString([], { timeZone: 'UTC', weekday: 'short' }) : time}{!isTomorrow && period && <small>{period}</small>}</b><i aria-hidden="true" /><span>{event.title}<small>{[isTomorrow ? describeDay(keyOf(event), todayKey, tz) : '', isTomorrow ? (event.allDay ? 'all day' : `${time} ${period}`.trim()) : '', who, event.location].filter(Boolean).join(' · ')}</small></span></button>; };
 
+    const nextLine = (event: Event) => [legendFor(event.color), event.location].filter(Boolean).join(' · ') || 'Today';
+    const holdForSummary = wantsSummary && !summary && summarySeen();
+    const morning = data && wantsSummary && (summary?.available || holdForSummary) ? <div className={`bb-next is-morning${summary?.available ? '' : ' is-loading'}`} aria-busy={!summary?.available}>
+        <p className="bb-morning-eyebrow"><Sparkles size={15} strokeWidth={2.4} aria-hidden="true" />Today, in brief</p>
+        {summary?.available ? <><h3>{summary.headline}</h3><p className="bb-morning-body">{summary.body}</p></> : <><span className="bb-skel is-head" /><span className="bb-skel" /><span className="bb-skel is-short" /></>}
+        {next ? <button type="button" className="bb-morning-next" style={{ '--m': hue(next) } as CSSProperties} onClick={() => setEventDetail(next)}>
+            <span className="t">{timeOf(next).time}{timeOf(next).period && <small>{timeOf(next).period}</small>}</span>
+            <span className="bb-morning-what"><b>{next.title}</b><small>{nextLine(next)}</small></span>
+            <span className="bb-when">{whenLabel(next)}</span>
+        </button> : <p className="bb-morning-next is-empty">{upcoming ? `Nothing else today. Next: ${upcoming.title}, ${describeDay(keyOf(upcoming), todayKey, tz).toLowerCase()}.` : 'Nothing else on the calendar today.'}</p>}
+    </div> : null;
     const todaySection = data && <div className="bb-today">
-        {next ? <button type="button" className="bb-next" style={nextTone(next)} onClick={() => setEventDetail(next)}>
+        {morning ?? (next ? <button type="button" className="bb-next" style={nextTone(next)} onClick={() => setEventDetail(next)}>
             <span className="t">{timeOf(next).time}{timeOf(next).period && <small>{timeOf(next).period}</small>}</span><span className="bb-when">{whenLabel(next)}</span>
             <h3>{next.title}</h3>
             <p>{[legendFor(next.color), next.location].filter(Boolean).join(' · ') || 'Today'}</p>
-        </button> : <div className="bb-next is-empty"><h3>{data.sources.calendar?.state === 'fresh' ? 'Nothing else today' : data.connected ? 'Calendar not set up' : 'Calendar not connected'}</h3><p>{upcoming ? `Next: ${upcoming.title}, ${describeDay(keyOf(upcoming), todayKey, tz).toLowerCase()}` : data.sources.calendar?.state === 'fresh' ? 'A little breathing room.' : data.sources.calendar?.message ?? 'Connect Google to see your calendar.'}</p></div>}
+        </button> : <div className="bb-next is-empty"><h3>{data.sources.calendar?.state === 'fresh' ? 'Nothing else today' : data.connected ? 'Calendar not set up' : 'Calendar not connected'}</h3><p>{upcoming ? `Next: ${upcoming.title}, ${describeDay(keyOf(upcoming), todayKey, tz).toLowerCase()}` : data.sources.calendar?.state === 'fresh' ? 'A little breathing room.' : data.sources.calendar?.message ?? 'Connect Google to see your calendar.'}</p></div>)}
+        {morning && summary?.available && <p className="bb-morning-foot"><span>Summary by {summary.model} · {new Date(summary.generatedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', timeZone: tz })}</span>{!readOnly && <button type="button" className="fh-text-button" disabled={summaryBusy} onClick={() => void loadSummary(true)}><RefreshCw size={14} aria-hidden="true" />{summaryBusy ? 'Writing…' : 'Refresh'}</button>}</p>}
         {canWrite && <div className="bb-quick"><button className="bb-btn is-primary" disabled={!data.connected} onClick={() => openTask()}><Plus size={16} strokeWidth={2.8} />To-do</button><button className="bb-btn" onClick={openNote}><Plus size={16} strokeWidth={2.8} />Note</button><button className="bb-btn" disabled={!data.connected} onClick={() => openEvent()}><Plus size={16} strokeWidth={2.8} />Event</button></div>}
         {next && (later.length > 0 || tomorrow) && <>
             <div className="bb-strip" aria-hidden="true"><i className="bb-dot is-next" style={{ '--m': hue(next) } as CSSProperties} />{later.slice(0, 4).map((event) => <i key={event.id} className="bb-dot is-later" style={{ '--m': hue(event) } as CSSProperties} />)}{tomorrow && <i className="bb-dot is-tomorrow" />}</div>
@@ -249,6 +280,6 @@ export default function ConnectedHub() {
     : panel === 'daycare' ? <FamilyUpdatesView updates={data?.daycare ?? []} />
     : panel === 'display' ? <div className="fh-form"><p>This replaces the editing session in this browser with server-enforced read-only access. Sign in again to return to editing.</p><button className="fh-button fh-primary" disabled={busy} onClick={() => void action(async () => { const response = await api.post<{ data: { token: string } }>('/api/familyhub/display-session', {}); api.setToken(response.data.token); localStorage.removeItem('user'); window.location.reload(); })}>Start protected display</button></div>
     : panel === 'google' ? <div className="fh-form">{!status ? <p>Loading Google configuration…</p> : <><div className="fh-callout"><p>{status.connected ? `Connected to ${status.email}.` : status.configured ? 'The server is ready. Authorize the dedicated family Google account to continue.' : 'Google Cloud setup is needed. Configure the server using docs/familyhub/GOOGLE_SETUP.md, then restart it.'}</p></div>{!status.configured && status.missingConfiguration?.length ? <p className="fh-fine-print">Missing server settings: {status.missingConfiguration.join(', ')}</p> : null}<label className="fh-toggle-row"><span>Also authorize daycare email reading</span><input type="checkbox" checked={includeGmail || status.gmail} disabled={status.gmail} onChange={(e) => setIncludeGmail(e.target.checked)} /></label><p className="fh-fine-print">Gmail permission allows mailbox reading; Family Hub processes only messages from no-reply@himama.com. Email contents are not sent to AI.</p><button className="fh-button fh-primary" disabled={busy || !status.configured} onClick={() => void connect()}>{status.connected ? 'Reconnect / grant Gmail access' : 'Connect family Google account'}<ArrowRight size={15} /></button>{sources && <form className="fh-form" onSubmit={(e) => { e.preventDefault(); void action(() => api.put('/api/familyhub/google/sources', { calendarId, taskListId, timeZone })); }}><label>Shared Google Calendar<select required value={calendarId} onChange={(e) => setCalendarId(e.target.value)}><option value="">Choose an editable calendar</option>{sources.calendars.filter((calendar) => ['owner', 'writer'].includes(calendar.accessRole)).map((calendar) => <option key={calendar.id} value={calendar.id}>{calendar.summary}</option>)}</select></label><label>Google Tasks list<select required value={taskListId} onChange={(e) => setTaskListId(e.target.value)}><option value="">Choose a task list</option>{sources.taskLists.map((list) => <option key={list.id} value={list.id}>{list.title}</option>)}</select></label><label>Household timezone<input required value={timeZone} onChange={(e) => setTimeZone(e.target.value)} /></label><button className="fh-button fh-primary" disabled={busy}>Use these sources<Check size={16} /></button></form>}{status.connected && <button className="fh-button fh-secondary" disabled={busy} onClick={() => void action(async () => { await api.delete('/api/familyhub/google/connection'); setStatus({ ...status, connected: false }); setSources(null); }, false)}>Disconnect Google and clear cached data</button>}</>}</div> : null}</HubDialog>
-        {arranging && <ArrangeCards order={preferences.order} saving={preferences.saving} error={preferences.error} onSave={async (order) => { if (await preferences.save('order', order)) setArranging(false); }} onClose={() => setArranging(false)} />}
+        {arranging && <ArrangeCards order={preferences.order} saving={preferences.saving} error={preferences.error} onSave={async (order) => { if (await preferences.save('order', order)) setArranging(false); }} onClose={() => setArranging(false)} daySummary={isModuleEnabled('ai') ? { value: preferences.showDaySummary, onChange: (value) => void preferences.saveDaySummary(value) } : undefined} />}
     </AppShell>;
 }

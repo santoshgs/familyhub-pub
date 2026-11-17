@@ -147,8 +147,18 @@ children). Plan agreed November 16 in three steps, all released and on the Pi:
 - **v2.4** Accept and dismiss as connected-app contracts, with optional changes. ZeroG
   (v0.3.5–v0.3.6) sends a nightly Telegram digest with Add/Skip buttons and `/digest`.
 
-Open: a browser review of the settings screen and the suggestions list; the scheduled digest's
-first run (07:00) not yet confirmed; edits from Telegram are off by default and untried.
+Open: a browser review of the settings screen and the suggestions list; edits from Telegram are off by
+default and untried. The scheduled 07:00 digest was confirmed by the owner on November 17.
+
+### Day summary — v2.5, November 17, 2026
+
+A short summary of the day by the household's AI, in three places: the Board Book home (the Morning
+page, optional per member), the frame's **Your day** card (can replace the calendar card), and ZeroG's
+morning Telegram message (v0.3.7, time set with `/morning`). Released and working by the owner's report.
+
+Next for this area: contracts for changing, completing and deleting Google events and to-dos, so ZeroG
+can "move the dentist" or "tick off milk" (ZeroG's side, path parameters, is ready); editing a
+connected app's grants in place, instead of removing and reconnecting it.
 
 ## Phase 5 — Raspberry Pi production
 

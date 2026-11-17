@@ -23,7 +23,7 @@ The thesis: the day drawn in flat primary shapes that a tired parent can read in
 | Area | Classic | Board Book |
 | --- | --- | --- |
 | Navigation | Top tab row; overflow in **More** | Cobalt sidebar on a wide screen; on a phone, a cobalt header and a bottom tab bar (Home, Calendar, then two shown modules, **More** for the rest, the theme, the look and sign out) |
-| Home | Five cards in a grid | **Today** first: a large block for the next event (time, "in 25 min", title, who and where), a strip of dots for the rest of today (next is largest, tomorrow smallest), later rows, and **To-do / Note / Event** quick-add buttons. To-dos, chores to approve (parents), notes, daycare and school follow in each member's saved order |
+| Home | Five cards in a grid | **Today** first: with AI on and **Start my day with a summary** on (v2.5, per member, in Arrange your overview), the **Morning page**: the day summary on the yellow block and the next appointment as an ink strip with "in 25 min"; otherwise a large block for the next event (time, "in 25 min", title, who and where), a strip of dots for the rest of today (next is largest, tomorrow smallest), later rows, and **To-do / Note / Event** quick-add buttons. To-dos, chores to approve (parents), notes, daycare and school follow in each member's saved order |
 | Event colours | Google's colours | Google's colours mapped to the nearest of four hues: cobalt, tomato, sunflower and grass (greys stay grey). Colour labels still use the original Google colour |
 | Calendar colour labels | Always listed, with unlabelled colours shown as hex codes | Only named colours are listed, plus one prompt to name the rest, so Home can say who each event is for |
 | To-dos | Completed items in a collapsed list | Items completed **today** stay in the list, struck through; older ones collapse under **Done earlier** (the server now passes Google's completion time) |
@@ -32,7 +32,9 @@ The thesis: the day drawn in flat primary shapes that a tired parent can read in
 | Settings | One page with collapsible sections | Five groups: **You**, **Household**, **Display**, **Data** and **Advanced** (server administrator only). On a phone, a list you tap into; on a wide screen, a side list whose open tab joins its panel. Sections show open, as labelled rows. Links such as `/settings#display` still work |
 | Type and colour | Instrument Sans and Fraunces, sage | Lexend throughout (self-hosted), white ground, ink text, cobalt shell, tabular figures. Light, dark and system themes |
 
-Arrange Home, Google connection and Use as display are at the bottom of Home in Board Book (Classic keeps them in the header). Menu order (v1.5.2) applies to both looks; Classic's Settings sections are uniform cards (v1.5.3).
+Arrange Home, Google connection and Use as display are at the bottom of Home in Board Book (Classic keeps them in the header).
+
+**Fixed in v2.5:** on the AI assistant page, the **Ask the assistant** button no longer squeezes its label into a circle one letter per line. Only the icon-only assistant button in the header and Home tools is drawn as a circle. Menu order (v1.5.2) applies to both looks; Classic's Settings sections are uniform cards (v1.5.3).
 
 ## How it was designed
 

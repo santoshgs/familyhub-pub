@@ -57,9 +57,10 @@ body.bb-on .fh-scope .bb-main > .fh-page-footer > span:first-child { font-family
 
 /* One type family throughout: OpenFamily sets headings in Fraunces. */
 body.bb-on .fh-scope :is(h1, h2, h3, h4, h5, h6), body.bb-on .fh-dialog :is(h1, h2, h3) { font-family: 'Lexend', -apple-system, BlinkMacSystemFont, sans-serif; }
-/* The AI assistant button, re-voiced as a shell tool */
-body.bb-on .fh-scope .btn-nexus[aria-label='AI assistant'] { border-radius: 999px; border: 2px solid currentColor; background: transparent; width: 44px; height: 44px; }
-body.bb-on .fh-scope .btn-nexus[aria-label='AI assistant'] svg { color: currentColor; }
+/* The icon-only AI assistant button, re-voiced as a shell tool. Scoped to the
+   header and hello tools so a labelled assistant button keeps its pill shape. */
+body.bb-on .fh-scope :is(.bb-head-tools, .bb-hello-acts) .btn-nexus[aria-label='AI assistant'] { border-radius: 999px; border: 2px solid currentColor; background: transparent; width: 44px; height: 44px; padding: 0; }
+body.bb-on .fh-scope :is(.bb-head-tools, .bb-hello-acts) .btn-nexus[aria-label='AI assistant'] svg { color: currentColor; }
 .bb-head-tools .btn-nexus[aria-label='AI assistant'] { color: #fff; }
 .bb-hello-acts .btn-nexus[aria-label='AI assistant'] { color: var(--bb-ink); }
 
@@ -182,6 +183,30 @@ html.dark .bb-sec > header a, html.dark .bb-sec > header button { color: #8FB0FF
 .bb-when { align-self: start; background: #1B1B1F; color: var(--bb-sun); font-weight: 700; font-size: 14px; padding: 8px 12px; border-radius: var(--bb-pill); white-space: nowrap; }
 .bb-next.is-empty { --m: var(--bb-wash); --on: var(--bb-ink); --on-soft: var(--bb-soft); }
 .bb-next.is-empty h3 { margin: 0; }
+/* Morning page (v2.5): the AI's few lines about today, with the next appointment as an ink strip. */
+.bb-next.is-morning { display: flex; flex-direction: column; gap: 0; padding: 18px 20px 0; overflow: hidden; }
+.bb-morning-eyebrow { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: var(--on-soft); }
+.bb-next.is-morning h3 { margin: 8px 0 0; font-size: 24px; letter-spacing: -.015em; line-height: 1.2; text-wrap: balance; }
+.bb-next.is-morning .bb-morning-body { margin: 8px 0 18px; font-size: 16px; line-height: 1.5; font-weight: 500; color: var(--on-soft); max-width: 60ch; }
+.bb-morning-next { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; margin: 0 -20px; padding: 14px 20px; width: calc(100% + 40px); background: #1B1B1F; color: #fff; border: 0; text-align: left; }
+.bb-morning-next .t { font-size: 32px; font-weight: 800; line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.bb-morning-next .t small { font-size: 14px; font-weight: 700; margin-left: 2px; letter-spacing: 0; }
+.bb-morning-what { min-width: 0; display: flex; flex-direction: column; gap: 2px; padding-left: 12px; border-left: 4px solid var(--m, var(--bb-sun)); }
+.bb-morning-what b { font-size: 16px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bb-morning-what small { font-size: 13px; color: #C9CAD2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bb-morning-next .bb-when { align-self: center; background: var(--bb-sun); color: #1B1B1F; }
+p.bb-morning-next.is-empty { display: block; font-size: 15px; font-weight: 600; color: #fff; }
+.bb-morning-next:focus-visible { outline: 3px solid var(--bb-sun); outline-offset: -3px; }
+.bb-morning-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 16px; margin-top: 6px; font-size: 13px; color: var(--bb-soft); }
+.bb-morning-foot .fh-text-button { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; }
+.bb-skel { display: block; height: 14px; width: 92%; margin: 10px 0 0; border-radius: 999px; background: rgba(27, 27, 31, .14); animation: fh-pulse 1.1s ease-in-out infinite alternate; }
+.bb-skel.is-head { height: 22px; width: 64%; margin-top: 12px; }
+.bb-skel.is-short { width: 58%; margin-bottom: 20px; }
+@media (prefers-reduced-motion: reduce) { .bb-skel { animation: none; } }
+.fh-dialog .fh-check-row, .fh-check-row { display: flex; align-items: flex-start; gap: 12px; padding: 4px 0 16px; border-bottom: 1.5px solid var(--bb-line, #E4E5EA); cursor: pointer; }
+.fh-check-row input { width: 22px; height: 22px; margin-top: 2px; flex: none; accent-color: var(--bb-grass, #2E9E4F); }
+.fh-check-row span { display: flex; flex-direction: column; gap: 2px; font-weight: 600; }
+.fh-check-row small { font-size: 13px; font-weight: 400; color: var(--bb-soft, #5A5A66); }
 .bb-strip { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; align-items: center; justify-items: center; height: 44px; margin-top: 24px; }
 .bb-strip::before { content: ''; position: absolute; left: 6%; right: 6%; top: 50%; height: 3px; border-radius: 3px; background: var(--bb-line); }
 .bb-dot { position: relative; border-radius: 50%; background: var(--m, var(--bb-line)); }
@@ -253,6 +278,11 @@ html.dark .bb-sec > header a, html.dark .bb-sec > header button { color: #8FB0FF
   .bb-next { padding: 24px 28px 26px; }
   .bb-next .t { font-size: 84px; }
   .bb-next h3 { font-size: 28px; }
+  .bb-next.is-morning { padding: 24px 28px 0; }
+  .bb-next.is-morning h3 { font-size: 32px; }
+  .bb-next.is-morning .bb-morning-body { font-size: 17px; }
+  .bb-morning-next { margin: 0 -28px; padding: 16px 28px; width: calc(100% + 56px); }
+  .bb-morning-next .t { font-size: 40px; }
 }
 
 /* ---------- Settings ---------- */

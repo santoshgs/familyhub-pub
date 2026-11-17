@@ -4,7 +4,7 @@
  * three or fewer share one row. Each row splits the 12 grid columns by the
  * cards' natural widths (Formula 1 is wider, weather narrower).
  */
-const WEIGHT: Record<string, number> = { calendar: 4, weather: 3, f1: 5 };
+const WEIGHT: Record<string, number> = { calendar: 4, summary: 4, weather: 3, f1: 5 };
 const weight = (key: string) => WEIGHT[key] ?? 4;
 
 export function gridPlaces(cards: string[]) {

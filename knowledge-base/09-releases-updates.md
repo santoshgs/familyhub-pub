@@ -94,4 +94,13 @@ Real upgrades across many releases (v0.1.0 → v1.2.0) have run on the Pi, each 
 | v1.5.4 | Nov 7, 2026 | Same code as v1.5.3 (released before the screensaver reached `familyhub/prototype`) |
 | v1.5.5 | Nov 7, 2026 | Frame screensaver (photos after idle) and night mode "Turn off" with double-tap wake |
 | v1.6.0 | Nov 8, 2026 | Nightly encrypted off-site backup to Cloudflare R2 with restore drill; budget groups, settlements and sharing in the data export; shopping on several Google Tasks lists (collapsible, editable, store mode) |
-| v1.6.1 | not released | Back up now in Settings → Advanced; committed `install-admin.sh`; backup status kept root-only |
+| v1.6.1 | Nov 8, 2026 | Back up now in Settings → Advanced; committed `install-admin.sh`; backup status kept root-only |
+| v1.6.2 | Nov 13, 2026 | `GET /api/schema`: an API description with payload contracts for outside tools |
+| v2.0.0 | Nov 13, 2026 | Connected apps (Settings → Agents): scoped, revocable `fha_` keys for tools such as ZeroG |
+| v2.0.1 | Nov 14, 2026 | Calendar event defaults (length, notifications), shopping order |
+| v2.0.2 | Nov 14, 2026 | Shopping list names on phones, colour labels in the event form |
+| v2.1.0 | Nov 14, 2026 | The AI assistant knows the household and can change things (Google lists, colours, repeats, edits and deletes) |
+| v2.2.0 | Nov 16, 2026 | Family Updates from Gmail labels |
+| v2.3.0 | Nov 16, 2026 | AI summaries and suggested events and to-dos in Family Updates |
+| v2.4.0 | Nov 17, 2026 | Family Updates suggestion contracts for connected apps (ZeroG's Telegram digest) |
+| v2.5.0 | Nov 17, 2026 | Day summary by the AI: Board Book Morning page, the frame's Your day card, ZeroG's morning message; AI page button fix |

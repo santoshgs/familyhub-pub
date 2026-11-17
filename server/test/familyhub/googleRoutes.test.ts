@@ -71,7 +71,7 @@ it('saves card order per member while sharing validated colour labels within one
     const order = ['notes', 'calendar', 'tasks', 'daycare', 'classroom'];
     expect((await request(app).put('/api/familyhub/preferences/order').set('Authorization', `Bearer ${owner.token}`).send({ cardOrder: order })).status).toBe(200);
     expect((await request(app).put('/api/familyhub/preferences/legend').set('Authorization', `Bearer ${owner.token}`).send({ legend: { '#039BE5': 'Blue: Fictional Alex' } })).status).toBe(200);
-    expect((await get('/api/familyhub/preferences')).body.data).toEqual({ cardOrder: order, hiddenModules: [], legend: { '#039be5': 'Blue: Fictional Alex' } });
+    expect((await get('/api/familyhub/preferences')).body.data).toEqual({ cardOrder: order, hiddenModules: [], showDaySummary: true, legend: { '#039be5': 'Blue: Fictional Alex' } });
     const invitation = await post('/api/invites', { role: 'enfant' });
     const child = (await request(app).post('/api/auth/register').send({ email: 'appearance-child@example.test', name: 'Fictional child', password: 'fictional-password-1', inviteToken: invitation.body.data.token })).body.data.token;
     expect((await get('/api/familyhub/preferences', child)).body.data.cardOrder).toEqual(['calendar', 'tasks', 'notes', 'daycare', 'classroom']);
