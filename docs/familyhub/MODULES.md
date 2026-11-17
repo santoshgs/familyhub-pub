@@ -24,7 +24,7 @@ household-wide, stored in `familyhub_module_preferences`, and defined once in
 | --- | --- | --- |
 | To-dos | Google Tasks | on |
 | Chores | Local chores (the `tasks` table), shown on the display when due | on |
-| Daycare, School | Gmail-based updates | on |
+| Family Updates (key `daycare`), School | Gmail-based updates: Lillio and Gmail labels chosen in Settings → Household (v2.2) | on |
 | Budget | Classic, analytics/limits and Kakeibo views; shared expenses, groups and settle up (v1.5) | on |
 | Pocket money | Points, parent approvals, balances and goals from reward chores | on |
 | Notes | Notes from home, also on the display. Kept in Family Hub: Google Keep's API is Workspace-only | on |

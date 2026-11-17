@@ -49,6 +49,8 @@ export const AGENT_DENIED_PREFIXES: readonly string[] = [
     '/api/familyhub/display', '/api/familyhub/display-session', '/api/familyhub/ambient/display-session',
     '/api/familyhub/google/status', '/api/familyhub/google/sources', '/api/familyhub/google/connect',
     '/api/familyhub/google/connection', '/api/familyhub/google/callback',
+    // Which Gmail labels Family Updates reads: a household setting, and it lists the account's labels.
+    '/api/familyhub/google/family-updates',
     // Looks a place name up at an outside weather service for every call.
     '/api/familyhub/ambient/locations',
 ];

@@ -316,3 +316,30 @@ it('reports a lapsed Google grant as 409 GOOGLE_RECONNECT, never 401, so the app
     }
     expect((await get('/api/auth/me')).status).toBe(200);
 });
+it('lets parents choose Family Updates sources from Gmail labels, and refreshes with the new choice', async () => {
+    await connect();
+    const lists: URL[] = [];
+    send.mockImplementation(async (url: string | URL | Request, options?: RequestInit) => {
+        const path = String(url);
+        if (path.includes('gmail.googleapis.com/gmail/v1/users/me/labels')) return Response.json({ labels: [{ id: 'INBOX', name: 'INBOX', type: 'system' }, { id: 'Label_7', name: 'Kids/School', type: 'user' }] });
+        if (path.includes('gmail.googleapis.com/gmail/v1/users/me/messages?')) { lists.push(new URL(path)); return Response.json({ messages: [] }); }
+        return transport(url, options);
+    });
+    const loaded = (await get('/api/familyhub/google/family-updates')).body.data;
+    expect(loaded).toMatchObject({ gmail: true, labels: [{ id: 'Label_7', name: 'Kids/School' }], settings: { lillio: { enabled: true, display: true }, labels: [] } });
+    const put = (body: unknown, token = owner.token) => request(app).put('/api/familyhub/google/family-updates').set('Authorization', `Bearer ${token}`).send(body);
+    expect((await put({ lillio: { enabled: true, display: true }, labels: [{ labelId: '../../x', name: 'School', display: true, verifiedOnly: true }] })).status).toBe(400);
+    await syncGoogle(owner.user.id); // caches the Lillio-only view
+    const saved = await put({ lillio: { enabled: false, display: true }, labels: [{ labelId: 'Label_7', name: 'School', display: false, verifiedOnly: true }] });
+    expect(saved.status).toBe(200);
+    expect((await query(`SELECT count(*)::int AS n FROM familyhub_google_snapshots WHERE family_id=$1 AND kind='daycare'`, [owner.user.id])).rows[0].n).toBe(0);
+    lists.length = 0;
+    expect((await syncGoogle(owner.user.id)).sources.daycare.state).toBe('fresh');
+    expect(lists.map((url) => url.searchParams.get('labelIds'))).toEqual(['Label_7']);
+    await put({ lillio: { enabled: false, display: true }, labels: [] });
+    expect((await syncGoogle(owner.user.id)).sources.daycare).toMatchObject({ state: 'unconfigured', message: expect.stringContaining('Settings') });
+    const invitation = await post('/api/invites', { role: 'enfant' });
+    const child = (await request(app).post('/api/auth/register').send({ email: 'fictional-family-child@example.test', name: 'Fictional child', password: 'fictional-password-1', inviteToken: invitation.body.data.token })).body.data.token;
+    expect((await get('/api/familyhub/google/family-updates', child)).status).toBe(403);
+    expect((await put({ lillio: { enabled: true, display: true }, labels: [] }, child)).status).toBe(403);
+});

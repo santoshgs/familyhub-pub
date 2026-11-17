@@ -401,13 +401,18 @@ export async function loadAmbientSnapshot(familyId: string) {
         const task = item as Record<string, unknown>;
         return { id: asString(task.id, 200), title: asString(task.title, 200), completed: false, dueDate: asString(task.dueDate, 40) || null };
     });
-    const notifications = (Array.isArray(google.daycare) ? google.daycare : []).slice(0, 5).map((item) => {
+    // Family Updates (v2.2): a source the household kept off the display never reaches the frame.
+    const notifications = (Array.isArray(google.daycare) ? google.daycare : []).filter((item) => (item as Record<string, unknown>)?.display !== false).slice(0, 5).map((item) => {
         const update = item as Record<string, unknown>;
-        return { id: asString(update.id, 160), title: asString(update.title, 120) || 'Daycare update',
+        const source = update.source && typeof update.source === 'object' ? asString((update.source as Record<string, unknown>).name, 40) : '';
+        return { id: asString(update.id, 160), title: asString(update.title, 120) || 'Family update', source,
             summary: asString(update.text, 500).split(/\r?\n/).map((line) => line.trim()).find(Boolean)?.slice(0, 110) || '',
-            details: asString(update.text, 1200).split(/\r?\n/).map((line) => line.trim()).filter(Boolean).join('\n').slice(0, 900),
+            details: asString(update.text, 1200).split(/\r?\n/).map((line) => line.trim()).join('\n').replace(/\n{3,}/g, '\n\n').trim().slice(0, 900),
             receivedAt: asString(update.receivedAt, 40), kind: asString(update.kind, 30), hasDetails: Boolean(update.hasDetails) };
     });
+    // v2.3: an AI summary, when the household's AI read the email, reads better than its first line.
+    const summaries = await import('./google/familyUpdatesAi').then(({ familyUpdateSummaries }) => familyUpdateSummaries(familyId, notifications.map((notice) => notice.id))).catch(() => ({} as Record<string, string>));
+    for (const notice of notifications) if (summaries[notice.id]) notice.summary = asString(summaries[notice.id], 160);
     const sourceTimes = Object.values(google.sources ?? {}).flatMap((source: any) => source.lastSuccess ? [source.lastSuccess] : []);
     if (weather?.fetchedAt) sourceTimes.push(weather.fetchedAt);
     return {

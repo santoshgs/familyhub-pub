@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ShoppingListsSettings } from '../familyhub/shopping/ShoppingListsSettings';
+import { FamilyUpdatesSettings } from '../familyhub/FamilyUpdatesSettings';
 import { CalendarEventDefaults } from '../familyhub/CalendarEventDefaults';
 import { useTranslation } from 'react-i18next';
 import { api } from '../lib/api';
@@ -288,6 +289,9 @@ export const AiAssistantCard: React.FC<{ isParent: boolean }> = ({ isParent }) =
 
                                 <p className="rounded-input bg-surface-2 px-3 py-2 text-micro text-muted-foreground">
                                     {t('ai:settings.privacy')}
+                                </p>
+                                <p className="rounded-input bg-surface-2 px-3 py-2 text-micro text-muted-foreground">
+                                    {t('ai:settings.providerPrivacy')}
                                 </p>
 
                                 {saveError && (
@@ -1030,6 +1034,7 @@ const Settings: React.FC<{ only?: string[] }> = ({ only }) => {
             {/* Optional modules */}
             {show('calendar-events') && isParent && <CalendarEventDefaults />}
             {show('shopping-lists') && isParent && <ShoppingListsSettings />}
+            {show('family-updates') && isParent && <FamilyUpdatesSettings />}
             {show('modules') && <ModulesCard isParent={isParent} />}
 
             {/* Custom categories */}

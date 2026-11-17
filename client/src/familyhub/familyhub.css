@@ -743,3 +743,25 @@ body.bb-on .fh-scope .ambient-night-mode label { flex-direction:row; align-items
 .fh-agent-form details { margin-top:6px; } .fh-agent-form summary { min-height:44px; display:flex; align-items:center; font-size:12px; color:var(--fh-muted); cursor:pointer; }
 .fh-agent-form > .fh-update-confirm { justify-content:flex-start; }
 @media (max-width:640px) { .fh-agent-fields { grid-template-columns:1fr; } }
+
+/* Family Updates (v2.2): email text as paragraphs and short lists. */
+.fh-mail-text { max-width: 68ch; }
+.fh-mail-text p, .fh-mail-text ul { margin: 0 0 10px; }
+.fh-mail-text ul { padding-left: 1.2em; list-style: disc; }
+.fh-mail-text li { margin: 2px 0; }
+.fh-mail-text :last-child { margin-bottom: 0; }
+.fh-timeline .fh-mail-text li { color: var(--fh-muted); font-size: 12px; line-height: 1.8; }
+
+/* Family Updates AI (v2.3): summaries and suggestions. */
+.fh-mail-summary { margin: 4px 0 8px; padding: 8px 10px; border-radius: 10px; background: var(--fh-sage-soft, rgba(120, 150, 110, .12)); font-size: 12px; line-height: 1.6; }
+.fh-mail-summary b { display: block; font-size: 10px; letter-spacing: .06em; text-transform: uppercase; opacity: .75; }
+.fh-mail-suggestions { margin: 0 0 20px; }
+.fh-mail-suggestions h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; }
+.fh-mail-suggestions h3 small { min-width: 22px; padding: 1px 7px; border-radius: 999px; background: var(--fh-line); font-size: 11px; text-align: center; }
+.fh-mail-suggestions ul { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 10px; }
+.fh-mail-suggestions li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; padding: 12px; border: 1px solid var(--fh-line); border-radius: 12px; }
+.fh-mail-suggestions li > div:first-child { display: grid; gap: 3px; min-width: 0; flex: 1 1 260px; }
+.fh-mail-suggestions small, .fh-mail-suggestions q { color: var(--fh-muted); font-size: 11px; }
+.fh-mail-suggestions q { font-style: italic; }
+.fh-mail-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.fh-mail-actions .fh-button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; }

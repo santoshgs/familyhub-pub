@@ -79,6 +79,7 @@
     "model": "Model",
     "enabled": "Assistant enabled",
     "privacy": "Privacy: the API key is encrypted and stored only on YOUR server. With Ollama nothing leaves the house — notes are processed locally.",
+    "providerPrivacy": "Where your text goes: with OpenAI, Anthropic or Google Gemini, what the assistant reads (your notes and, if you switch it on, Family Updates emails) is sent to that company. Their paid APIs say they do not use it to train models; Google's free Gemini tier does use it to improve its products. Providers may keep requests for a while to check for abuse. For private family information, use a paid API key or a model you host yourself (Ollama), or leave AI off.",
     "parentOnly": "Only parents can change these settings.",
     "save": "Save",
     "saving": "Saving…",

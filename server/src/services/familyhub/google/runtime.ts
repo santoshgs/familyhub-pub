@@ -2,6 +2,8 @@ import { query, withTransaction, type QueryFn } from '../../../db';
 import cron from 'node-cron';
 import { GoogleAdapters, GoogleApiError } from './adapters';
 import { googleStatus, getGoogleAccessToken } from './connection';
+import type { DaycareUpdate } from './daycare';
+import { hasFamilySources, readFamilySettings, recordFamilyStats, type FamilyUpdateSettings } from './familyUpdates';
 
 export interface Selection { calendarId: string; taskListId: string; timeZone: string }
 export type SourceState = { state: 'fresh' | 'stale' | 'error' | 'unconfigured' | 'disconnected'; lastSuccess?: string; message?: string };
@@ -52,17 +54,29 @@ async function readSources(familyId: string, attempt = 0): Promise<GoogleSnapsho
         return result;
     }
     const api = googleApi(familyId);
+    const updateSources: FamilyUpdateSettings | null = status.gmail ? await readFamilySettings(familyId) : null;
+    let previousUpdates: unknown[] = [];
     const loaders: Record<string, () => Promise<unknown[]>> = {
         calendar: () => { const now = new Date(); return api.calendar(config!.calendarId, now.toISOString(), new Date(now.getTime() + 7 * 86400000).toISOString(), config!.timeZone); },
-        tasks: () => api.tasks(config!.taskListId), daycare: () => api.daycare(),
+        tasks: () => api.tasks(config!.taskListId),
+        daycare: async () => {
+            const known = new Map((previousUpdates as DaycareUpdate[]).flatMap((item) => item && typeof item.id === 'string' ? [[item.id, item] as const] : []));
+            const { updates, stats } = await api.familyUpdates(updateSources!, new Date(), known);
+            recordFamilyStats(familyId, stats);
+            return updates;
+        },
     };
     await Promise.all(Object.keys(loaders).map(async (kind) => {
         if ((kind !== 'daycare' && !config) || (kind === 'daycare' && !status.gmail)) {
-            sources[kind] = { state: 'unconfigured', message: kind === 'daycare' ? 'Authorize Gmail to read daycare notifications.' : 'Choose your shared calendar and task list.' }; return;
+            sources[kind] = { state: 'unconfigured', message: kind === 'daycare' ? 'Authorize Gmail to read Family Updates.' : 'Choose your shared calendar and task list.' }; return;
+        }
+        if (kind === 'daycare' && updateSources && !hasFamilySources(updateSources)) {
+            sources[kind] = { state: 'unconfigured', message: 'Choose what Family Updates shows in Settings → Household.' }; return;
         }
         const cached = (await query('SELECT payload, fetched_at FROM familyhub_google_snapshots WHERE family_id=$1 AND kind=$2', [familyId, kind])).rows[0];
         const ttl = kind === 'daycare' ? 300000 : 60000;
         let items: unknown[] = cached?.payload ?? [];
+        if (kind === 'daycare') previousUpdates = Array.isArray(items) ? items : [];
         if (cached && Date.now() - new Date(cached.fetched_at).getTime() < ttl) sources[kind] = { state: 'fresh', lastSuccess: new Date(cached.fetched_at).toISOString() };
         else try {
             items = await loaders[kind]();
@@ -97,7 +111,11 @@ export function startFamilyHubSyncScheduler(): void {
     if (started) return; started = true;
     cron.schedule('* * * * *', () => {
         void query('SELECT family_id FROM familyhub_google_connections').then(async ({ rows }) => {
-            for (const row of rows) await syncGoogle(row.family_id).catch(() => undefined);
+            for (const row of rows) {
+                await syncGoogle(row.family_id).catch(() => undefined);
+                // Family Updates AI (v2.3): in the background, so a slow model never delays the next refresh.
+                void import('./familyUpdatesAi').then(({ processFamilyUpdatesAi }) => processFamilyUpdatesAi(row.family_id)).catch(() => undefined);
+            }
         }).catch(() => undefined);
     });
 }

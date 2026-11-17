@@ -12,7 +12,7 @@ export default function AiHub() {
         <div className="fh-greeting"><div><p className="fh-eyebrow">Powered by OpenFamily</p><h1>A little <em>help.</em></h1><p className="fh-greeting-copy">Choose your provider and model, then turn a request into reviewed tasks and calendar events.</p></div></div>
         <section className="fh-card fh-ai-launch"><h2>AI assistant</h2><p>{status?.configured && status.enabled ? `Configured: ${status.model} via ${status.provider}. Test the connection below before use.` : 'Set up and enable a model below to start using the assistant.'}</p>{!isModuleEnabled('ai') && <p>The AI module is hidden. Enable it in OpenFamily settings to use the assistant.</p>}<MagicInputButton label="Ask the assistant" /></section>
         <div className="fh-ai-settings"><AiAssistantCard isParent={parent} /></div>
-        <p className="fh-fine-print">Ollama can use a model you have installed, including Llama. Other providers use their configured model name and credentials. This reuses OpenFamily’s review-before-saving assistant; daycare emails are not sent to it.</p>
+        <p className="fh-fine-print">Ollama can use a model you have installed, including Llama. Other providers use their configured model name and credentials. This reuses OpenFamily’s review-before-saving assistant. Family Updates emails are sent to it only for the sources where you switch AI on (Settings → Household → Family Updates).</p>
         <a className="fh-text-button" href="/settings">All OpenFamily settings</a>
     </AppShell>;
 }

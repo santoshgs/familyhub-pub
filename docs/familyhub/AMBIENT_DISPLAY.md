@@ -53,7 +53,7 @@ and recovery are in [FRAME.md](FRAME.md).
 
 * **Detail panels.** Every card opens an in-place panel instead of navigating:
   Calendar shows the next 7 days grouped by day (Today, Tomorrow, then dates);
-  To-dos shows all open tasks with due dates; Daycare shows each recent notice
+  To-dos shows all open tasks with due dates; Family Updates (key `daycare`) shows each recent notice
   with its date and fuller text; Chores, Weather and Formula 1 keep their
   existing panels.
 * **Night dimming.** Parents choose *Dim on a schedule*, a start and end time in
@@ -137,7 +137,7 @@ is visible on its screen.
 | Calendar | Existing selected Google Calendar via the FamilyHub Google runtime: the next 7 days (up to 80 events), shown in the household time zone. The card lists the next four; the panel shows all, by day. |
 | To-dos | Existing selected Google Tasks list via the same cached runtime; up to 40 open tasks. Due dates are calendar dates. |
 | Chores | FamilyHub chores (OpenFamily `tasks` records) due today, with or without points; assigned family member names are included. Parents add and assign them under **Chores** in the navigation. Google to-dos and chores remain separate. |
-| Daycare | Existing Gmail/Lillio integration cache: the five most recent notices with title, one-line summary and up to 900 characters of text for the panel. |
+| Family Updates (`daycare`) | Gmail cache (Lillio and chosen labels, v2.2): the five most recent emails from sources allowed on the display, with title, source name, one-line summary (the AI summary when there is one, v2.3) and up to 900 characters of text for the panel. Sources marked off the display are never sent. |
 | Weather | Open-Meteo geocoding and forecast services. Selected city and coordinates are stored in the household's `familyhub_ambient_settings` row. Current temperature, condition, today's high/low and tomorrow's condition and high/low (shown under the current conditions) are cached in process for 20 minutes. No key is needed. The interface attributes Open-Meteo. |
 | News | Opt-in **News** card. Headlines from the RSS or Atom feeds chosen in Settings → Display → News (default BBC News World and Technology; at most 8 public `https` feeds, each checked on the Pi before it is added), merged newest first, at most 12, cached 15 minutes per feed. The card shows three under the feed names; the panel lists all with a one-line summary. Tapping a story opens a reader view: the server fetches that page once through the private-address guard, extracts the article with Mozilla Readability, and sends only plain-text paragraphs, headings, list items and quotes (cached six hours). Only links that arrived in a configured feed are fetched; if extraction fails the panel shows the feed summary. No images or scripts from the article reach the display. Check each feed's terms (BBC feeds are for personal, non-commercial use). |
 | Formula 1 | Jolpica F1 Ergast-compatible schedule API. The server checks current and following season, filters for a strictly future race, returns sessions in the API's UTC schedule, and the browser displays them in the household time zone. Successful schedules are cached in process for six hours. If a refresh fails, the last good schedule is kept (v1.5.3): retries after five minutes, a stalled read times out, a cached race that has started is passed over, and each failure is logged as `familyhub.f1_schedule_failed` with its reason. The interface attributes Jolpica F1. |

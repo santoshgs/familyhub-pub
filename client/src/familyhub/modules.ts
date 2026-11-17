@@ -5,7 +5,7 @@
 export const FAMILYHUB_MODULES = [
     { key: 'todos', label: 'To-dos', path: '/tasks', description: 'Google Tasks, shared with the family display.' },
     { key: 'chores', label: 'Chores', path: '/chores', description: 'Household chores kept in Family Hub. Due chores appear on the family display.' },
-    { key: 'daycare', label: 'Daycare', path: '/daycare', description: 'Daycare updates read from Gmail.' },
+    { key: 'daycare', label: 'Family Updates', path: '/daycare', description: 'Daycare, school and other family emails read from Gmail.' },
     { key: 'classroom', label: 'School', path: '/classroom', description: 'School updates read from Gmail.' },
     { key: 'budget', label: 'Budget', path: '/budget', description: 'Household spending, income and budgets.' },
     { key: 'rewards', label: 'Pocket money', path: '/rewards', description: 'Points, approvals, balances and savings goals, earned through reward chores.' },

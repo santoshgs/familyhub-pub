@@ -1,5 +1,6 @@
 /** Server-only Google adapters. Credentials are supplied by the household connection. */
 import { DAYCARE_SENDER, parseDaycareEmail, type DaycareUpdate, type GmailMessage } from './daycare';
+import { LILLIO_SOURCE_ID, parseLabelEmail, type FamilyUpdateSettings, type LabelSource, type SourceStats } from './familyUpdates';
 export class GoogleApiError extends Error {
     constructor(public readonly status: number, public readonly retryAfter: string | null = null) {
         super(status === 401 ? 'Google authorization needs reconnecting.' : status === 429 ? 'Google is rate limiting requests.' : 'Google request failed.');
@@ -196,36 +197,88 @@ export class GoogleAdapters {
             .sort((a, b) => Number(a.id) - Number(b.id)) };
     }
 
+    /** Lillio only, as before v2.2. */
     async daycare(now = new Date()): Promise<DaycareUpdate[]> {
+        return (await this.familyUpdates({ lillio: { enabled: true, name: 'Daycare', display: true, ai: false }, labels: [] }, now)).updates;
+    }
+
+    /** The account's own Gmail labels (not system ones), for choosing Family Updates sources. */
+    async gmailLabels(): Promise<{ id: string; name: string }[]> {
+        const response = await this.request<{ labels?: { id?: unknown; name?: unknown; type?: unknown }[] }>('gmail', 'users/me/labels', new URLSearchParams());
+        if (response.labels !== undefined && !Array.isArray(response.labels)) throw new Error('Invalid Gmail label response.');
+        return (response.labels ?? []).flatMap((label) => label.type === 'user' && typeof label.id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(label.id)
+            && typeof label.name === 'string' && label.name.length <= 225 ? [{ id: label.id, name: label.name }] : [])
+            .sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    /**
+     * Family Updates (v2.2): the last 30 days from the Lillio sender and from
+     * each chosen Gmail label, at most 100 emails in all. `known` holds records
+     * parsed on an earlier refresh, keyed by message id; an email's content does
+     * not change, so only new ids are downloaded.
+     */
+    async familyUpdates(settings: FamilyUpdateSettings, now = new Date(), known: ReadonlyMap<string, DaycareUpdate> = new Map()): Promise<{ updates: DaycareUpdate[]; stats: Record<string, SourceStats> }> {
         if (!Number.isFinite(now.getTime())) throw new Error('A valid synchronization time is required.');
         const after = Math.floor((now.getTime() - 30 * 86_400_000) / 1000);
         const deadline = Date.now() + 45_000;
-        const params = new URLSearchParams({ q: `from:${DAYCARE_SENDER} after:${after}`, maxResults: '100', includeSpamTrash: 'false' });
+        const plan: { id: string; params: URLSearchParams; label?: LabelSource }[] = [];
+        if (settings.lillio.enabled) plan.push({ id: LILLIO_SOURCE_ID, params: new URLSearchParams({ q: `from:${DAYCARE_SENDER} after:${after}` }) });
+        for (const label of settings.labels) plan.push({ id: label.labelId, label, params: new URLSearchParams({ q: `after:${after}`, labelIds: label.labelId }) });
+        const wanted: { id: string; source: (typeof plan)[number] }[] = [];
+        const seen = new Set<string>();
+        for (const source of plan) {
+            for (const id of await this.messageIds(source.params, 100 - seen.size, deadline)) {
+                if (seen.has(id)) continue; // In more than one source: the first source shows it.
+                seen.add(id); wanted.push({ id, source });
+            }
+            if (seen.size >= 100) break;
+        }
+        const updates: DaycareUpdate[] = [];
+        const stats: Record<string, SourceStats> = Object.fromEntries(plan.map((source) => [source.id, { shown: 0, hidden: 0 }]));
+        // Sequential, capped fetches avoid a mailbox-wide burst; never request attachments.
+        for (const { id, source } of wanted) {
+            let update: DaycareUpdate | null = null;
+            const cached = known.get(id);
+            if (cached && (cached.source?.id ?? LILLIO_SOURCE_ID) === source.id) update = cached;
+            else {
+                if (Date.now() >= deadline) throw new Error('Family Updates refresh timed out.');
+                const raw = await this.request<GmailMessage>('gmail', `users/me/messages/${encodeURIComponent(id)}`, new URLSearchParams({ format: 'full' }));
+                if (source.label) {
+                    const parsed = parseLabelEmail(raw, source.label);
+                    update = 'update' in parsed ? parsed.update : null;
+                } else update = parseDaycareEmail(raw);
+            }
+            if (update && Date.parse(update.receivedAt) >= after * 1000 && Date.parse(update.receivedAt) <= now.getTime()) {
+                // Current names and display choice, also for records parsed earlier.
+                updates.push(source.label ? { ...update, source: { id: source.id, name: source.label.name }, display: source.label.display }
+                    : { ...update, source: { id: LILLIO_SOURCE_ID, name: settings.lillio.name }, display: settings.lillio.display });
+                stats[source.id].shown++;
+            } else stats[source.id].hidden++;
+        }
+        return { updates: updates.sort((left, right) => right.receivedAt.localeCompare(left.receivedAt)), stats };
+    }
+
+    private async messageIds(initial: URLSearchParams, limit: number, deadline: number): Promise<string[]> {
+        const params = new URLSearchParams(initial);
+        params.set('includeSpamTrash', 'false');
         const ids = new Set<string>(), tokens = new Set<string>();
+        if (limit <= 0) return [];
         for (let page = 0; page < 100; page++) {
-            if (Date.now() >= deadline) throw new Error('Daycare refresh timed out.');
-            params.set('maxResults', String(100 - ids.size));
+            if (Date.now() >= deadline) throw new Error('Family Updates refresh timed out.');
+            params.set('maxResults', String(limit - ids.size));
             const response = await this.request<{ messages?: { id: string }[]; nextPageToken?: string }>('gmail', 'users/me/messages', params);
             if (response.messages !== undefined && !Array.isArray(response.messages)) throw new Error('Invalid Gmail list response.');
             for (const message of response.messages ?? []) {
                 if (typeof message.id !== 'string' || !message.id) throw new Error('Invalid Gmail message identifier.');
                 ids.add(message.id);
-                if (ids.size === 100) break;
+                if (ids.size === limit) break;
             }
-            if (!response.nextPageToken || ids.size === 100) break;
+            if (!response.nextPageToken || ids.size === limit) break;
             if (tokens.has(response.nextPageToken)) throw new Error('Repeated Gmail page token.');
             if (page === 99) throw new Error('Gmail pagination limit reached.');
             tokens.add(response.nextPageToken); params.set('pageToken', response.nextPageToken);
         }
-        const updates: DaycareUpdate[] = [];
-        // Sequential, capped fetches avoid a mailbox-wide burst; never request attachments.
-        for (const id of ids) {
-            if (Date.now() >= deadline) throw new Error('Daycare refresh timed out.');
-            const raw = await this.request<GmailMessage>('gmail', `users/me/messages/${encodeURIComponent(id)}`, new URLSearchParams({ format: 'full' }));
-            const update = parseDaycareEmail(raw);
-            if (update && Date.parse(update.receivedAt) >= after * 1000 && Date.parse(update.receivedAt) <= now.getTime()) updates.push(update);
-        }
-        return updates.sort((left, right) => right.receivedAt.localeCompare(left.receivedAt));
+        return [...ids];
     }
 
     private async pages<T>(service: 'calendar' | 'tasks', path: string, initial: URLSearchParams): Promise<T[]> {

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Digest-pinned Family Hub deployment. Requires Docker Compose v2; optional gh for update."""
-
 import argparse
 import datetime
 import fcntl
@@ -17,32 +16,30 @@ import tempfile
 import time
 import urllib.request
 
-FILES = ("compose.yml", "compose.vpn.yml", "Caddyfile", "images.yml", "release.py")
-VERSION = re.compile(r"familyhub-v\d+\.\d+\.\d+\Z")
+FILES = ('compose.yml', 'compose.vpn.yml', 'Caddyfile', 'images.yml', 'release.py')
+VERSION = re.compile(r'familyhub-v\d+\.\d+\.\d+\Z')
 # Optional push notifications (ntfy). Root-only file: NTFY_URL=https://ntfy.sh/<private topic>
 # and, for a protected topic, NTFY_TOKEN=<access token>. See deploy/familyhub/admin/README.md.
-NOTIFY_FILES = ("/etc/familyhub-notify.env", "/etc/familyhub-renewals.env")
+NOTIFY_FILES = ('/etc/familyhub-notify.env', '/etc/familyhub-renewals.env')
 REPEAT_FAILURE_AFTER = 24 * 3600
 # Settings → Advanced → Software updates reads a secret-free status file. The
 # deployment keeps it in its root-only state directory and, with --publish-dir,
 # also copies it into the app's exchange folder (writable by the server
 # container, so it is written without following any path there).
-STATUS_FILE = "update-status.json"
-UPDATE_UNIT = "familyhub-update.service"
-UPDATE_TIMER = "familyhub-update.timer"
+STATUS_FILE = 'update-status.json'
+UPDATE_UNIT = 'familyhub-update.service'
+UPDATE_TIMER = 'familyhub-update.timer'
 
 
 def now_iso():
-    return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
 def publish_file(directory, name, data):
     dfd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
-        tmp = f".{name}.{os.getpid()}.{os.urandom(6).hex()}"
-        fd = os.open(
-            tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=dfd
-        )
+        tmp = f'.{name}.{os.getpid()}.{os.urandom(6).hex()}'
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=dfd)
         try:
             os.write(fd, data)
             os.fchmod(fd, 0o644)
@@ -56,13 +53,8 @@ def publish_file(directory, name, data):
 
 def timer_enabled():
     try:
-        result = subprocess.run(
-            ["systemctl", "is-enabled", UPDATE_TIMER],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        return result.stdout.strip() == "enabled"
+        result = subprocess.run(['systemctl', 'is-enabled', UPDATE_TIMER], capture_output=True, text=True, timeout=10)
+        return result.stdout.strip() == 'enabled'
     except (OSError, subprocess.SubprocessError):
         return None
 
@@ -70,27 +62,10 @@ def timer_enabled():
 def list_releases():
     # gh handles private-repository authentication and asset redirects.
     try:
-        result = subprocess.run(
-            [
-                "gh",
-                "release",
-                "list",
-                "--repo",
-                "santoshgs/FamilyHub",
-                "--limit",
-                "30",
-                "--json",
-                "tagName,isDraft,isPrerelease",
-            ],
-            capture_output=True,
-            check=True,
-            timeout=120,
-        )
+        result = subprocess.run(['gh', 'release', 'list', '--repo', 'santoshgs/FamilyHub', '--limit', '30', '--json', 'tagName,isDraft,isPrerelease'], capture_output=True, check=True, timeout=120)
         return json.loads(result.stdout)
     except (OSError, ValueError, subprocess.SubprocessError):
-        raise RuntimeError(
-            "GitHub releases could not be listed: check the network and the release token"
-        ) from None
+        raise RuntimeError('GitHub releases could not be listed: check the network and the release token') from None
 
 
 def read_notify_settings(files=NOTIFY_FILES):
@@ -98,26 +73,24 @@ def read_notify_settings(files=NOTIFY_FILES):
     for name in files:
         try:
             for line in Path(name).read_text().splitlines():
-                key, sep, value = line.strip().partition("=")
-                if sep and key in ("NTFY_URL", "NTFY_TOKEN") and key not in settings:
-                    settings[key] = value.strip().strip("\"'")
+                key, sep, value = line.strip().partition('=')
+                if sep and key in ('NTFY_URL', 'NTFY_TOKEN') and key not in settings:
+                    settings[key] = value.strip().strip('"\'')
         except OSError:
             continue
-    return settings if settings.get("NTFY_URL", "").startswith("https://") else {}
+    return settings if settings.get('NTFY_URL', '').startswith('https://') else {}
 
 
-def notify(title, message, priority="default", tags="", settings=None):
+def notify(title, message, priority='default', tags='', settings=None):
     """Best effort: a notification never stops or fails a deployment."""
     settings = read_notify_settings() if settings is None else settings
     if not settings:
         return False
-    headers = {"Title": title, "Priority": priority, "Tags": tags}
-    if settings.get("NTFY_TOKEN"):
-        headers["Authorization"] = "Bearer " + settings["NTFY_TOKEN"]
+    headers = {'Title': title, 'Priority': priority, 'Tags': tags}
+    if settings.get('NTFY_TOKEN'):
+        headers['Authorization'] = 'Bearer ' + settings['NTFY_TOKEN']
     try:
-        request = urllib.request.Request(
-            settings["NTFY_URL"], data=message.encode(), headers=headers, method="POST"
-        )
+        request = urllib.request.Request(settings['NTFY_URL'], data=message.encode(), headers=headers, method='POST')
         with urllib.request.urlopen(request, timeout=10):
             return True
     except Exception:
@@ -125,61 +98,41 @@ def notify(title, message, priority="default", tags="", settings=None):
 
 
 def version_key(version):
-    return tuple(int(part) for part in version[len("familyhub-v") :].split("."))
+    return tuple(int(part) for part in version[len('familyhub-v'):].split('.'))
 
 
 def newest_release(releases, blocked):
-    eligible = [
-        r["tagName"]
-        for r in releases
-        if not r["isDraft"]
-        and not r["isPrerelease"]
-        and VERSION.fullmatch(r["tagName"])
-        and r["tagName"] not in blocked
-    ]
+    eligible = [r['tagName'] for r in releases if not r['isDraft'] and not r['isPrerelease']
+                and VERSION.fullmatch(r['tagName']) and r['tagName'] not in blocked]
     return max(eligible, key=version_key) if eligible else None
 
 
 def validate_package(folder):
     folder = Path(folder)
-    manifest = json.loads((folder / "manifest.json").read_text())
-    if manifest.get("schema") != 1 or not VERSION.fullmatch(
-        manifest.get("version", "")
-    ):
-        raise ValueError("Invalid release manifest/version")
-    if manifest.get("rollbackSafe") is not True:
-        raise ValueError("This release requires a manual database migration plan")
-    for service in ("server", "client"):
-        image = manifest.get(service + "Image", "")
-        if not re.fullmatch(
-            r"ghcr\.io/santoshgs/familyhub-" + service + r"@sha256:[a-f0-9]{64}", image
-        ):
-            raise ValueError("Expected a Family Hub image pinned by digest")
+    manifest = json.loads((folder / 'manifest.json').read_text())
+    if manifest.get('schema') != 1 or not VERSION.fullmatch(manifest.get('version', '')):
+        raise ValueError('Invalid release manifest/version')
+    if manifest.get('rollbackSafe') is not True:
+        raise ValueError('This release requires a manual database migration plan')
+    for service in ('server', 'client'):
+        image = manifest.get(service + 'Image', '')
+        if not re.fullmatch(r'ghcr\.io/santoshgs/familyhub-' + service + r'@sha256:[a-f0-9]{64}', image):
+            raise ValueError('Expected a Family Hub image pinned by digest')
     for name in FILES:
         file = folder / name
-        if (
-            file.is_symlink()
-            or not file.is_file()
-            or hashlib.sha256(file.read_bytes()).hexdigest()
-            != manifest.get("files", {}).get(name)
-        ):
-            raise ValueError("Release file integrity check failed: " + name)
+        if file.is_symlink() or not file.is_file() or hashlib.sha256(file.read_bytes()).hexdigest() != manifest.get('files', {}).get(name):
+            raise ValueError('Release file integrity check failed: ' + name)
     return manifest
 
 
 def unpack(archive, destination):
     # Only fixed, regular files; never extract paths, links, devices or executables.
-    allowed = set(FILES) | {"manifest.json", "release.py", "env.example"}
-    with tarfile.open(archive, "r:gz") as source:
+    allowed = set(FILES) | {'manifest.json', 'release.py', 'env.example'}
+    with tarfile.open(archive, 'r:gz') as source:
         seen = set()
         for entry in source:
-            if (
-                entry.name not in allowed
-                or not entry.isfile()
-                or entry.size > 1024 * 1024
-                or entry.name in seen
-            ):
-                raise ValueError("Unexpected entry in release archive")
+            if entry.name not in allowed or not entry.isfile() or entry.size > 1024 * 1024 or entry.name in seen:
+                raise ValueError('Unexpected entry in release archive')
             seen.add(entry.name)
             content = source.extractfile(entry)
             (Path(destination) / entry.name).write_bytes(content.read())
@@ -193,162 +146,95 @@ class Deployment:
         os.chmod(self.state, 0o700)
         self.env_file = Path(env_file).resolve()
         if not self.env_file.is_file():
-            raise ValueError("Private deployment environment file is missing")
+            raise ValueError('Private deployment environment file is missing')
         if self.env_file.stat().st_mode & 0o077:
-            raise ValueError(
-                "Private deployment environment must have owner-only permissions (chmod 600)"
-            )
+            raise ValueError('Private deployment environment must have owner-only permissions (chmod 600)')
 
     def compose(self, folder, *args, output=None):
         manifest = validate_package(folder)
-        env = dict(
-            os.environ,
-            COMPOSE_PROFILES="",
-            FAMILYHUB_SERVER_IMAGE=manifest["serverImage"],
-            FAMILYHUB_CLIENT_IMAGE=manifest["clientImage"],
-        )
-        command = [
-            "docker",
-            "compose",
-            "--project-name",
-            "familyhub",
-            "--env-file",
-            str(self.env_file),
-            "-f",
-            str(Path(folder) / "compose.yml"),
-            "-f",
-            str(Path(folder) / "compose.vpn.yml"),
-            "-f",
-            str(Path(folder) / "images.yml"),
-            *args,
-        ]
-        result = subprocess.run(
-            command,
-            env=env,
-            stdout=output or subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-        )
+        env = dict(os.environ, COMPOSE_PROFILES='', FAMILYHUB_SERVER_IMAGE=manifest['serverImage'], FAMILYHUB_CLIENT_IMAGE=manifest['clientImage'])
+        command = ['docker', 'compose', '--project-name', 'familyhub', '--env-file', str(self.env_file),
+                   '-f', str(Path(folder) / 'compose.yml'), '-f', str(Path(folder) / 'compose.vpn.yml'), '-f', str(Path(folder) / 'images.yml'), *args]
+        result = subprocess.run(command, env=env, stdout=output or subprocess.DEVNULL, stderr=subprocess.PIPE)
         if result.returncode:
             # Raw compose errors may include environment values. Keep private diagnostics local.
-            raise RuntimeError(
-                "Docker deployment command failed; inspect container health locally"
-            )
+            raise RuntimeError('Docker deployment command failed; inspect container health locally')
 
     def current(self):
-        file = self.state / "current.json"
+        file = self.state / 'current.json'
         return json.loads(file.read_text()) if file.exists() else None
 
     def blocked(self):
-        file = self.state / "blocked.json"
+        file = self.state / 'blocked.json'
         return json.loads(file.read_text()) if file.exists() else []
 
     def block(self, version):
-        file = self.state / "blocked.json"
+        file = self.state / 'blocked.json'
         file.write_text(json.dumps(sorted(set(self.blocked() + [version]))))
         os.chmod(file, 0o600)
 
     def record(self, current, previous):
-        temp = self.state / "current.tmp"
-        temp.write_text(
-            json.dumps({"current": current, "previous": previous}, indent=2)
-        )
+        temp = self.state / 'current.tmp'
+        temp.write_text(json.dumps({'current': current, 'previous': previous}, indent=2))
         os.chmod(temp, 0o600)
-        temp.replace(self.state / "current.json")
+        temp.replace(self.state / 'current.json')
 
     def folder(self, version):
         if not isinstance(version, str) or not VERSION.fullmatch(version):
-            raise ValueError("Invalid release version")
-        return self.state / "releases" / version
+            raise ValueError('Invalid release version')
+        return self.state / 'releases' / version
 
     def promote(self, folder):
-        self.compose(
-            folder,
-            "up",
-            "-d",
-            "--no-build",
-            "--pull",
-            "never",
-            "--wait",
-            "--wait-timeout",
-            "180",
-        )
+        self.compose(folder, 'up', '-d', '--no-build', '--pull', 'never', '--wait', '--wait-timeout', '180')
 
     def backup(self, folder):
-        directory = Path(tempfile.mkdtemp(prefix="pre-update-", dir=self.state))
+        directory = Path(tempfile.mkdtemp(prefix='pre-update-', dir=self.state))
         os.chmod(directory, 0o700)
         # Dump a consistent snapshot before migrations; never expose a password on argv.
-        with (directory / "database.dump").open("wb") as output:
-            os.chmod(directory / "database.dump", 0o600)
-            self.compose(
-                folder,
-                "exec",
-                "-T",
-                "postgres",
-                "pg_dump",
-                "-U",
-                "familyhub",
-                "-d",
-                "familyhub",
-                "-Fc",
-                output=output,
-            )
-        with (directory / "uploads.tar.gz").open("wb") as output:
-            os.chmod(directory / "uploads.tar.gz", 0o600)
-            self.compose(
-                folder,
-                "exec",
-                "-T",
-                "server",
-                "tar",
-                "-czf",
-                "-",
-                "-C",
-                "/app/uploads",
-                ".",
-                output=output,
-            )
-        shutil.copyfile(self.env_file, directory / "deployment.env")
-        os.chmod(directory / "deployment.env", 0o600)
+        with (directory / 'database.dump').open('wb') as output:
+            os.chmod(directory / 'database.dump', 0o600)
+            self.compose(folder, 'exec', '-T', 'postgres', 'pg_dump', '-U', 'familyhub', '-d', 'familyhub', '-Fc', output=output)
+        with (directory / 'uploads.tar.gz').open('wb') as output:
+            os.chmod(directory / 'uploads.tar.gz', 0o600)
+            self.compose(folder, 'exec', '-T', 'server', 'tar', '-czf', '-', '-C', '/app/uploads', '.', output=output)
+        shutil.copyfile(self.env_file, directory / 'deployment.env')
+        os.chmod(directory / 'deployment.env', 0o600)
         return directory
 
     def apply(self, source):
         manifest = validate_package(source)
         current = self.current()
-        if current and current["current"] == manifest["version"]:
-            if validate_package(self.folder(current["current"])) != manifest:
-                raise ValueError("An existing release version cannot be replaced")
-            print("Already running " + manifest["version"])
+        if current and current['current'] == manifest['version']:
+            if validate_package(self.folder(current['current'])) != manifest:
+                raise ValueError('An existing release version cannot be replaced')
+            print('Already running ' + manifest['version'])
             return None
-        target = self.folder(manifest["version"])
+        target = self.folder(manifest['version'])
         if target.exists():
             if validate_package(target) != manifest:
-                raise ValueError("An existing release version cannot be replaced")
+                raise ValueError('An existing release version cannot be replaced')
         else:
             target.mkdir(parents=True, mode=0o700)
-            for name in (*FILES, "manifest.json"):
+            for name in (*FILES, 'manifest.json'):
                 shutil.copyfile(Path(source) / name, target / name)
-        self.compose(target, "config", "--quiet")
+        self.compose(target, 'config', '--quiet')
         if not current:
-            self.compose(target, "pull", "postgres")
-        self.compose(target, "pull", "server", "client")
-        previous = current["current"] if current else None
+            self.compose(target, 'pull', 'postgres')
+        self.compose(target, 'pull', 'server', 'client')
+        previous = current['current'] if current else None
         if previous:
             self.backup(self.folder(previous))
         try:
             self.promote(target)
         except RuntimeError:
-            self.block(manifest["version"])
+            self.block(manifest['version'])
             if previous:
                 self.promote(self.folder(previous))
-                raise RuntimeError(
-                    "Update failed; previous application release restored. Database was not reverted."
-                )
-            raise RuntimeError(
-                "Initial deployment failed. Data volumes were retained for inspection."
-            )
-        self.record(manifest["version"], previous)
-        print("Running " + manifest["version"])
-        return manifest["version"]
+                raise RuntimeError('Update failed; previous application release restored. Database was not reverted.')
+            raise RuntimeError('Initial deployment failed. Data volumes were retained for inspection.')
+        self.record(manifest['version'], previous)
+        print('Running ' + manifest['version'])
+        return manifest['version']
 
     def status(self):
         try:
@@ -363,24 +249,12 @@ class Deployment:
             data = self.status()
             data.update(fields)
             current = self.current() or {}
-            latest = data.get("latest")
-            data.update(
-                current=current.get("current"),
-                previous=current.get("previous"),
-                blocked=self.blocked(),
-                autoUpdates=timer_enabled(),
-                updatedAt=now_iso(),
-            )
-            data["updateAvailable"] = bool(
-                latest
-                and VERSION.fullmatch(latest)
-                and (
-                    not data["current"]
-                    or version_key(latest) > version_key(data["current"])
-                )
-            )
+            latest = data.get('latest')
+            data.update(current=current.get('current'), previous=current.get('previous'), blocked=self.blocked(),
+                        autoUpdates=timer_enabled(), updatedAt=now_iso())
+            data['updateAvailable'] = bool(latest and VERSION.fullmatch(latest) and (not data['current'] or version_key(latest) > version_key(data['current'])))
             body = json.dumps(data, indent=1).encode()
-            temp = self.state / (STATUS_FILE + ".tmp")
+            temp = self.state / (STATUS_FILE + '.tmp')
             temp.write_bytes(body)
             os.chmod(temp, 0o600)
             temp.replace(self.state / STATUS_FILE)
@@ -392,220 +266,130 @@ class Deployment:
 
     def check(self, publish_dir=None):
         latest = newest_release(list_releases(), self.blocked())
-        data = self.write_status(
-            publish_dir, latest=latest, checkedAt=now_iso(), state="checked", message=""
-        )
-        print(
-            "Newest release: "
-            + (latest or "none")
-            + (
-                "; an update is available"
-                if data and data.get("updateAvailable")
-                else ""
-            )
-        )
+        data = self.write_status(publish_dir, latest=latest, checkedAt=now_iso(), state='checked', message='')
+        print('Newest release: ' + (latest or 'none') + ('; an update is available' if data and data.get('updateAvailable') else ''))
 
     def start_update(self, publish_dir=None):
         # The update itself runs in the updater's own unit (same backup, health
         # check and rollback as the hourly timer); this only starts it now.
-        self.write_status(
-            publish_dir, state="installing", requestedAt=now_iso(), message=""
-        )
-        subprocess.run(
-            ["systemctl", "start", "--no-block", UPDATE_UNIT],
-            check=True,
-            capture_output=True,
-            timeout=30,
-        )
-        print("Update started")
+        self.write_status(publish_dir, state='installing', requestedAt=now_iso(), message='')
+        subprocess.run(['systemctl', 'start', '--no-block', UPDATE_UNIT], check=True, capture_output=True, timeout=30)
+        print('Update started')
 
     def report_failure(self, message, now=None):
         """Notifies once per distinct failure, then again only after a day."""
         now = time.time() if now is None else now
-        file = self.state / "last-failure.json"
+        file = self.state / 'last-failure.json'
         try:
             last = json.loads(file.read_text())
         except (OSError, ValueError):
             last = {}
-        if (
-            last.get("message") == message
-            and now - last.get("at", 0) < REPEAT_FAILURE_AFTER
-        ):
+        if last.get('message') == message and now - last.get('at', 0) < REPEAT_FAILURE_AFTER:
             return False
-        file.write_text(json.dumps({"message": message, "at": now}))
+        file.write_text(json.dumps({'message': message, 'at': now}))
         os.chmod(file, 0o600)
-        return notify("Family Hub update failed", message, "high", "warning")
+        return notify('Family Hub update failed', message, 'high', 'warning')
 
     def clear_failure(self):
-        (self.state / "last-failure.json").unlink(missing_ok=True)
+        (self.state / 'last-failure.json').unlink(missing_ok=True)
 
     def restart(self):
         # Recreates the running release's containers so changed private settings
         # (for example sign-in with Google) take effect. Data volumes are kept.
         current = self.current()
         if not current:
-            raise ValueError("No release is recorded")
-        self.promote(self.folder(current["current"]))
-        print("Restarted " + current["current"])
+            raise ValueError('No release is recorded')
+        self.promote(self.folder(current['current']))
+        print('Restarted ' + current['current'])
 
     def rollback(self):
         current = self.current()
-        if not current or not current.get("previous"):
-            raise ValueError("No previous release is recorded")
-        self.backup(self.folder(current["current"]))
-        self.promote(self.folder(current["previous"]))
-        self.block(current["current"])
-        self.record(current["previous"], current["current"])
-        print("Previous application release restored; household data was not rewound.")
-        notify(
-            "Family Hub rolled back",
-            f"Now running {current['previous']}; {current['current']} is blocked from reinstalling.",
-            "high",
-            "rewind",
-        )
+        if not current or not current.get('previous'):
+            raise ValueError('No previous release is recorded')
+        self.backup(self.folder(current['current']))
+        self.promote(self.folder(current['previous']))
+        self.block(current['current'])
+        self.record(current['previous'], current['current'])
+        print('Previous application release restored; household data was not rewound.')
+        notify('Family Hub rolled back', f"Now running {current['previous']}; {current['current']} is blocked from reinstalling.", 'high', 'rewind')
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "action",
-        choices=["apply", "restart", "rollback", "update", "check", "start-update"],
-    )
-    parser.add_argument(
-        "package", nargs="?", help="Extracted, trusted release directory for apply"
-    )
-    parser.add_argument("--state-dir", required=True)
-    parser.add_argument("--env-file", required=True)
-    parser.add_argument(
-        "--publish-dir",
-        help="Also copy the update status file into this folder (the app exchange)",
-    )
+    parser.add_argument('action', choices=['apply', 'restart', 'rollback', 'update', 'check', 'start-update'])
+    parser.add_argument('package', nargs='?', help='Extracted, trusted release directory for apply')
+    parser.add_argument('--state-dir', required=True)
+    parser.add_argument('--env-file', required=True)
+    parser.add_argument('--publish-dir', help='Also copy the update status file into this folder (the app exchange)')
     args = parser.parse_args()
     os.umask(0o077)
     deployment = Deployment(args.state_dir, args.env_file)
-    with (deployment.state / "update.lock").open("a") as lock:
+    with (deployment.state / 'update.lock').open('a') as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            raise ValueError(
-                "Another update task is running; try again in a few minutes"
-            ) from None
-        if args.action == "check":
+            raise ValueError('Another update task is running; try again in a few minutes') from None
+        if args.action == 'check':
             deployment.check(args.publish_dir)
             return
-        if args.action == "start-update":
+        if args.action == 'start-update':
             # Release the lock first: the updater unit takes it for the actual update.
             fcntl.flock(lock, fcntl.LOCK_UN)
             deployment.start_update(args.publish_dir)
             return
-        if args.action == "rollback":
+        if args.action == 'rollback':
             deployment.rollback()
-        elif args.action == "restart":
+        elif args.action == 'restart':
             deployment.restart()
-        elif args.action == "apply":
+        elif args.action == 'apply':
             if not args.package:
-                raise ValueError("An extracted release directory is required")
+                raise ValueError('An extracted release directory is required')
             deployment.apply(args.package)
         else:
             release = newest_release(list_releases(), deployment.blocked())
             if not release:
-                raise ValueError("No stable Family Hub release is available")
-            if deployment.current() and version_key(
-                deployment.current()["current"]
-            ) >= version_key(release):
-                print("Already up to date")
-                deployment.write_status(
-                    args.publish_dir,
-                    latest=release,
-                    checkedAt=now_iso(),
-                    state="up-to-date",
-                    message="",
-                )
+                raise ValueError('No stable Family Hub release is available')
+            if deployment.current() and version_key(deployment.current()['current']) >= version_key(release):
+                print('Already up to date')
+                deployment.write_status(args.publish_dir, latest=release, checkedAt=now_iso(), state='up-to-date', message='')
                 deployment.clear_failure()
                 return
-            with tempfile.TemporaryDirectory(
-                prefix="release-", dir=deployment.state
-            ) as temp:
-                subprocess.run(
-                    [
-                        "gh",
-                        "release",
-                        "download",
-                        release,
-                        "--repo",
-                        "santoshgs/FamilyHub",
-                        "--pattern",
-                        release + ".tar.gz",
-                        "--dir",
-                        temp,
-                    ],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.PIPE,
-                    check=True,
-                )
-                folder = Path(temp) / "package"
+            with tempfile.TemporaryDirectory(prefix='release-', dir=deployment.state) as temp:
+                subprocess.run(['gh', 'release', 'download', release, '--repo', 'santoshgs/FamilyHub', '--pattern', release + '.tar.gz', '--dir', temp], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=True)
+                folder = Path(temp) / 'package'
                 folder.mkdir()
-                unpack(Path(temp) / (release + ".tar.gz"), folder)
+                unpack(Path(temp) / (release + '.tar.gz'), folder)
                 installed = deployment.apply(folder)
             if installed:
-                notify(
-                    "Family Hub updated",
-                    f"Now running {installed}.",
-                    "default",
-                    "white_check_mark",
-                )
-            deployment.write_status(
-                args.publish_dir,
-                latest=release,
-                checkedAt=now_iso(),
-                finishedAt=now_iso(),
-                state="updated" if installed else "up-to-date",
-                message=f"Now running {installed}." if installed else "",
-            )
+                notify('Family Hub updated', f'Now running {installed}.', 'default', 'white_check_mark')
+            deployment.write_status(args.publish_dir, latest=release, checkedAt=now_iso(), finishedAt=now_iso(),
+                                    state='updated' if installed else 'up-to-date', message=f'Now running {installed}.' if installed else '')
         deployment.clear_failure()
 
 
 def describe(error):
-    return (
-        str(error)
-        if isinstance(error, (ValueError, RuntimeError))
-        else "Check private configuration, authentication and local service status."
-    )
+    return str(error) if isinstance(error, (ValueError, RuntimeError)) else 'Check private configuration, authentication and local service status.'
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     try:
         main()
     except Exception as error:
         message = describe(error)
-        print("Family Hub deployment stopped: " + message, file=sys.stderr)
-        action = sys.argv[1] if len(sys.argv) > 1 else ""
+        print('Family Hub deployment stopped: ' + message, file=sys.stderr)
+        action = sys.argv[1] if len(sys.argv) > 1 else ''
         try:
-            state = sys.argv[sys.argv.index("--state-dir") + 1]
-            env = sys.argv[sys.argv.index("--env-file") + 1]
-            publish = (
-                sys.argv[sys.argv.index("--publish-dir") + 1]
-                if "--publish-dir" in sys.argv
-                else None
-            )
+            state = sys.argv[sys.argv.index('--state-dir') + 1]
+            env = sys.argv[sys.argv.index('--env-file') + 1]
+            publish = sys.argv[sys.argv.index('--publish-dir') + 1] if '--publish-dir' in sys.argv else None
             deployment = Deployment(state, env)
-            if action in ("update", "check", "start-update"):
+            if action in ('update', 'check', 'start-update'):
                 # A busy lock is not a failure of the running task: keep its state.
-                busy = message.startswith("Another update task is running")
-                deployment.write_status(
-                    publish,
-                    message=message,
-                    finishedAt=now_iso(),
-                    **(
-                        {}
-                        if busy
-                        else {
-                            "state": "failed" if action != "check" else "check-failed"
-                        }
-                    ),
-                )
+                busy = message.startswith('Another update task is running')
+                deployment.write_status(publish, message=message, finishedAt=now_iso(),
+                                        **({} if busy else {'state': 'failed' if action != 'check' else 'check-failed'}))
             # Only the hourly updater notifies; a person running a command sees the error.
-            if action == "update":
+            if action == 'update':
                 deployment.report_failure(message)
         except Exception:
             pass

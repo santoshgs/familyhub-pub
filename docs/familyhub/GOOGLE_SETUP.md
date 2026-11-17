@@ -9,7 +9,7 @@ Use this guide locally on the development Mac first. No Raspberry Pi change is r
 1. Use the dedicated Family Hub Google account, not a primary personal Gmail account.
 2. Share the existing family calendar with it. Because the approved dashboard can create events, grant **Make changes to events**. Permission to manage calendar sharing is unnecessary. Accept the sharing invitation in that account before connecting. [Calendar sharing permissions](https://support.google.com/calendar/answer/37082)
 3. Create or choose a Google Tasks list in the dedicated account. Native Google Tasks access requires switching to that account, which the user has accepted.
-4. Send Lillio notifications to this account. The daycare integration processes the exact sender `no-reply@himama.com`; meals, milk/feeding, naps, activities, and parent messages appear only when the email actually contains them.
+4. Send Lillio notifications, and any school mail you want in Family Updates, to this account. Family Updates processes the exact Lillio sender `no-reply@himama.com` and the Gmail labels chosen in Settings → Household → Family Updates (v2.2); meals, milk/feeding, naps, activities, and parent messages appear only when the email actually contains them.
 
 ## 2. Configure a Google Cloud project
 
@@ -117,7 +117,7 @@ Only continue through a Google consent warning after independently recognizing y
 - Check DST/all-day calendar behavior, reconnect after revoked/expired authorization, and distinguish stale cache from fresh data.
 - Confirm the tablet token cannot perform protected writes or Google setup operations.
 - Authorize Gmail, then inspect available representative Lillio emails locally. Verify sender filtering, activity/message extraction, duplicate handling, safe link-only fallback, and no attachment-fetch requests or retained photos.
-- Keep children's email content out of external AI. Existing AI task proposals must use the same Google Tasks operations after user review; daycare email content is not automatically sent to that assistant.
+- Email content goes to the household's AI provider only for Family Updates sources where a parent switched AI on (v2.3), with the provider stated in Settings; use a paid or self-hosted model for children's information. AI suggestions use the same Google Calendar and Tasks operations, and only after a parent adds them.
 
 Passing unit/integration tests with fixtures does not complete these checks. Real Lillio email formats, actual Google consent/refresh, physical iOS Safari, and Pi operation must be recorded separately in the roadmap.
 

@@ -12,7 +12,8 @@ import { api } from '../lib/api';
 import { MagicInputButton } from '../components/app/MagicInput';
 import { HubDialog } from './FamilyHub';
 import { EventDetail, EventForm } from './EventEditor';
-import { DaycareTimeline, type DaycareUpdate } from './DaycareUpdates';
+import { updateLabel, type DaycareUpdate } from './DaycareUpdates';
+import { FamilyUpdatesView } from './FamilyUpdatesView';
 import { dayKey, describeDay, onColour, splitTime, cleanDaycareText, dueLabel, worldHue } from './today';
 import { shiftDay } from './calendarDates';
 import './familyhub.css';
@@ -28,7 +29,7 @@ interface GoogleStatus { configured: boolean; connected: boolean; email?: string
 interface Sources { calendars: { id: string; summary: string; accessRole: string }[]; taskLists: { id: string; title: string }[] }
 type Panel = 'note' | 'google' | 'event' | 'task' | 'daycare' | 'display' | null;
 const FALLBACK_COLOUR = '#7986cb';
-const VIEW_TITLES: Record<string, string> = { calendar: 'Calendar', tasks: 'To-dos', daycare: 'Daycare', classroom: 'School' };
+const VIEW_TITLES: Record<string, string> = { calendar: 'Calendar', tasks: 'To-dos', daycare: 'Family Updates', classroom: 'School' };
 
 function Freshness({ source }: { source?: Source }) {
     // A source that is not set up already says so in its empty state.
@@ -185,8 +186,8 @@ export default function ConnectedHub() {
         {canWrite && <button className="bb-add" onClick={openNote}><Pencil size={16} />Leave a note</button>}
     </>;
     const daycareList = data && <>
-        {data.daycare.length ? <div className="bb-dc">{data.daycare.slice(0, 3).map((update) => <button type="button" className="bb-dc-row" key={update.id} onClick={() => setPanel('daycare')}><h3>{update.title}</h3><p>{cleanDaycareText(update.text, 90)}</p><time>{[update.kind === 'activity' ? update.activityType ?? 'Activity' : update.kind === 'message' ? 'Message from daycare' : 'Notification', new Date(update.receivedAt).toLocaleString([], { timeZone: tz, weekday: 'short', hour: 'numeric', minute: '2-digit' })].join(' · ')}</time></button>)}</div>
-            : <p className="bb-empty">{data.sources.daycare?.state === 'fresh' ? 'No daycare emails in the last 30 days.' : data.sources.daycare?.message}</p>}
+        {data.daycare.length ? <div className="bb-dc">{data.daycare.slice(0, 3).map((update) => <button type="button" className="bb-dc-row" key={update.id} onClick={() => setPanel('daycare')}><h3>{update.title}</h3><p>{cleanDaycareText(update.text, 90)}</p><time>{[updateLabel(update), new Date(update.receivedAt).toLocaleString([], { timeZone: tz, weekday: 'short', hour: 'numeric', minute: '2-digit' })].join(' · ')}</time></button>)}</div>
+            : <p className="bb-empty">{data.sources.daycare?.state === 'fresh' ? 'No Family Updates in the last 30 days.' : data.sources.daycare?.message}</p>}
         <Freshness source={data.sources.daycare} />
     </>;
     const schoolEmpty = <p className="bb-empty">Google Classroom isn’t connected yet. School permissions will be checked before connecting.</p>;
@@ -208,7 +209,7 @@ export default function ConnectedHub() {
         calendar: () => section('calendar', 'Today', null, todaySection),
         tasks: () => section('tasks', openTasks.length === 1 ? '1 to-do' : `${openTasks.length} to-dos`, <a href="/tasks">Open list</a>, taskList(5)),
         notes: () => section('notes', 'Notes', <a href="/notes">All notes</a>, notesList),
-        daycare: () => section('daycare', 'Daycare', <button type="button" onClick={() => setPanel('daycare')}>All updates</button>, daycareList),
+        daycare: () => section('daycare', 'Family Updates', <button type="button" onClick={() => setPanel('daycare')}>All updates</button>, daycareList),
         classroom: () => section('classroom', 'School', null, schoolEmpty),
     };
     const left = visible.filter((_, index) => index % 2 === 0);
@@ -239,13 +240,13 @@ export default function ConnectedHub() {
             </>
             : view === 'calendar' ? <section className="bb-sec"><FullCalendar timeZone={data.timeZone} connected={data.connected} onSelect={setEventDetail} refreshKey={data} initialDate={calendarDay} onDateChange={setCalendarDay} />{canWrite && <button className="bb-add" disabled={!data.connected} onClick={() => openEvent(null, calendarDay)}><Plus size={17} />Add an event to Google Calendar</button>}<CalendarLegend events={data.events} labels={legend} editable={canWrite} saving={preferences.saving} error={preferences.error} onSave={(legend) => preferences.save('legend', legend)} /></section>
             : view === 'tasks' ? <section className="bb-sec">{taskList()}</section>
-            : view === 'daycare' ? <section className="bb-sec"><DaycareTimeline updates={data.daycare} /><Freshness source={data.sources.daycare} /></section>
+            : view === 'daycare' ? <section className="bb-sec"><FamilyUpdatesView updates={data.daycare} /><Freshness source={data.sources.daycare} /></section>
             : <section className="bb-sec">{schoolEmpty}</section>}
         <HubDialog open={Boolean(panel || eventDetail)} onClose={() => { setPanel(null); setEventDetail(null); setError(''); }} title={eventDetail?.title ?? titleForPanel} description={panel === 'google' ? 'Calendar, Tasks and Gmail use the same verified family account.' : panel === 'daycare' ? 'Up to 100 daycare emails from the last 30 days; attachments and photos are ignored.' : 'Changes are saved to the selected source.'}>{error && <div className="fh-callout" role="alert"><p>{error}</p></div>}
     {panel === 'note' ? <form className="fh-form" onSubmit={(e) => { e.preventDefault(); void action(() => api.post('/api/notes', { content: noteContent.trim(), color: noteColor })); }}><label>Message<textarea autoFocus required maxLength={500} rows={4} value={noteContent} onChange={(e) => setNoteContent(e.target.value)} /></label><label>Colour<select value={noteColor} onChange={(e) => setNoteColor(e.target.value)}><option value="yellow">Yellow</option><option value="pink">Red</option><option value="green">Green</option></select></label><button className="fh-button fh-primary" disabled={busy || !canWrite || !noteContent.trim()}>Save note</button></form> : eventDetail ? <EventDetail event={eventDetail} when={eventWhen(eventDetail)} legend={legend} canWrite={canWrite && Boolean(data?.connected)} onEdit={() => openEvent(eventDetail)} />
     : panel === 'event' ? <EventForm key={editingEvent?.id ?? 'new'} event={editingEvent} initialDate={eventDay} timeZone={timeZone} legend={legend} busy={busy} canWrite={canWrite} run={(task) => action(task)} />
     : panel === 'task' ? <form className="fh-form" onSubmit={(e) => { e.preventDefault(); void saveTask(); }}><label>What needs doing?<input required autoFocus maxLength={1024} value={title} onChange={(e) => setTitle(e.target.value)} /></label><label>Due date<input type="date" value={due} onChange={(e) => setDue(e.target.value)} /></label><p className="fh-fine-print">Saved directly to Google Tasks. The API supports dates, not precise reminder times.</p><div className="bb-hello-acts">{editingTask && <button type="button" className="fh-button fh-secondary" disabled={busy} onClick={() => void action(() => api.delete(`/api/familyhub/google/tasks/${encodeURIComponent(editingTask.id)}`))}><Trash2 size={16} />Delete</button>}<button className="fh-button fh-primary" disabled={busy || !canWrite}>Save to Google Tasks</button></div></form>
-    : panel === 'daycare' ? <DaycareTimeline updates={data?.daycare ?? []} />
+    : panel === 'daycare' ? <FamilyUpdatesView updates={data?.daycare ?? []} />
     : panel === 'display' ? <div className="fh-form"><p>This replaces the editing session in this browser with server-enforced read-only access. Sign in again to return to editing.</p><button className="fh-button fh-primary" disabled={busy} onClick={() => void action(async () => { const response = await api.post<{ data: { token: string } }>('/api/familyhub/display-session', {}); api.setToken(response.data.token); localStorage.removeItem('user'); window.location.reload(); })}>Start protected display</button></div>
     : panel === 'google' ? <div className="fh-form">{!status ? <p>Loading Google configuration…</p> : <><div className="fh-callout"><p>{status.connected ? `Connected to ${status.email}.` : status.configured ? 'The server is ready. Authorize the dedicated family Google account to continue.' : 'Google Cloud setup is needed. Configure the server using docs/familyhub/GOOGLE_SETUP.md, then restart it.'}</p></div>{!status.configured && status.missingConfiguration?.length ? <p className="fh-fine-print">Missing server settings: {status.missingConfiguration.join(', ')}</p> : null}<label className="fh-toggle-row"><span>Also authorize daycare email reading</span><input type="checkbox" checked={includeGmail || status.gmail} disabled={status.gmail} onChange={(e) => setIncludeGmail(e.target.checked)} /></label><p className="fh-fine-print">Gmail permission allows mailbox reading; Family Hub processes only messages from no-reply@himama.com. Email contents are not sent to AI.</p><button className="fh-button fh-primary" disabled={busy || !status.configured} onClick={() => void connect()}>{status.connected ? 'Reconnect / grant Gmail access' : 'Connect family Google account'}<ArrowRight size={15} /></button>{sources && <form className="fh-form" onSubmit={(e) => { e.preventDefault(); void action(() => api.put('/api/familyhub/google/sources', { calendarId, taskListId, timeZone })); }}><label>Shared Google Calendar<select required value={calendarId} onChange={(e) => setCalendarId(e.target.value)}><option value="">Choose an editable calendar</option>{sources.calendars.filter((calendar) => ['owner', 'writer'].includes(calendar.accessRole)).map((calendar) => <option key={calendar.id} value={calendar.id}>{calendar.summary}</option>)}</select></label><label>Google Tasks list<select required value={taskListId} onChange={(e) => setTaskListId(e.target.value)}><option value="">Choose a task list</option>{sources.taskLists.map((list) => <option key={list.id} value={list.id}>{list.title}</option>)}</select></label><label>Household timezone<input required value={timeZone} onChange={(e) => setTimeZone(e.target.value)} /></label><button className="fh-button fh-primary" disabled={busy}>Use these sources<Check size={16} /></button></form>}{status.connected && <button className="fh-button fh-secondary" disabled={busy} onClick={() => void action(async () => { await api.delete('/api/familyhub/google/connection'); setStatus({ ...status, connected: false }); setSources(null); }, false)}>Disconnect Google and clear cached data</button>}</>}</div> : null}</HubDialog>
         {arranging && <ArrangeCards order={preferences.order} saving={preferences.saving} error={preferences.error} onSave={async (order) => { if (await preferences.save('order', order)) setArranging(false); }} onClose={() => setArranging(false)} />}

@@ -9,6 +9,9 @@ import { issueAccessToken } from '../lib/authTokens';
 import { googleStatus, startGoogleConnection, finishGoogleConnection, disconnectGoogle, GoogleConnectionError } from '../services/familyhub/google/connection';
 import { googleApi, selection, configureSources, syncGoogle, invalidate } from '../services/familyhub/google/runtime';
 import { GoogleApiError } from '../services/familyhub/google/adapters';
+import { FamilyUpdatesError, familyStats, readFamilySettings, saveFamilySettings } from '../services/familyhub/google/familyUpdates';
+import { acceptSuggestion, dismissSuggestion, readFamilyUpdatesAi, SuggestionError } from '../services/familyhub/google/familyUpdatesAi';
+import { householdAiSummary } from '../services/ai/settings';
 import { EventDefaultsError, googleReminderPreview, readEventDefaults, remindersFor, saveEventDefaults, withDefaultEnd } from '../services/familyhub/google/eventDefaults';
 import { loadAmbientSnapshot, readAmbientSettings, saveAmbientSettings, searchWeatherLocations } from '../services/familyhub/ambient';
 import { getNewsArticle, previewFeed } from '../services/familyhub/news';
@@ -25,6 +28,8 @@ const fail = (res: Response, error: unknown) => {
     // the app sign the person out. It is a 409 the Home page offers to reconnect.
     if (error instanceof GoogleConnectionError) return res.status(error.status === 401 ? 409 : error.status).json({ success: false, error: error.message, ...(error.status === 401 ? { code: 'GOOGLE_RECONNECT' } : {}) });
     if (error instanceof EventDefaultsError) return res.status(error.status).json({ success: false, error: error.message });
+    if (error instanceof FamilyUpdatesError) return res.status(error.status).json({ success: false, error: error.message });
+    if (error instanceof SuggestionError) return res.status(error.status).json({ success: false, error: error.message, ...(error.code ? { code: error.code } : {}) });
     if (error instanceof GoogleApiError) return res.status(error.status === 401 ? 409 : 502).json({ success: false, error: error.message, ...(error.status === 401 ? { code: 'GOOGLE_RECONNECT' } : {}) });
     return res.status(400).json({ success: false, error: 'This change could not be completed. Check the fields and Google connection.' });
 };
@@ -438,6 +443,36 @@ router.get('/google/event-defaults', async (req: AuthRequest, res) => {
 });
 router.put('/google/event-defaults', requireParent, async (req: AuthRequest, res) => {
     try { res.json({ success: true, data: await saveEventDefaults(req.userId!, req.body) }); }
+    catch (error) { fail(res, error); }
+});
+// Family Updates sources (v2.2): Lillio and the Gmail labels the household chose.
+// Parents only; the label list comes from Google and needs the Gmail grant.
+router.get('/google/family-updates', requireParent, requireModule('daycare'), async (req: AuthRequest, res) => {
+    try {
+        const [settings, status, ai, disabled] = await Promise.all([readFamilySettings(req.userId!), googleStatus(req.userId!), householdAiSummary(req.userId!), getDisabledModules(req.userId!)]);
+        const labels = status.gmail ? await googleApi(req.userId!).gmailLabels() : [];
+        res.set('Cache-Control', 'no-store').json({ success: true, data: { settings, gmail: status.gmail, labels, stats: familyStats(req.userId!),
+            ai: { ...ai, moduleOn: !disabled.includes('ai') } } });
+    } catch (error) { fail(res, error); }
+});
+router.put('/google/family-updates', requireParent, requireModule('daycare'), async (req: AuthRequest, res) => {
+    try { res.json({ success: true, data: await saveFamilySettings(req.userId!, req.body) }); }
+    catch (error) { fail(res, error); }
+});
+// Family Updates suggestions (v2.3): what the household's AI found in emails,
+// waiting for a parent. Accepting writes the stored suggestion to Google; the
+// body may change only the title, date and times (v2.4), checked like the AI's own items.
+router.get('/family-updates/suggestions', requireModule('daycare'), async (req: AuthRequest, res) => {
+    try { res.set('Cache-Control', 'no-store').json({ success: true, data: await readFamilyUpdatesAi(req.userId!) }); }
+    catch (error) { fail(res, error); }
+});
+const decision = (req: AuthRequest) => ({ actorUserId: req.actualUserId ?? req.userId!, via: req.agentSessionId ? 'agent' as const : 'app' as const });
+router.post('/family-updates/suggestions/:id/accept', requireParent, requireModule('daycare'), async (req: AuthRequest, res) => {
+    try { res.json({ success: true, data: await acceptSuggestion(req.userId!, req.params.id, decision(req), req.body) }); }
+    catch (error) { fail(res, error); }
+});
+router.post('/family-updates/suggestions/:id/dismiss', requireParent, requireModule('daycare'), async (req: AuthRequest, res) => {
+    try { res.json({ success: true, data: await dismissSuggestion(req.userId!, req.params.id, decision(req), req.body) }); }
     catch (error) { fail(res, error); }
 });
 // Edit or delete one Google Calendar event from Family Hub (v1.5).
