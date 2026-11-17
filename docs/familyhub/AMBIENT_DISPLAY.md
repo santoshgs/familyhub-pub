@@ -106,6 +106,15 @@ daycare, Formula 1, family photos, guest Wi-Fi, countdown, stocks and crypto.
 * **Refresh.** The snapshot reloads every minute and the clock every 15
   seconds. Display sessions do not open the live-update WebSocket.
 
+### Your day card (v2.5)
+
+`summary` is a display module like the others (card or pill, chosen in Settings → Display layout), so
+it can take the calendar's place. The card shows the household AI's headline and two sentences about
+today (the same text as the Board Book home and ZeroG's morning message), the next timed event with
+how soon it starts, and a count of today's events and to-dos. Tapping it opens the calendar panel.
+The summary travels in the `/ambient` payload as `daySummary` (null when the module is not shown), so
+display tokens need no new path. Without AI it says how to turn the assistant on.
+
 ## Read-only access policy
 
 Display tokens carry the `ambient` scope and, since v0.3.1, a display-session

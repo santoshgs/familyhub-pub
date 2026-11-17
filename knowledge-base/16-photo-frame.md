@@ -14,6 +14,10 @@ was set up and how to keep it running. Command-level details are in the
 * **Cards:** Family calendar (Up next), Weather with tomorrow's forecast, the
   next Formula 1 weekend, To-dos, Chores or News, and Daycare updates. Parents
   choose the weather city in **Settings → Display**.
+* **Your day (v2.5):** the AI assistant's summary of today, the next appointment
+  with how soon it starts ("in 25 min"), and today's event and to-do counts. Put it
+  in the calendar's place in the Display layout if you like; tapping it opens the
+  calendar panel. Without AI it says how to turn the assistant on.
 * **Display layout (v1.5.2):** each module, and the new Wi-Fi, countdown, markets
   and photos options, is a card, a quick pill or off. Up to six cards appear, in
   the order set in **Settings → Display → Display layout**. The first row holds

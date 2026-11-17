@@ -14,6 +14,16 @@ The AI provider settings say this too (English and French). With OpenAI, Anthrop
 
 For each Family Updates source with AI on, each new email is sent once to this provider in the background (up to three a minute) for a short summary and suggested events or to-dos. Suggestions are checked by Family Hub and wait for a parent to add or dismiss them; see [Family Updates](05-daycare-gmail.md). A provider failure is retried after 15 and then 30 minutes. Only an error code is logged, never the email or the model's answer.
 
+## Day summary (v2.5)
+
+With AI on, the household's provider also writes a short summary of today: a headline and two sentences. It is sent the titles, times, places and colour-label names of today's events, the titles of to-dos due today or overdue, and chores due today. Never email. It is asked once, then again only when today's events, to-dos or chores change (at most every 30 minutes), or when someone taps **Refresh** under it. The summary appears:
+
+- at the top of the Board Book home (the Morning page), for members who keep **Start my day with a summary** on (Arrange your overview);
+- on the photo frame, when **Your day** is chosen in Settings → Display → Display layout ([Photo frame](16-photo-frame.md));
+- in ZeroG's morning Telegram message, through the connected-app read grant `/api/familyhub/day-summary/*`.
+
+If the provider fails, the last good summary for today stays; with AI off, these places show the calendar as before.
+
 ## Ollama and Llama
 
 Ollama can serve a model such as a supported Llama variant if it is already installed and running on an accessible host. The server URL must be reachable **from the Family Hub server container**, not merely from the browser. `localhost` inside that container refers to the container itself. Consider the Raspberry Pi 4's 4 GB RAM and the model's actual memory and performance needs; choosing a model in settings does not establish that it will run acceptably on the Pi.

@@ -11,11 +11,13 @@ export function useDashboardAppearance(session: string | undefined) {
     const [legend, setLegend] = useState<Record<string, string>>({});
     const [error, setError] = useState('');
     const [saving, setSaving] = useState(false);
+    // v2.5: start Home with the day summary (on unless this member turned it off).
+    const [showDaySummary, setShowDaySummary] = useState(true);
     useEffect(() => {
         let active = true;
         setOrder(CARD_ORDER); setLegend({});
-        void api.get<{ data: { cardOrder: string[]; legend: Record<string, string> } }>('/api/familyhub/preferences').then(({ data }) => {
-            if (active) { setOrder(normalizeCardOrder(data.cardOrder)); setLegend(data.legend); }
+        void api.get<{ data: { cardOrder: string[]; legend: Record<string, string>; showDaySummary?: boolean } }>('/api/familyhub/preferences').then(({ data }) => {
+            if (active) { setOrder(normalizeCardOrder(data.cardOrder)); setLegend(data.legend); setShowDaySummary(data.showDaySummary !== false); }
         }).catch(() => { if (active) setError('Dashboard preferences could not be loaded.'); });
         return () => { active = false; };
     }, [session]);
@@ -29,13 +31,21 @@ export function useDashboardAppearance(session: string | undefined) {
         } catch { setError('That preference could not be saved. Try again.'); return false; }
         finally { setSaving(false); }
     };
-    return { order, legend, error, saving, save };
+    const saveDaySummary = async (value: boolean) => {
+        const before = showDaySummary;
+        setShowDaySummary(value); setError('');
+        try { await api.put('/api/familyhub/preferences/day-summary', { showDaySummary: value }); }
+        catch { setShowDaySummary(before); setError('That preference could not be saved. Try again.'); }
+    };
+    return { order, legend, error, saving, save, showDaySummary, saveDaySummary };
 }
-export function ArrangeCards({ order, saving, error, onSave, onClose }: {
+export function ArrangeCards({ order, saving, error, onSave, onClose, daySummary }: {
     order: string[]; saving: boolean; error: string; onSave: (order: string[]) => Promise<void>; onClose: () => void;
+    /** Board Book only (v2.5): start Home with the AI's summary of the day. */
+    daySummary?: { value: boolean; onChange: (value: boolean) => void };
 }) {
     const [draft, setDraft] = useState(order);
-    return <HubDialog open onClose={onClose} title="Arrange your overview" description="Saved for your account. Other family members keep their own layout."><div className="fh-form">{draft.map((card, index) => <div className="fh-arrange-row" key={card}><span>{CARD_LABELS[card]}</span><button className="fh-button fh-secondary" disabled={!index} aria-label={`Move ${CARD_LABELS[card]} up`} onClick={() => setDraft(moveCard(draft, card, draft[index - 1]))}>↑</button><button className="fh-button fh-secondary" disabled={index === draft.length - 1} aria-label={`Move ${CARD_LABELS[card]} down`} onClick={() => setDraft(moveCard(draft, card, draft[index + 1]))}>↓</button></div>)}{error && <p role="alert">{error}</p>}<button className="fh-button fh-secondary" onClick={() => setDraft(CARD_ORDER)}>Reset order</button><button className="fh-button fh-primary" disabled={saving} onClick={() => void onSave(draft)}>Save card order</button></div></HubDialog>;
+    return <HubDialog open onClose={onClose} title="Arrange your overview" description="Saved for your account. Other family members keep their own layout."><div className="fh-form">{daySummary && <label className="fh-check-row"><input type="checkbox" checked={daySummary.value} onChange={(event) => daySummary.onChange(event.target.checked)} /><span>Start my day with a summary<small>The AI assistant writes a few lines about today above your next appointment.</small></span></label>}{draft.map((card, index) => <div className="fh-arrange-row" key={card}><span>{CARD_LABELS[card]}</span><button className="fh-button fh-secondary" disabled={!index} aria-label={`Move ${CARD_LABELS[card]} up`} onClick={() => setDraft(moveCard(draft, card, draft[index - 1]))}>↑</button><button className="fh-button fh-secondary" disabled={index === draft.length - 1} aria-label={`Move ${CARD_LABELS[card]} down`} onClick={() => setDraft(moveCard(draft, card, draft[index + 1]))}>↓</button></div>)}{error && <p role="alert">{error}</p>}<button className="fh-button fh-secondary" onClick={() => setDraft(CARD_ORDER)}>Reset order</button><button className="fh-button fh-primary" disabled={saving} onClick={() => void onSave(draft)}>Save card order</button></div></HubDialog>;
 }
 /**
  * Picks the colour for a new label from Google's own event colours (v2.0.2),

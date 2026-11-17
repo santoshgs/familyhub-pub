@@ -369,7 +369,7 @@ export async function loadAmbientSnapshot(familyId: string) {
         wifi: { ...extras.settings.wifi, enabled: shown.has('wifi') }, countdown: { ...extras.settings.countdown, enabled: shown.has('countdown') },
         markets: { ...extras.settings.markets, enabled: shown.has('markets') }, photos: { ...extras.settings.photos, enabled: shown.has('photos') || settings.screensaver.enabled } };
     // The screensaver shows the same uploaded photos, so they are sent when it is on even if Family photos is not on the display.
-    const [weather, race, news, aqi, standings, markets, photoRows] = await Promise.all([
+    const [weather, race, news, aqi, standings, markets, photoRows, daySummary] = await Promise.all([
         getAmbientWeather(settings.location, extraSettings.weather.unit), getNextFormulaRace(),
         settings.widgets.includes('news') ? getNews(extraSettings.news.feeds) : Promise.resolve(null),
         settings.widgets.includes('weather') && extraSettings.weather.showAqi ? getAirQuality(settings.location) : Promise.resolve(null),
@@ -379,6 +379,8 @@ export async function loadAmbientSnapshot(familyId: string) {
             : Promise.resolve(null),
         getMarkets(familyId, extraSettings.markets, extras.secrets),
         extraSettings.photos.enabled ? listPhotos(familyId) : Promise.resolve([]),
+        // v2.5: the day summary card asks the household's AI only when today changed (see daySummary.ts).
+        shown.has('summary') ? import('./daySummary').then(({ getDaySummary }) => getDaySummary(familyId)).catch(() => ({ available: false as const, reason: 'error' as const })) : Promise.resolve(null),
     ]);
     // The display receives only the fields it renders: the next 7 days of
     // events (the Google loader's window) and open tasks, for its detail panels.
@@ -417,7 +419,7 @@ export async function loadAmbientSnapshot(familyId: string) {
     if (weather?.fetchedAt) sourceTimes.push(weather.fetchedAt);
     return {
         generatedAt: new Date().toISOString(), timeZone, today,
-        settings, events, tasks,
+        settings, events, tasks, daySummary,
         chores: choresResult.rows.map((row) => ({ id: String(row.id), title: asString(row.title, 160), dueDate: dayKey(row.due_date), completed: Boolean(row.is_completed), points: Number(row.points) || 0, members: row.members ?? [] })),
         notifications,
         weather: { data: weather, state: weather ? 'fresh' : settings.location ? 'unavailable' : 'unconfigured', place: settings.location ? `${settings.location.city}, ${settings.location.country}` : null },

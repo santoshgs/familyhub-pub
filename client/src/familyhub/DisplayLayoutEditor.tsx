@@ -10,6 +10,7 @@ import { MAX_CARDS, moveModule, placeModule, type Layout } from './ambientLayout
 export type { Layout };
 export const MODULES: Array<[key: string, title: string, description: string]> = [
     ['calendar', 'Family calendar', 'Next appointments from the connected Google Calendar.'],
+    ['summary', 'Your day', 'A short summary of today from the AI assistant, with the next appointment. Use it in place of the calendar if you like.'],
     ['weather', 'Weather', 'Live conditions for the city chosen below.'],
     ['tasks', 'To-dos', 'Open items from the selected Google Tasks list.'],
     ['chores', 'Chores', 'Chores due today.'],
